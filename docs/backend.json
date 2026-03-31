@@ -1,0 +1,1738 @@
+{
+  "entities": {
+    "Cliente": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Cliente",
+      "type": "object",
+      "description": "Represents a customer in the system, storing personal, contact, and address information.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Cliente entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The full name of the client."
+        },
+        "cpf": {
+          "type": "string",
+          "description": "The client's CPF (Cadastro de Pessoas Físicas) number."
+        },
+        "telefone": {
+          "type": "string",
+          "description": "The primary contact phone number for the client."
+        },
+        "email": {
+          "type": "string",
+          "description": "The client's email address.",
+          "format": "email"
+        },
+        "dataNascimento": {
+          "type": "string",
+          "description": "The client's date of birth.",
+          "format": "date"
+        },
+        "sexo": {
+          "type": "string",
+          "description": "The client's gender.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "logradouro": {
+          "type": "string",
+          "description": "The street name or public place of the client's address."
+        },
+        "numero": {
+          "type": "string",
+          "description": "The building number of the client's address."
+        },
+        "complemento": {
+          "type": "string",
+          "description": "Additional address details, such as apartment or block number."
+        },
+        "bairro": {
+          "type": "string",
+          "description": "The neighborhood of the client's address."
+        },
+        "cidade": {
+          "type": "string",
+          "description": "The city of the client's address."
+        },
+        "estado": {
+          "type": "string",
+          "description": "The state or province of the client's address."
+        },
+        "cep": {
+          "type": "string",
+          "description": "The ZIP code (CEP) of the client's address."
+        },
+        "tags": {
+          "type": "array",
+          "description": "A list of tags associated with the client for categorization.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the client."
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the client account is active."
+        },
+        "indicadoPor": {
+          "type": "string",
+          "description": "Name or reference of who indicated the client."
+        },
+        "canalOrigem": {
+          "type": "string",
+          "description": "The original channel through which the client was acquired.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "telefone",
+        "ativo"
+      ]
+    },
+    "Filho": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Filho",
+      "type": "object",
+      "description": "Represents a child linked to a specific client, often for retail segments like children's fashion.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Filho entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the parent Client. (Relationship: Cliente 1:N Filho)"
+        },
+        "nome": {
+          "type": "string",
+          "description": "The name of the child."
+        },
+        "dataNascimento": {
+          "type": "string",
+          "description": "The child's date of birth.",
+          "format": "date"
+        },
+        "sexo": {
+          "type": "string",
+          "description": "The child's gender.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "numeracaoRoupa": {
+          "type": "number",
+          "description": "The child's clothing size."
+        },
+        "numeracaoCalcado": {
+          "type": "number",
+          "description": "The child's shoe size."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the child."
+        }
+      },
+      "required": [
+        "id",
+        "clientId",
+        "nome",
+        "dataNascimento"
+      ]
+    },
+    "Atendimento": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Atendimento",
+      "type": "object",
+      "description": "Records customer service interactions and their status.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Atendimento entity."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client associated with this attendance. (Relationship: Cliente 1:N Atendimento)"
+        },
+        "canal": {
+          "type": "string",
+          "description": "The communication channel used for the attendance.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the attendance.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "assunto": {
+          "type": "string",
+          "description": "The subject or topic of the attendance."
+        },
+        "attendantId": {
+          "type": "string",
+          "description": "Reference to the Vendedor (attendant) handling this attendance. (Relationship: Vendedor 1:N Atendimento)"
+        },
+        "setor": {
+          "type": "string",
+          "description": "The department or sector responsible for the attendance."
+        },
+        "prioridade": {
+          "type": "string",
+          "description": "The priority level of the attendance.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "slaPrazo": {
+          "type": "string",
+          "description": "The Service Level Agreement (SLA) deadline for this attendance.",
+          "format": "date-time"
+        },
+        "tags": {
+          "type": "array",
+          "description": "A list of tags associated with the attendance for categorization.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "avaliacaoNps": {
+          "type": "number",
+          "description": "The Net Promoter Score (NPS) evaluation for this attendance."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the attendance."
+        },
+        "dataAbertura": {
+          "type": "string",
+          "description": "The date and time when the attendance was opened.",
+          "format": "date-time"
+        },
+        "dataEncerramento": {
+          "type": "string",
+          "description": "The date and time when the attendance was closed.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "canal",
+        "status",
+        "prioridade",
+        "dataAbertura"
+      ]
+    },
+    "Mensagem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Mensagem",
+      "type": "object",
+      "description": "Represents a single message within an attendance chat.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Mensagem entity."
+        },
+        "atendimentoId": {
+          "type": "string",
+          "description": "Reference to the Atendimento this message belongs to. (Relationship: Atendimento 1:N Mensagem)"
+        },
+        "remetente": {
+          "type": "string",
+          "description": "The sender of the message (client, attendant, or bot).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conteudo": {
+          "type": "string",
+          "description": "The content of the message."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of message content.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "arquivoUrl": {
+          "type": "string",
+          "description": "URL to the attached file if the message type is not 'texto'.",
+          "format": "uri"
+        },
+        "lida": {
+          "type": "boolean",
+          "description": "Indicates if the message has been read."
+        },
+        "dataEnvio": {
+          "type": "string",
+          "description": "The date and time the message was sent.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "atendimentoId",
+        "remetente",
+        "tipo",
+        "dataEnvio"
+      ]
+    },
+    "Venda": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Venda",
+      "type": "object",
+      "description": "Records details of a completed or ongoing sales transaction.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Venda entity."
+        },
+        "numero": {
+          "type": "string",
+          "description": "A unique sequential number for the sale transaction."
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client who made the purchase. (Relationship: Cliente 1:N Venda)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the sale.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "The sum of prices of all items before discounts."
+        },
+        "descontoTotal": {
+          "type": "number",
+          "description": "The total discount applied to the entire sale."
+        },
+        "total": {
+          "type": "number",
+          "description": "The final total amount of the sale after all discounts."
+        },
+        "formaPagamento": {
+          "type": "string",
+          "description": "The method of payment used for the sale."
+        },
+        "parcelas": {
+          "type": "number",
+          "description": "The number of installments if the payment is parceled."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the sale."
+        },
+        "vendedorId": {
+          "type": "string",
+          "description": "Reference to the Vendedor who made the sale. (Relationship: Vendedor 1:N Venda)"
+        },
+        "notaFiscalUrl": {
+          "type": "string",
+          "description": "URL to the generated fiscal receipt (nota fiscal).",
+          "format": "uri"
+        },
+        "notaEnviadaWhatsapp": {
+          "type": "boolean",
+          "description": "Indicates if the fiscal receipt was sent via WhatsApp."
+        },
+        "dataVenda": {
+          "type": "string",
+          "description": "The date and time when the sale occurred.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "numero",
+        "status",
+        "total",
+        "dataVenda"
+      ]
+    },
+    "VendaItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "VendaItem",
+      "type": "object",
+      "description": "Represents a single product item included in a sales transaction.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the VendaItem entity."
+        },
+        "vendaId": {
+          "type": "string",
+          "description": "Reference to the Venda this item belongs to. (Relationship: Venda 1:N VendaItem)"
+        },
+        "produtoId": {
+          "type": "string",
+          "description": "Reference to the Product sold. (Relationship: Produto 1:N VendaItem)"
+        },
+        "quantidade": {
+          "type": "number",
+          "description": "The quantity of the product sold."
+        },
+        "precoUnitario": {
+          "type": "number",
+          "description": "The unit price of the product at the time of sale."
+        },
+        "desconto": {
+          "type": "number",
+          "description": "The discount applied to this specific item."
+        },
+        "total": {
+          "type": "number",
+          "description": "The total price for this item after quantity and discount calculations."
+        }
+      },
+      "required": [
+        "id",
+        "vendaId",
+        "produtoId",
+        "quantidade",
+        "precoUnitario",
+        "total"
+      ]
+    },
+    "Produto": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Produto",
+      "type": "object",
+      "description": "Defines a product available for sale, including inventory and pricing details.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Produto entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The name of the product."
+        },
+        "codigo": {
+          "type": "string",
+          "description": "An internal code for the product."
+        },
+        "sku": {
+          "type": "string",
+          "description": "Stock Keeping Unit, a unique identifier for the product variant."
+        },
+        "ean": {
+          "type": "string",
+          "description": "European Article Number (barcode)."
+        },
+        "ncm": {
+          "type": "string",
+          "description": "Nomenclatura Comum do Mercosul code."
+        },
+        "cest": {
+          "type": "string",
+          "description": "Código Especificador da Substituição Tributária code."
+        },
+        "categoria": {
+          "type": "string",
+          "description": "The main category of the product."
+        },
+        "subcategoria": {
+          "type": "string",
+          "description": "The subcategory of the product."
+        },
+        "marca": {
+          "type": "string",
+          "description": "The brand of the product."
+        },
+        "descricao": {
+          "type": "string",
+          "description": "A detailed description of the product."
+        },
+        "precoCusto": {
+          "type": "number",
+          "description": "The cost price of the product for the store."
+        },
+        "precoVenda": {
+          "type": "number",
+          "description": "The selling price of the product to customers."
+        },
+        "precoPromocional": {
+          "type": "number",
+          "description": "A special promotional price for the product."
+        },
+        "estoqueAtual": {
+          "type": "number",
+          "description": "The current quantity of the product in stock."
+        },
+        "estoqueMinimo": {
+          "type": "number",
+          "description": "The minimum stock level before reordering is triggered."
+        },
+        "unidade": {
+          "type": "string",
+          "description": "The unit of measure for the product (e.g., 'UN' for Unit)."
+        },
+        "fotoUrl": {
+          "type": "string",
+          "description": "URL to the main photo of the product.",
+          "format": "uri"
+        },
+        "fotosUrls": {
+          "type": "array",
+          "description": "A list of URLs for additional product photos.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the product is active and available for sale."
+        },
+        "tamanhos": {
+          "type": "array",
+          "description": "A list of available sizes for the product.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cores": {
+          "type": "array",
+          "description": "A list of available colors for the product.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "fornecedorId": {
+          "type": "string",
+          "description": "Reference to the primary Fornecedor of this product. (Relationship: Fornecedor 1:N Produto)"
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "precoVenda",
+        "estoqueAtual",
+        "ativo"
+      ]
+    },
+    "MovimentacaoEstoque": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "MovimentacaoEstoque",
+      "type": "object",
+      "description": "Records all incoming, outgoing, or adjustment movements of products in stock.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the MovimentacaoEstoque entity."
+        },
+        "produtoId": {
+          "type": "string",
+          "description": "Reference to the Product whose stock was moved. (Relationship: Produto 1:N MovimentacaoEstoque)"
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of stock movement (e.g., entry, exit, adjustment).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quantidade": {
+          "type": "number",
+          "description": "The quantity of product moved."
+        },
+        "quantidadeAnterior": {
+          "type": "number",
+          "description": "The stock quantity before the movement."
+        },
+        "quantidadePosterior": {
+          "type": "number",
+          "description": "The stock quantity after the movement."
+        },
+        "motivo": {
+          "type": "string",
+          "description": "The reason for the stock movement."
+        },
+        "referencia": {
+          "type": "string",
+          "description": "A reference identifier related to the movement (e.g., sale ID, purchase order ID)."
+        },
+        "custoUnitario": {
+          "type": "number",
+          "description": "The unit cost of the product at the time of movement."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the stock movement."
+        },
+        "dataMovimentacao": {
+          "type": "string",
+          "description": "The date and time when the stock movement occurred.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "produtoId",
+        "tipo",
+        "quantidade",
+        "dataMovimentacao"
+      ]
+    },
+    "Fornecedor": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Fornecedor",
+      "type": "object",
+      "description": "Stores information about suppliers of products and services.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Fornecedor entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The legal name or trade name of the supplier."
+        },
+        "cnpj": {
+          "type": "string",
+          "description": "The CNPJ (Cadastro Nacional da Pessoa Jurídica) of the supplier."
+        },
+        "telefone": {
+          "type": "string",
+          "description": "The primary contact phone number for the supplier."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the supplier.",
+          "format": "email"
+        },
+        "contato": {
+          "type": "string",
+          "description": "The name of the main contact person at the supplier."
+        },
+        "cidade": {
+          "type": "string",
+          "description": "The city where the supplier is located."
+        },
+        "estado": {
+          "type": "string",
+          "description": "The state or province where the supplier is located."
+        },
+        "prazoEntregaDias": {
+          "type": "number",
+          "description": "The typical delivery time in days from the supplier."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the supplier."
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the supplier is active and currently used."
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "ativo"
+      ]
+    },
+    "PedidoCompra": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PedidoCompra",
+      "type": "object",
+      "description": "Records details of purchase orders made to suppliers.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PedidoCompra entity."
+        },
+        "numero": {
+          "type": "string",
+          "description": "A unique sequential number for the purchase order."
+        },
+        "fornecedorId": {
+          "type": "string",
+          "description": "Reference to the Fornecedor for this purchase order. (Relationship: Fornecedor 1:N PedidoCompra)"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the purchase order.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "subtotal": {
+          "type": "number",
+          "description": "The sum of prices of all items in the order before discounts and freight."
+        },
+        "desconto": {
+          "type": "number",
+          "description": "The total discount applied to the purchase order."
+        },
+        "frete": {
+          "type": "number",
+          "description": "The freight cost for the purchase order."
+        },
+        "total": {
+          "type": "number",
+          "description": "The final total amount of the purchase order."
+        },
+        "dataPedido": {
+          "type": "string",
+          "description": "The date and time when the purchase order was placed.",
+          "format": "date-time"
+        },
+        "dataPrevisao": {
+          "type": "string",
+          "description": "The estimated date and time of delivery.",
+          "format": "date-time"
+        },
+        "dataRecebimento": {
+          "type": "string",
+          "description": "The actual date and time when the order was received.",
+          "format": "date-time"
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the purchase order."
+        }
+      },
+      "required": [
+        "id",
+        "numero",
+        "fornecedorId",
+        "status",
+        "dataPedido",
+        "total"
+      ]
+    },
+    "PedidoCompraItem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PedidoCompraItem",
+      "type": "object",
+      "description": "Represents a single product item included in a purchase order.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PedidoCompraItem entity."
+        },
+        "pedidoCompraId": {
+          "type": "string",
+          "description": "Reference to the PedidoCompra this item belongs to. (Relationship: PedidoCompra 1:N PedidoCompraItem)"
+        },
+        "produtoId": {
+          "type": "string",
+          "description": "Reference to the Product being ordered. (Relationship: Produto 1:N PedidoCompraItem)"
+        },
+        "quantidade": {
+          "type": "number",
+          "description": "The quantity of the product ordered."
+        },
+        "precoUnitario": {
+          "type": "number",
+          "description": "The unit price of the product as per the purchase order."
+        },
+        "total": {
+          "type": "number",
+          "description": "The total price for this item after quantity calculation."
+        }
+      },
+      "required": [
+        "id",
+        "pedidoCompraId",
+        "produtoId",
+        "quantidade",
+        "precoUnitario",
+        "total"
+      ]
+    },
+    "ContaFinanceira": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ContaFinanceira",
+      "type": "object",
+      "description": "Manages financial entries, categorized as either accounts payable (despesas) or accounts receivable (receitas).",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ContaFinanceira entity."
+        },
+        "descricao": {
+          "type": "string",
+          "description": "A brief description of the financial entry."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of financial entry (revenue or expense).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "planoContaCodigo": {
+          "type": "string",
+          "description": "Reference to the PlanoContas entry for categorization. (Relationship: PlanoContas 1:N ContaFinanceira)"
+        },
+        "valor": {
+          "type": "number",
+          "description": "The monetary value of the financial entry."
+        },
+        "dataVencimento": {
+          "type": "string",
+          "description": "The due date for the financial entry.",
+          "format": "date-time"
+        },
+        "dataPagamento": {
+          "type": "string",
+          "description": "The actual date when the financial entry was paid or received.",
+          "format": "date-time"
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the financial entry.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "formaPagamento": {
+          "type": "string",
+          "description": "The method of payment for the entry (e.g., Pix, Credit Card)."
+        },
+        "contaId": {
+          "type": "string",
+          "description": "Reference to the ContaBancaria used for this transaction. (Relationship: ContaBancaria 1:N ContaFinanceira)"
+        },
+        "fornecedorId": {
+          "type": "string",
+          "description": "Reference to the Fornecedor if this is an expense. (Relationship: Fornecedor 1:N ContaFinanceira)"
+        },
+        "vendaId": {
+          "type": "string",
+          "description": "Reference to the Venda if this is a revenue. (Relationship: Venda 1:N ContaFinanceira)"
+        },
+        "recorrente": {
+          "type": "boolean",
+          "description": "Indicates if this is a recurring financial entry."
+        },
+        "observacoes": {
+          "type": "string",
+          "description": "General observations or notes about the financial entry."
+        },
+        "comprovanteUrl": {
+          "type": "string",
+          "description": "URL to the payment receipt or proof of transaction.",
+          "format": "uri"
+        }
+      },
+      "required": [
+        "id",
+        "descricao",
+        "tipo",
+        "planoContaCodigo",
+        "valor",
+        "dataVencimento",
+        "status"
+      ]
+    },
+    "ContaBancaria": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "ContaBancaria",
+      "type": "object",
+      "description": "Manages information about the company's bank accounts or cash holdings.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the ContaBancaria entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "A descriptive name for the account (e.g., 'Conta Corrente Principal')."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of account (e.g., checking, savings, cash, Pix).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "banco": {
+          "type": "string",
+          "description": "The name of the bank."
+        },
+        "agencia": {
+          "type": "string",
+          "description": "The bank branch number."
+        },
+        "numero": {
+          "type": "string",
+          "description": "The bank account number."
+        },
+        "saldoInicial": {
+          "type": "number",
+          "description": "The initial balance of the account."
+        },
+        "saldoAtual": {
+          "type": "number",
+          "description": "The current balance of the account."
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the account is active."
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "tipo",
+        "saldoInicial",
+        "saldoAtual",
+        "ativo"
+      ]
+    },
+    "PlanoContas": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "PlanoContas",
+      "type": "object",
+      "description": "Defines the chart of accounts for financial categorization.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the PlanoContas entity, often a code."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The name of the account category (e.g., 'Salários', 'Vendas de Produtos')."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of account (revenue or expense).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "grupo": {
+          "type": "string",
+          "description": "The group to which this account belongs (e.g., 'Despesas Operacionais')."
+        },
+        "nivel": {
+          "type": "number",
+          "description": "The hierarchical level of the account in the chart of accounts."
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the account category is active."
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "tipo",
+        "nivel",
+        "ativo"
+      ]
+    },
+    "Vendedor": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Vendedor",
+      "type": "object",
+      "description": "Represents a sales associate within the company, including commission details.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Vendedor entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The full name of the salesperson."
+        },
+        "email": {
+          "type": "string",
+          "description": "The email address of the salesperson.",
+          "format": "email"
+        },
+        "telefone": {
+          "type": "string",
+          "description": "The contact phone number of the salesperson."
+        },
+        "cpf": {
+          "type": "string",
+          "description": "The CPF (Cadastro de Pessoas Físicas) number of the salesperson."
+        },
+        "comissao": {
+          "type": "number",
+          "description": "The commission rate or fixed amount for the salesperson."
+        },
+        "comissaoTipo": {
+          "type": "string",
+          "description": "The type of commission (percentage or fixed amount).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the salesperson is active."
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "email",
+        "comissao",
+        "comissaoTipo",
+        "ativo"
+      ]
+    },
+    "Meta": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Meta",
+      "type": "object",
+      "description": "Sets sales targets and tracks performance for individual salespeople over a period.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Meta entity."
+        },
+        "vendedorId": {
+          "type": "string",
+          "description": "Reference to the Vendedor for whom this goal is set. (Relationship: Vendedor 1:N Meta)"
+        },
+        "mes": {
+          "type": "string",
+          "description": "The month for which the goal is set (YYYY-MM-DD, typically first day of month).",
+          "format": "date"
+        },
+        "metaValor": {
+          "type": "number",
+          "description": "The target sales value for the period."
+        },
+        "valorVendido": {
+          "type": "number",
+          "description": "The actual sales value achieved for the period."
+        },
+        "comissaoPercentual": {
+          "type": "number",
+          "description": "The percentage of commission applied to sales exceeding the target."
+        },
+        "comissaoValor": {
+          "type": "number",
+          "description": "The calculated commission amount based on sales performance."
+        },
+        "status": {
+          "type": "string",
+          "description": "The status of the goal (open or closed).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "id",
+        "vendedorId",
+        "mes",
+        "metaValor",
+        "status"
+      ]
+    },
+    "CampanhaMarketing": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "CampanhaMarketing",
+      "type": "object",
+      "description": "Manages marketing campaigns, including type, channel, message content, and performance metrics.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the CampanhaMarketing entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The name of the marketing campaign."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of marketing campaign.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "canal": {
+          "type": "string",
+          "description": "The communication channel(s) used for the campaign.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the campaign.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "mensagem": {
+          "type": "string",
+          "description": "The main message content of the campaign."
+        },
+        "segmentacao": {
+          "type": "string",
+          "description": "Criteria used to segment the audience for the campaign (e.g., JSON string of filters)."
+        },
+        "totalContatos": {
+          "type": "number",
+          "description": "The total number of contacts targeted by the campaign."
+        },
+        "totalEnviados": {
+          "type": "number",
+          "description": "The total number of messages successfully sent."
+        },
+        "totalLidos": {
+          "type": "number",
+          "description": "The total number of messages read by recipients."
+        },
+        "dataAgendamento": {
+          "type": "string",
+          "description": "The scheduled date and time for the campaign to run.",
+          "format": "date-time"
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "tipo",
+        "canal",
+        "status",
+        "mensagem"
+      ]
+    },
+    "TemplatesMensagem": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "TemplatesMensagem",
+      "type": "object",
+      "description": "Stores reusable message templates for various communication purposes.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the TemplatesMensagem entity."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The name of the message template."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The category or purpose of the template.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "conteudo": {
+          "type": "string",
+          "description": "The raw content of the message template, potentially with placeholders."
+        },
+        "variaveis": {
+          "type": "array",
+          "description": "A list of variable names used within the template content (e.g., '{{nome}}', '{{produto}}').",
+          "items": {
+            "type": "string"
+          }
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the template is active and available for use."
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "tipo",
+        "conteudo",
+        "ativo"
+      ]
+    },
+    "Agenda": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Agenda",
+      "type": "object",
+      "description": "Manages scheduled tasks, appointments, and reminders for staff or clients.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Agenda entity."
+        },
+        "titulo": {
+          "type": "string",
+          "description": "The title of the agenda item."
+        },
+        "descricao": {
+          "type": "string",
+          "description": "A detailed description of the agenda item."
+        },
+        "tipo": {
+          "type": "string",
+          "description": "The type of agenda item (task, appointment, reminder, meeting).",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "status": {
+          "type": "string",
+          "description": "The current status of the agenda item.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "prioridade": {
+          "type": "string",
+          "description": "The priority level of the agenda item.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "dataInicio": {
+          "type": "string",
+          "description": "The start date and time of the agenda item.",
+          "format": "date-time"
+        },
+        "dataFim": {
+          "type": "string",
+          "description": "The end date and time of the agenda item.",
+          "format": "date-time"
+        },
+        "diaTodo": {
+          "type": "boolean",
+          "description": "Indicates if the agenda item lasts all day."
+        },
+        "responsavelId": {
+          "type": "string",
+          "description": "Reference to the Vendedor responsible for this agenda item. (Relationship: Vendedor 1:N Agenda)"
+        },
+        "clientId": {
+          "type": "string",
+          "description": "Reference to the Client associated with this agenda item. (Relationship: Cliente 1:N Agenda)"
+        },
+        "cor": {
+          "type": "string",
+          "description": "A color code to visually identify the agenda item in a calendar."
+        },
+        "recorrente": {
+          "type": "boolean",
+          "description": "Indicates if the agenda item is recurring."
+        }
+      },
+      "required": [
+        "id",
+        "titulo",
+        "tipo",
+        "status",
+        "prioridade",
+        "dataInicio"
+      ]
+    },
+    "Empresa": {
+      "$schema": "http://json-schema.org/draft-07/schema#",
+      "title": "Empresa",
+      "type": "object",
+      "description": "Stores general configuration and master data for the retail store/company.",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier for the Empresa entity (expected to be a single entry, e.g., 'main')."
+        },
+        "nome": {
+          "type": "string",
+          "description": "The official name of the company/store."
+        },
+        "cnpj": {
+          "type": "string",
+          "description": "The CNPJ (Cadastro Nacional da Pessoa Jurídica) of the company."
+        },
+        "telefone": {
+          "type": "string",
+          "description": "The primary contact phone number for the company."
+        },
+        "email": {
+          "type": "string",
+          "description": "The official email address of the company.",
+          "format": "email"
+        },
+        "segmento": {
+          "type": "string",
+          "description": "The business segment of the company.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "plano": {
+          "type": "string",
+          "description": "The subscription plan of the company for the CRManager system.",
+          "format": "enum",
+          "items": {
+            "type": "string"
+          }
+        },
+        "logradouro": {
+          "type": "string",
+          "description": "The street name or public place of the company's address."
+        },
+        "numero": {
+          "type": "string",
+          "description": "The building number of the company's address."
+        },
+        "complemento": {
+          "type": "string",
+          "description": "Additional address details, such as suite or floor number."
+        },
+        "bairro": {
+          "type": "string",
+          "description": "The neighborhood of the company's address."
+        },
+        "cidade": {
+          "type": "string",
+          "description": "The city of the company's address."
+        },
+        "estado": {
+          "type": "string",
+          "description": "The state or province of the company's address."
+        },
+        "cep": {
+          "type": "string",
+          "description": "The ZIP code (CEP) of the company's address."
+        },
+        "logoUrl": {
+          "type": "string",
+          "description": "URL to the company's logo image.",
+          "format": "uri"
+        },
+        "whatsappApiUrl": {
+          "type": "string",
+          "description": "The URL endpoint for the WhatsApp API integration.",
+          "format": "uri"
+        },
+        "whatsappApiKey": {
+          "type": "string",
+          "description": "The API key for authentication with the WhatsApp API."
+        },
+        "whatsappInstance": {
+          "type": "string",
+          "description": "The WhatsApp API instance identifier."
+        },
+        "ativo": {
+          "type": "boolean",
+          "description": "Indicates if the company's account in the system is active."
+        },
+        "responsavelNome": {
+          "type": "string",
+          "description": "The name of the primary contact person for the company."
+        },
+        "responsavelEmail": {
+          "type": "string",
+          "description": "The email of the primary contact person for the company.",
+          "format": "email"
+        }
+      },
+      "required": [
+        "id",
+        "nome",
+        "cnpj",
+        "email",
+        "segmento",
+        "plano",
+        "ativo",
+        "responsavelNome",
+        "responsavelEmail"
+      ]
+    }
+  },
+  "auth": {
+    "providers": [
+      "password",
+      "anonymous"
+    ]
+  },
+  "firestore": {
+    "structure": [
+      {
+        "path": "/empresa/{empresaId}",
+        "definition": {
+          "entityName": "Empresa",
+          "schema": {
+            "$ref": "#/backend/entities/Empresa"
+          },
+          "description": "Stores global company configuration and settings. Expected to be a singleton (e.g., empresaId = 'main'). Access is restricted to admin users."
+        }
+      },
+      {
+        "path": "/vendedores/{vendedorId}",
+        "definition": {
+          "entityName": "Vendedor",
+          "schema": {
+            "$ref": "#/backend/entities/Vendedor"
+          },
+          "description": "Stores profiles of sales associates who are system users. The document ID (vendedorId) should match the Firebase Authentication UID. Includes denormalized 'ativo' field for system access control.",
+          "params": [
+            {
+              "name": "vendedorId",
+              "description": "The unique ID of the Vendedor, corresponding to a Firebase Authentication UID."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/roles_admin/{adminUid}",
+        "definition": {
+          "entityName": "AdminRole",
+          "schema": {
+            "$ref": "#/backend/entities/Vendedor"
+          },
+          "description": "Collection for granting administrative privileges. The document ID (adminUid) should match the Firebase Authentication UID of an admin user. Existence of a document here grants admin role."
+        }
+      },
+      {
+        "path": "/clientes/{clienteId}",
+        "definition": {
+          "entityName": "Cliente",
+          "schema": {
+            "$ref": "#/backend/entities/Cliente"
+          },
+          "description": "Master list of all customers. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "clienteId",
+              "description": "The unique ID of the Cliente."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/clientes/{clienteId}/filhos/{filhoId}",
+        "definition": {
+          "entityName": "Filho",
+          "schema": {
+            "$ref": "#/backend/entities/Filho"
+          },
+          "description": "Children linked to a specific client. Includes denormalized 'clientId' for authorization independence and easier querying.",
+          "params": [
+            {
+              "name": "clienteId",
+              "description": "The unique ID of the parent Cliente."
+            },
+            {
+              "name": "filhoId",
+              "description": "The unique ID of the Filho."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/atendimentos/{atendimentoId}",
+        "definition": {
+          "entityName": "Atendimento",
+          "schema": {
+            "$ref": "#/backend/entities/Atendimento"
+          },
+          "description": "Records customer service interactions. Includes denormalized 'clientId', 'clientNome', 'attendantId', 'attendantNome' for authorization independence and query efficiency.",
+          "params": [
+            {
+              "name": "atendimentoId",
+              "description": "The unique ID of the Atendimento."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/atendimentos/{atendimentoId}/mensagens/{mensagemId}",
+        "definition": {
+          "entityName": "Mensagem",
+          "schema": {
+            "$ref": "#/backend/entities/Mensagem"
+          },
+          "description": "Individual messages within an attendance chat. Includes denormalized 'atendimentoId' and 'remetente' for authorization independence and clarity.",
+          "params": [
+            {
+              "name": "atendimentoId",
+              "description": "The unique ID of the parent Atendimento."
+            },
+            {
+              "name": "mensagemId",
+              "description": "The unique ID of the Mensagem."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/vendas/{vendaId}",
+        "definition": {
+          "entityName": "Venda",
+          "schema": {
+            "$ref": "#/backend/entities/Venda"
+          },
+          "description": "Records sales transactions. Includes denormalized 'clientId', 'clientNome', 'vendedorId', 'vendedorNome' for authorization independence and query efficiency.",
+          "params": [
+            {
+              "name": "vendaId",
+              "description": "The unique ID of the Venda."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/vendas/{vendaId}/venda_itens/{vendaItemId}",
+        "definition": {
+          "entityName": "VendaItem",
+          "schema": {
+            "$ref": "#/backend/entities/VendaItem"
+          },
+          "description": "Individual product items within a sale. Includes denormalized 'vendaId', 'produtoId', 'produtoNome' for authorization independence and clarity.",
+          "params": [
+            {
+              "name": "vendaId",
+              "description": "The unique ID of the parent Venda."
+            },
+            {
+              "name": "vendaItemId",
+              "description": "The unique ID of the VendaItem."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/produtos/{produtoId}",
+        "definition": {
+          "entityName": "Produto",
+          "schema": {
+            "$ref": "#/backend/entities/Produto"
+          },
+          "description": "Product catalog. Includes denormalized 'fornecedorId', 'fornecedorNome' for authorization independence and query efficiency.",
+          "params": [
+            {
+              "name": "produtoId",
+              "description": "The unique ID of the Produto."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/produtos/{produtoId}/movimentacoes_estoque/{movimentacaoEstoqueId}",
+        "definition": {
+          "entityName": "MovimentacaoEstoque",
+          "schema": {
+            "$ref": "#/backend/entities/MovimentacaoEstoque"
+          },
+          "description": "Records stock movements for a specific product. Includes denormalized 'produtoId', 'produtoNome' for authorization independence and clarity.",
+          "params": [
+            {
+              "name": "produtoId",
+              "description": "The unique ID of the parent Produto."
+            },
+            {
+              "name": "movimentacaoEstoqueId",
+              "description": "The unique ID of the MovimentacaoEstoque."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/fornecedores/{fornecedorId}",
+        "definition": {
+          "entityName": "Fornecedor",
+          "schema": {
+            "$ref": "#/backend/entities/Fornecedor"
+          },
+          "description": "List of product and service suppliers. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "fornecedorId",
+              "description": "The unique ID of the Fornecedor."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/pedidos_compra/{pedidoCompraId}",
+        "definition": {
+          "entityName": "PedidoCompra",
+          "schema": {
+            "$ref": "#/backend/entities/PedidoCompra"
+          },
+          "description": "Records purchase orders made to suppliers. Includes denormalized 'fornecedorId', 'fornecedorNome' for authorization independence and query efficiency.",
+          "params": [
+            {
+              "name": "pedidoCompraId",
+              "description": "The unique ID of the PedidoCompra."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/pedidos_compra/{pedidoCompraId}/pedido_compra_itens/{pedidoCompraItemId}",
+        "definition": {
+          "entityName": "PedidoCompraItem",
+          "schema": {
+            "$ref": "#/backend/entities/PedidoCompraItem"
+          },
+          "description": "Individual product items within a purchase order. Includes denormalized 'pedidoCompraId', 'produtoId', 'produtoNome' for authorization independence and clarity.",
+          "params": [
+            {
+              "name": "pedidoCompraId",
+              "description": "The unique ID of the parent PedidoCompra."
+            },
+            {
+              "name": "pedidoCompraItemId",
+              "description": "The unique ID of the PedidoCompraItem."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/contas_financeiras/{contaFinanceiraId}",
+        "definition": {
+          "entityName": "ContaFinanceira",
+          "schema": {
+            "$ref": "#/backend/entities/ContaFinanceira"
+          },
+          "description": "Manages financial entries (payable/receivable). Includes denormalized 'planoContaCodigo', 'fornecedorId', 'fornecedorNome', 'vendaId', 'contaId' for authorization independence and query efficiency.",
+          "params": [
+            {
+              "name": "contaFinanceiraId",
+              "description": "The unique ID of the ContaFinanceira."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/contas_bancarias/{contaBancariaId}",
+        "definition": {
+          "entityName": "ContaBancaria",
+          "schema": {
+            "$ref": "#/backend/entities/ContaBancaria"
+          },
+          "description": "Manages company's bank accounts and cash holdings. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "contaBancariaId",
+              "description": "The unique ID of the ContaBancaria."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/plano_contas/{planoContasId}",
+        "definition": {
+          "entityName": "PlanoContas",
+          "schema": {
+            "$ref": "#/backend/entities/PlanoContas"
+          },
+          "description": "Defines the chart of accounts for financial categorization. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "planoContasId",
+              "description": "The unique ID of the PlanoContas."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/metas/{metaId}",
+        "definition": {
+          "entityName": "Meta",
+          "schema": {
+            "$ref": "#/backend/entities/Meta"
+          },
+          "description": "Sales targets for individual salespeople. Includes denormalized 'vendedorId', 'vendedorNome' for authorization independence and query efficiency. Allows filtering by current user's vendedorId.",
+          "params": [
+            {
+              "name": "metaId",
+              "description": "The unique ID of the Meta."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/campanhas_marketing/{campanhaMarketingId}",
+        "definition": {
+          "entityName": "CampanhaMarketing",
+          "schema": {
+            "$ref": "#/backend/entities/CampanhaMarketing"
+          },
+          "description": "Manages marketing campaigns. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "campanhaMarketingId",
+              "description": "The unique ID of the CampanhaMarketing."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/templates_mensagem/{templateMensagemId}",
+        "definition": {
+          "entityName": "TemplatesMensagem",
+          "schema": {
+            "$ref": "#/backend/entities/TemplatesMensagem"
+          },
+          "description": "Stores reusable message templates. Accessible by authenticated vendedores and admins.",
+          "params": [
+            {
+              "name": "templateMensagemId",
+              "description": "The unique ID of the TemplatesMensagem."
+            }
+          ]
+        }
+      },
+      {
+        "path": "/agenda_items/{agendaItemId}",
+        "definition": {
+          "entityName": "Agenda",
+          "schema": {
+            "$ref": "#/backend/entities/Agenda"
+          },
+          "description": "Manages scheduled tasks, appointments, and reminders. Includes denormalized 'responsavelId', 'responsavelNome', 'clientId', 'clientNome' for authorization independence and query efficiency. Allows filtering by current user's responsavelId.",
+          "params": [
+            {
+              "name": "agendaItemId",
+              "description": "The unique ID of the Agenda item."
+            }
+          ]
+        }
+      }
+    ],
+    "reasoning": "The Firestore structure for CRManager is designed to prioritize authorization independence, clarity of intent, and efficient querying, adhering strictly to the provided core design principles and strategy mandates. The overarching strategy assumes a single-tenant model, where all operational data belongs to one 'Empresa', and 'Vendedor' entities represent the authorized users of the system. This means most data is company-wide, with specific items like 'Meta' and 'Agenda' being associated with individual 'Vendedor's.\n\n**Authorization Independence (CRITICAL):**\nThis design achieves authorization independence primarily through extensive **denormalization (Strategy A)**. Instead of relying on `get()` calls in security rules to check parent or related documents for authorization context, critical IDs (and sometimes names) are copied directly into the documents that depend on them. For instance:\n*   `Filho` documents include `clientId`.\n*   `Atendimento` documents include `clientId`, `clientNome`, `attendantId`, and `attendantNome`.\n*   `Venda` documents include `clientId`, `clientNome`, `vendedorId`, and `vendedorNome`.\n*   Nested items like `VendaItem`, `MovimentacaoEstoque`, and `PedidoCompraItem` include their respective parent IDs (`vendaId`, `produtoId`, `pedidoCompraId`) and often the relevant entity names.\n*   `Meta` and `Agenda` documents include `vendedorId`/`responsavelId` and `clientId` respectively.\nThis approach ensures that Firestore Security Rules can evaluate access permissions directly on the `resource.data` of the document being accessed. For example, a rule can verify `resource.data.vendedorId == request.auth.uid` without needing to fetch the parent `Vendedor` document, thus preventing broken atomic operations and simplifying rule debugging.\n\n**QAPs (Rules are not Filters):**\nSecure `list` operations (QAPs) are enabled through **Structural Segregation (Strategy B)** and **Access Modeling (Strategy C)**:\n*   **Top-level Collections:** Most core business entities (`Clientes`, `Produtos`, `Fornecedores`, `Vendas`, `Atendimentos`, `ContaFinanceira`, `ContaBancaria`, `PlanoContas`, `CampanhaMarketing`, `TemplatesMensagem`) are placed in top-level collections. This design choice ensures that all documents within these collections inherently share a homogeneous security posture (e.g., 'all products are visible to any authorized salesperson'). Security rules can then grant or deny access to the entire collection based on whether the `request.auth.uid` corresponds to an active `Vendedor` or an `AdminRole`. This avoids the need for rules to act as data filters, which can lead to inefficient queries and security vulnerabilities.\n*   **Role-Based Access Control (DBAC):** The `/roles_admin/{adminUid}` collection implements DBAC using the **Existence over Content** pattern. The mere existence of a document with `request.auth.uid` as its ID in this collection grants administrative privileges. This is an efficient and clear way to manage global roles.\n*   **User-Scoped Data within Company-Wide Collections:** For `Meta` and `Agenda`, while they are company-wide, they include `vendedorId` (or `responsavelId`) as a denormalized field. This allows non-admin users to `list` and `read` *only* the documents where `resource.data.vendedorId == request.auth.uid`, effectively scoping their view securely without relying on client-side filtering or complex rule evaluations that would incur additional reads or fail `list` operations.\n\n**Data Clarity and Predictability (Strategy D):**\n*   **Explicit State Modeling:** Entities like `Venda`, `Atendimento`, `CampanhaMarketing`, `ContaFinanceira`, `Meta`, and `Agenda` utilize a dedicated `status` field, ensuring clarity about their lifecycle.\n*   **Predictable Schema & Naming:** All paths use semantic, consistent naming conventions (e.g., `clientes`, `vendedores`). Wildcards are descriptive (e.g., `{clienteId}`, `{vendedorId}`), enhancing readability and debuggability. Fields for authorization context are consistently named (e.g., `clientId`, `vendedorId`, `attendantId`).\n\nIn summary, the design employs strategic denormalization and structural segregation to create a highly secure, scalable, and easily auditable Firestore data model. It directly addresses the challenges of authorization independence and QAPs, ensuring robust security rules without compromising performance or maintainability."
+  }
+}
