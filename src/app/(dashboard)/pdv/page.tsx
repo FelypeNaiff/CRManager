@@ -10,36 +10,37 @@ import {
   Minus, 
   Trash2, 
   CreditCard, 
-  Banknote, 
-  QrCode, 
   Receipt,
   User,
   ShoppingBag,
-  TicketPercent
+  TicketPercent,
+  QrCode,
+  Loader2
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Separator } from "@/components/ui/separator"
 import { toast } from "@/hooks/use-toast"
-
-const products = [
-  { id: 1, name: "Camiseta Algodão Kids", price: 49.90, stock: 15, category: "Roupas", image: "https://picsum.photos/seed/p1/200/200" },
-  { id: 2, name: "Vestido Floral Verão", price: 89.90, stock: 8, category: "Vestidos", image: "https://picsum.photos/seed/p2/200/200" },
-  { id: 3, name: "Tênis Esportivo Infantil", price: 129.90, stock: 5, category: "Calçados", image: "https://picsum.photos/seed/p3/200/200" },
-  { id: 4, name: "Conjunto Moletom Inverno", price: 159.90, stock: 12, category: "Inverno", image: "https://picsum.photos/seed/p4/200/200" },
-  { id: 5, name: "Boné Kids Estampado", price: 35.00, stock: 20, category: "Acessórios", image: "https://picsum.photos/seed/p5/200/200" },
-  { id: 6, name: "Shorts Jeans Infantil", price: 59.90, stock: 10, category: "Roupas", image: "https://picsum.photos/seed/p6/200/200" },
-]
+import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
+import { collection } from "firebase/firestore"
 
 export default function PDVPage() {
-  const [cart, setCart] = useState<{product: typeof products[0], quantity: number}[]>([])
+  const [cart, setCart] = useState<{product: any, quantity: number}[]>([])
   const [searchTerm, setSearchTerm] = useState("")
+  const db = useFirestore()
 
-  const filteredProducts = products.filter(p => 
-    p.name.toLowerCase().includes(searchTerm.toLowerCase())
+  const produtosQuery = useMemoFirebase(() => {
+    if (!db) return null
+    return collection(db, "produtos")
+  }, [db])
+
+  const { data: products, isLoading } = useCollection(produtosQuery)
+
+  const filteredProducts = (products || []).filter(p => 
+    p.nome?.toLowerCase().includes(searchTerm.toLowerCase())
   )
 
-  const addToCart = (product: typeof products[0]) => {
+  const addToCart = (product: any) => {
     setCart(prev => {
       const existing = prev.find(item => item.product.id === product.id)
       if (existing) {
@@ -53,15 +54,15 @@ export default function PDVPage() {
     })
     toast({
       title: "Produto adicionado",
-      description: `${product.name} foi adicionado ao carrinho.`
+      description: `${product.nome} foi adicionado ao carrinho.`
     })
   }
 
-  const removeFromCart = (productId: number) => {
+  const removeFromCart = (productId: string) => {
     setCart(prev => prev.filter(item => item.product.id !== productId))
   }
 
-  const updateQuantity = (productId: number, delta: number) => {
+  const updateQuantity = (productId: string, delta: number) => {
     setCart(prev => prev.map(item => {
       if (item.product.id === productId) {
         const newQty = Math.max(1, item.quantity + delta)
@@ -71,7 +72,7 @@ export default function PDVPage() {
     }))
   }
 
-  const subtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0)
+  const subtotal = cart.reduce((acc, item) => acc + (item.product.precoVenda * item.quantity), 0)
   const discount = 0
   const total = subtotal - discount
 
@@ -93,7 +94,6 @@ export default function PDVPage() {
 
   return (
     <div className="flex h-full flex-col lg:flex-row gap-6">
-      {/* Product List Section */}
       <div className="flex-1 flex flex-col gap-4">
         <div className="flex items-center gap-4">
           <div className="relative flex-1">
@@ -111,39 +111,49 @@ export default function PDVPage() {
         </div>
 
         <ScrollArea className="flex-1">
-          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
-            {filteredProducts.map((product) => (
-              <Card 
-                key={product.id} 
-                className="overflow-hidden group hover:shadow-md transition-all cursor-pointer border-secondary"
-                onClick={() => addToCart(product)}
-              >
-                <div className="aspect-square relative overflow-hidden bg-secondary/30">
-                  <img 
-                    src={product.image} 
-                    alt={product.name} 
-                    className="object-cover w-full h-full group-hover:scale-105 transition-transform"
-                  />
-                  <Badge className="absolute top-2 left-2 bg-primary/90">
-                    {product.category}
-                  </Badge>
-                </div>
-                <CardContent className="p-3">
-                  <h3 className="font-medium text-sm line-clamp-1">{product.name}</h3>
-                  <div className="flex items-center justify-between mt-2">
-                    <span className="font-bold text-primary">R$ {product.price.toFixed(2)}</span>
-                    <span className={`text-[10px] ${product.stock < 10 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                      Estoque: {product.stock}
-                    </span>
+          {isLoading ? (
+            <div className="flex flex-col items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+              <p className="text-muted-foreground">Carregando produtos...</p>
+            </div>
+          ) : filteredProducts.length === 0 ? (
+            <div className="text-center py-20 border rounded-xl bg-muted/10">
+              <p className="text-muted-foreground">Nenhum produto disponível.</p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
+              {filteredProducts.map((product) => (
+                <Card 
+                  key={product.id} 
+                  className="overflow-hidden group hover:shadow-md transition-all cursor-pointer border-secondary"
+                  onClick={() => addToCart(product)}
+                >
+                  <div className="aspect-square relative overflow-hidden bg-secondary/30">
+                    <img 
+                      src={product.fotoUrl || "https://picsum.photos/seed/placeholder/200/200"} 
+                      alt={product.nome} 
+                      className="object-cover w-full h-full group-hover:scale-105 transition-transform"
+                    />
+                    <Badge className="absolute top-2 left-2 bg-primary/90">
+                      {product.categoria || "Geral"}
+                    </Badge>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                  <CardContent className="p-3">
+                    <h3 className="font-medium text-sm line-clamp-1">{product.nome}</h3>
+                    <div className="flex items-center justify-between mt-2">
+                      <span className="font-bold text-primary">R$ {product.precoVenda?.toFixed(2)}</span>
+                      <span className={`text-[10px] ${product.estoqueAtual < 10 ? 'text-amber-500' : 'text-emerald-500'}`}>
+                        Estoque: {product.estoqueAtual}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
         </ScrollArea>
       </div>
 
-      {/* Cart Sidebar Section */}
       <Card className="w-full lg:w-[400px] flex flex-col h-[calc(100vh-10rem)] shadow-lg border-primary/10">
         <CardHeader className="bg-primary/5 py-4 border-b">
           <div className="flex items-center justify-between">
@@ -176,11 +186,11 @@ export default function PDVPage() {
                 {cart.map((item) => (
                   <div key={item.product.id} className="flex gap-3 animate-in fade-in slide-in-from-right-2 duration-200">
                     <div className="h-14 w-14 rounded border overflow-hidden shrink-0 bg-secondary/20">
-                      <img src={item.product.image} className="w-full h-full object-cover" />
+                      <img src={item.product.fotoUrl || "https://picsum.photos/seed/placeholder/100/100"} className="w-full h-full object-cover" />
                     </div>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product.name}</p>
-                      <p className="text-xs font-bold text-primary">R$ {item.product.price.toFixed(2)}</p>
+                      <p className="text-sm font-medium truncate">{item.product.nome}</p>
+                      <p className="text-xs font-bold text-primary">R$ {item.product.precoVenda?.toFixed(2)}</p>
                       <div className="flex items-center gap-3 mt-1">
                         <div className="flex items-center border rounded h-7">
                           <button 
@@ -206,7 +216,7 @@ export default function PDVPage() {
                       </div>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-bold">R$ {(item.product.price * item.quantity).toFixed(2)}</p>
+                      <p className="text-sm font-bold">R$ {(item.product.precoVenda * item.quantity).toFixed(2)}</p>
                     </div>
                   </div>
                 ))}

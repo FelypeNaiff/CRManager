@@ -8,7 +8,6 @@ import {
   Megaphone, 
   Sparkles, 
   Send, 
-  Calendar, 
   Users, 
   Target,
   Plus,
@@ -20,12 +19,18 @@ import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { generateMarketingCampaignContent } from "@/ai/flows/marketing-campaign-content-generator"
 import { toast } from "@/hooks/use-toast"
+import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
+import { collection } from "firebase/firestore"
 
 export default function CampanhasPage() {
   const [targetAudience, setTargetAudience] = useState("")
   const [objective, setObjective] = useState("")
   const [generatedContent, setGeneratedContent] = useState("")
   const [isGenerating, setIsGenerating] = useState(false)
+  const db = useFirestore()
+
+  const campanhasQuery = useMemoFirebase(() => db ? collection(db, "campanhas_marketing") : null, [db])
+  const { data: campaigns, isLoading } = useCollection(campanhasQuery)
 
   const handleGenerateContent = async () => {
     if (!targetAudience || !objective) {
@@ -59,12 +64,6 @@ export default function CampanhasPage() {
     }
   }
 
-  const campaigns = [
-    { id: 1, name: "Promoção Dia das Crianças", status: "Enviando", type: "WhatsApp", stats: "750/1200", color: "bg-primary" },
-    { id: 2, name: "Reativação Clientes 6 Meses", status: "Agendada", type: "E-mail", stats: "Aguardando", color: "bg-blue-500" },
-    { id: 3, name: "Lançamento Verão 2024", status: "Concluída", type: "WhatsApp", stats: "2500/2500", color: "bg-emerald-500" },
-  ]
-
   return (
     <div className="space-y-8">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -78,31 +77,40 @@ export default function CampanhasPage() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Current Campaigns List */}
         <div className="lg:col-span-1 space-y-4">
           <h2 className="text-lg font-bold flex items-center gap-2">
             <Clock className="h-5 w-5 text-primary" /> Campanhas Recentes
           </h2>
-          {campaigns.map(camp => (
-            <Card key={camp.id} className="shadow-sm border-l-4" style={{ borderLeftColor: `var(--color-${camp.id})` }}>
-              <CardContent className="p-4">
-                <div className="flex justify-between items-start mb-2">
-                  <h3 className="font-bold">{camp.name}</h3>
-                  <Badge variant={camp.status === "Concluída" ? "default" : "outline"} className="text-[10px]">
-                    {camp.status}
-                  </Badge>
-                </div>
-                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                  <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {camp.type}</span>
-                  <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" /> {camp.stats}</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          
+          {isLoading ? (
+            <div className="flex justify-center py-10">
+              <Loader2 className="h-6 w-6 animate-spin text-primary" />
+            </div>
+          ) : !campaigns || campaigns.length === 0 ? (
+            <div className="text-center py-10 border rounded-xl bg-muted/5">
+              <p className="text-sm text-muted-foreground">Nenhuma campanha cadastrada.</p>
+            </div>
+          ) : (
+            campaigns.map((camp: any) => (
+              <Card key={camp.id} className="shadow-sm border-l-4 border-l-primary">
+                <CardContent className="p-4">
+                  <div className="flex justify-between items-start mb-2">
+                    <h3 className="font-bold">{camp.nome}</h3>
+                    <Badge variant="outline" className="text-[10px]">
+                      {camp.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                    <span className="flex items-center gap-1"><Target className="h-3 w-3" /> {camp.canal}</span>
+                    <span className="flex items-center gap-1"><BarChart3 className="h-3 w-3" /> {camp.totalEnviados || 0}</span>
+                  </div>
+                </CardContent>
+              </Card>
+            ))
+          )}
           <Button variant="outline" className="w-full">Ver todas as campanhas</Button>
         </div>
 
-        {/* AI Campaign Generator */}
         <Card className="lg:col-span-2 shadow-md border-primary/20 overflow-hidden">
           <CardHeader className="bg-primary/5 pb-6">
             <div className="flex items-center gap-3">
