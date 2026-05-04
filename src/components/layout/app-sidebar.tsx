@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { useProfile } from "@/lib/contexts/profile-context"
 import {
   LayoutDashboard,
   Users,
@@ -117,6 +118,7 @@ const navItems = [
 
 export function AppSidebar() {
   const pathname = usePathname()
+  const { activeProfile, logoutProfile } = useProfile()
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
@@ -179,12 +181,12 @@ export function AppSidebar() {
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 p-4">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
-          <div className="h-8 w-8 rounded-full bg-sidebar-accent overflow-hidden">
-            <img src="https://picsum.photos/seed/user1/100/100" alt="Avatar" className="h-full w-full object-cover" />
+          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center font-bold text-sidebar-primary-foreground text-sm">
+            {activeProfile?.nome?.charAt(0) || "?"}
           </div>
-          <div className="flex flex-col overflow-hidden">
-            <span className="truncate text-sm font-medium text-sidebar-primary-foreground">Admin</span>
-            <span className="truncate text-xs text-sidebar-foreground">Sair do sistema</span>
+          <div className="flex flex-col overflow-hidden flex-1">
+            <span className="truncate text-sm font-medium text-sidebar-primary-foreground capitalize">{activeProfile?.nome || "Usuário"}</span>
+            <span className="truncate text-xs text-sidebar-foreground capitalize">{activeProfile?.role || ""}</span>
           </div>
         </div>
       </SidebarFooter>
