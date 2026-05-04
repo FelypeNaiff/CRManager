@@ -8,10 +8,20 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Bell, Search, User, Loader2 } from "lucide-react"
+import { Bell, Search, User, Loader2, LogOut } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useUser } from "@/firebase"
+import { useUser, useAuth } from "@/firebase"
+import { useProfile } from "@/lib/contexts/profile-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import { signOut } from "firebase/auth"
 
 export default function DashboardLayout({
   children,
@@ -19,15 +29,19 @@ export default function DashboardLayout({
   children: React.ReactNode
 }) {
   const { user, isUserLoading } = useUser()
+  const { activeProfile, isLoadingProfile, logoutProfile } = useProfile()
+  const auth = useAuth()
   const router = useRouter()
 
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push("/login")
+    } else if (!isUserLoading && user && !isLoadingProfile && !activeProfile) {
+      router.push("/selecionar-perfil")
     }
-  }, [user, isUserLoading, router])
+  }, [user, isUserLoading, activeProfile, isLoadingProfile, router])
 
-  if (isUserLoading) {
+  if (isUserLoading || isLoadingProfile) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -36,7 +50,18 @@ export default function DashboardLayout({
     )
   }
 
-  if (!user) return null
+  if (!user || !activeProfile) return null
+
+  const handleLogoutProfile = () => {
+    logoutProfile()
+    router.push("/selecionar-perfil")
+  }
+
+  const handleLogoutMaster = async () => {
+    logoutProfile()
+    await signOut(auth)
+    router.push("/login")
+  }
 
   return (
     <SidebarProvider defaultOpen={true}>
@@ -61,14 +86,37 @@ export default function DashboardLayout({
                 <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
               </Button>
               <div className="h-8 w-px bg-border mx-1"></div>
-              <Button variant="ghost" className="gap-2 px-2">
-                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
-                  <User className="h-4 w-4 text-primary" />
-                </div>
-                <span className="hidden sm:inline-block text-sm font-medium">
-                  {user.displayName || "Vendedor"}
-                </span>
-              </Button>
+              
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="gap-2 px-2 hover:bg-secondary">
+                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
+                    <div className="hidden sm:flex flex-col items-start text-left">
+                      <span className="text-sm font-medium leading-none">
+                        {activeProfile.nome}
+                      </span>
+                      <span className="text-xs text-muted-foreground capitalize mt-1">
+                        {activeProfile.role}
+                      </span>
+                    </div>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>Minha Conta</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogoutProfile} className="cursor-pointer">
+                    <User className="mr-2 h-4 w-4" />
+                    <span>Trocar de Perfil</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={handleLogoutMaster} className="cursor-pointer text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    <span>Sair do Sistema</span>
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
           <main className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">

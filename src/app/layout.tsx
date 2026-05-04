@@ -2,6 +2,7 @@ import type {Metadata} from 'next';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
+import { ProfileProvider } from '@/lib/contexts/profile-context';
 
 export const metadata: Metadata = {
   title: 'CRManager - Gestão de Varejo',
@@ -22,8 +23,10 @@ export default function RootLayout({
       </head>
       <body className="font-body antialiased selection:bg-primary/20">
         <FirebaseClientProvider>
-          {children}
-          <Toaster />
+          <ProfileProvider>
+            {children}
+            <Toaster />
+          </ProfileProvider>
         </FirebaseClientProvider>
       </body>
     </html>
