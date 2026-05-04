@@ -135,8 +135,7 @@ export function AppSidebar() {
             <Store className="h-5 w-5" />
           </div>
           <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-headline font-bold text-sidebar-primary-foreground">CRManager</span>
-            <span className="truncate text-xs text-sidebar-foreground">Kids Fashion</span>
+            <span className="truncate font-headline font-bold text-sidebar-foreground">CRManager</span>
           </div>
         </div>
       </SidebarHeader>

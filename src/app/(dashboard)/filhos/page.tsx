@@ -40,7 +40,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake } from "lucide-react"
 import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, addDoc, updateDoc, deleteDoc, doc, query, where, serverTimestamp } from "firebase/firestore"
+import { collection, collectionGroup, addDoc, updateDoc, deleteDoc, doc, query, where, serverTimestamp } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 
@@ -77,8 +77,12 @@ export default function FilhosPage() {
   const [isSaving, setIsSaving] = useState(false)
 
   const filhosQuery = useMemoFirebase(() => {
-    if (!db || !clienteId) return null
-    return query(collection(db, "clientes", clienteId, "filhos"))
+    if (!db) return null
+    if (clienteId) {
+      return query(collection(db, "clientes", clienteId, "filhos"))
+    } else {
+      return query(collectionGroup(db, "filhos"))
+    }
   }, [db, clienteId])
 
   const { data: filhos, isLoading } = useCollection(filhosQuery)
@@ -178,11 +182,10 @@ export default function FilhosPage() {
             <h1 className="text-3xl font-headline font-bold tracking-tight flex items-center gap-2">
               <Baby className="h-8 w-8 text-primary" /> Filhos
             </h1>
-            {clienteId && (
+            {clienteId ? (
               <p className="text-muted-foreground">Crianças vinculadas a <span className="font-semibold text-foreground">{decodeURIComponent(clienteNome)}</span></p>
-            )}
-            {!clienteId && (
-              <p className="text-muted-foreground">Selecione um cliente para ver os filhos cadastrados.</p>
+            ) : (
+              <p className="text-muted-foreground">Lista de todos os filhos cadastrados no sistema.</p>
             )}
           </div>
         </div>
@@ -193,16 +196,7 @@ export default function FilhosPage() {
         )}
       </div>
 
-      {!clienteId ? (
-        <div className="text-center py-20 border rounded-xl bg-muted/10">
-          <Baby className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground font-medium">Nenhum cliente selecionado</p>
-          <p className="text-muted-foreground text-sm mt-1">Acesse pelo menu de opções de um cliente.</p>
-          <Button variant="outline" className="mt-4" onClick={() => router.push("/clientes")}>
-            Ir para Clientes
-          </Button>
-        </div>
-      ) : isLoading ? (
+      {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
           <p className="text-muted-foreground">Carregando...</p>
@@ -211,7 +205,11 @@ export default function FilhosPage() {
         <div className="text-center py-20 border rounded-xl bg-muted/10">
           <Baby className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground font-medium">Nenhum filho cadastrado ainda.</p>
-          <p className="text-muted-foreground text-sm mt-1">Clique em "Cadastrar Filho" para adicionar.</p>
+          <p className="text-muted-foreground text-sm mt-1">
+            {clienteId 
+              ? "Clique em \"Cadastrar Filho\" para adicionar." 
+              : "Cadastre filhos através do perfil dos clientes."}
+          </p>
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
