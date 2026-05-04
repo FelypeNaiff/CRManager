@@ -68,7 +68,7 @@ export default function DashboardLayout({
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset>
-          <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b bg-background/95 px-4 backdrop-blur transition-[width,height] ease-linear">
+          <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[#1a1d21] bg-[#1a1d21] text-white px-4 transition-[width,height] ease-linear">
             <div className="flex items-center gap-4">
               <SidebarTrigger className="-ml-1" />
               <div className="hidden md:flex relative max-w-sm">
@@ -76,28 +76,28 @@ export default function DashboardLayout({
                 <Input
                   type="search"
                   placeholder="Pesquisar..."
-                  className="w-[300px] pl-9 bg-secondary/50 border-none h-9 focus-visible:ring-1 focus-visible:ring-primary"
+                  className="w-[300px] pl-9 bg-white/10 border-none text-white placeholder:text-white/50 h-9 focus-visible:ring-1 focus-visible:ring-primary"
                 />
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative">
+              <Button variant="ghost" size="icon" className="relative hover:bg-white/10 text-white">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
               </Button>
-              <div className="h-8 w-px bg-border mx-1"></div>
+              <div className="h-8 w-px bg-white/10 mx-1"></div>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 px-2 hover:bg-secondary">
-                    <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Button variant="ghost" className="gap-2 px-2 hover:bg-white/10 text-white">
+                    <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
                       <User className="h-4 w-4 text-primary" />
                     </div>
                     <div className="hidden sm:flex flex-col items-start text-left">
                       <span className="text-sm font-medium leading-none">
                         {activeProfile.nome}
                       </span>
-                      <span className="text-xs text-muted-foreground capitalize mt-1">
+                      <span className="text-xs text-white/70 capitalize mt-1">
                         {activeProfile.role}
                       </span>
                     </div>

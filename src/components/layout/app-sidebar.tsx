@@ -23,8 +23,15 @@ import {
   Settings,
   UserCog,
   Store,
-  Wallet
+  Wallet,
+  ChevronRight
 } from "lucide-react"
+
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible"
 
 import {
   Sidebar,
@@ -134,50 +141,57 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
       <SidebarContent>
-        {navItems.map((item) => (
-          <SidebarGroup key={item.title}>
-            {item.items ? (
-              <>
-                <SidebarGroupLabel className="font-headline text-[10px] uppercase tracking-wider text-sidebar-foreground/50">
-                  {item.title}
-                </SidebarGroupLabel>
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {item.items.map((subItem) => (
-                      <SidebarMenuItem key={subItem.title}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={pathname === subItem.url}
-                          tooltip={subItem.title}
-                        >
-                          <Link href={subItem.url}>
-                            <subItem.icon className="h-4 w-4" />
-                            <span>{subItem.title}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    ))}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              </>
-            ) : (
-              <SidebarMenu>
-                <SidebarMenuItem>
+        <SidebarGroup>
+          <SidebarMenu>
+            {navItems.map((item) => (
+              item.items ? (
+                <Collapsible
+                  key={item.title}
+                  asChild
+                  defaultOpen={item.items.some(sub => pathname === sub.url)}
+                  className="group/collapsible"
+                >
+                  <SidebarMenuItem>
+                    <CollapsibleTrigger asChild>
+                      <SidebarMenuButton tooltip={item.title} className="hover:bg-sidebar-accent/50 text-sidebar-foreground">
+                        {item.icon && <item.icon className="text-sidebar-foreground/70 group-data-[state=open]/collapsible:text-primary" />}
+                        <span className="group-data-[state=open]/collapsible:font-medium">{item.title}</span>
+                        <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/50" />
+                      </SidebarMenuButton>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <SidebarMenuSub>
+                        {item.items.map((subItem) => (
+                          <SidebarMenuSubItem key={subItem.title}>
+                            <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors">
+                              <Link href={subItem.url}>
+                                <span>{subItem.title}</span>
+                              </Link>
+                            </SidebarMenuSubButton>
+                          </SidebarMenuSubItem>
+                        ))}
+                      </SidebarMenuSub>
+                    </CollapsibleContent>
+                  </SidebarMenuItem>
+                </Collapsible>
+              ) : (
+                <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton
                     asChild
                     isActive={pathname === item.url}
                     tooltip={item.title}
+                    className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-primary transition-colors"
                   >
                     <Link href={item.url || "#"}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
+                      {item.icon && <item.icon className={pathname === item.url ? "text-primary" : "text-sidebar-foreground/70"} />}
+                      <span className={pathname === item.url ? "font-medium" : ""}>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
-              </SidebarMenu>
-            )}
-          </SidebarGroup>
-        ))}
+              )
+            ))}
+          </SidebarMenu>
+        </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border/50 p-4">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">

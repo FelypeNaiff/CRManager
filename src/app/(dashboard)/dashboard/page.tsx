@@ -1,145 +1,223 @@
 "use client"
 
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
-import { Users, ShoppingBag, TrendingUp, AlertCircle, MessageSquare, Loader2 } from "lucide-react"
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { Users, ShoppingBag, TrendingUp, AlertCircle, ArrowRight, Wallet, CalendarDays, Banknote, Building } from "lucide-react"
 import { 
   Bar, 
   BarChart, 
   ResponsiveContainer, 
   XAxis, 
   YAxis, 
-  CartesianGrid 
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend
 } from "recharts"
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart"
-import { Badge } from "@/components/ui/badge"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, orderBy, limit } from "firebase/firestore"
+import Link from "next/link"
 
 export default function DashboardPage() {
-  const db = useFirestore()
-
-  // Queries para dados reais
-  const clientesQuery = useMemoFirebase(() => db ? collection(db, "clientes") : null, [db])
-  const vendasQuery = useMemoFirebase(() => db ? query(collection(db, "vendas"), orderBy("dataVenda", "desc"), limit(5)) : null, [db])
-  const atendimentosQuery = useMemoFirebase(() => db ? collection(db, "atendimentos") : null, [db])
-
-  const { data: clientes } = useCollection(clientesQuery)
-  const { data: vendas, isLoading: isLoadingVendas } = useCollection(vendasQuery)
-  const { data: atendimentos } = useCollection(atendimentosQuery)
-
-  // Dados simplificados para o gráfico (vazios por padrão até ter dados reais)
-  const chartData = [
-    { name: "Seg", total: 0 },
-    { name: "Ter", total: 0 },
-    { name: "Qua", total: 0 },
-    { name: "Qui", total: 0 },
-    { name: "Sex", total: 0 },
-    { name: "Sáb", total: 0 },
-    { name: "Dom", total: 0 },
+  
+  // Mock Data for Cash Flow
+  const fluxoCaixaData = [
+    { name: "Jan", entradas: 4000, saidas: 2400 },
+    { name: "Fev", entradas: 3000, saidas: 1398 },
+    { name: "Mar", entradas: 2000, saidas: 9800 },
+    { name: "Abr", entradas: 2780, saidas: 3908 },
+    { name: "Mai", entradas: 1890, saidas: 4800 },
+    { name: "Jun", entradas: 2390, saidas: 3800 },
   ]
 
-  const stats = [
-    { label: "Total Clientes", value: clientes?.length || 0, icon: Users, color: "text-violet-600", bg: "bg-violet-50" },
-    { label: "Vendas do Mês", value: `R$ ${vendas?.reduce((acc, v) => acc + (v.total || 0), 0).toFixed(2) || "0,00"}`, icon: ShoppingBag, color: "text-emerald-600", bg: "bg-emerald-50" },
-    { label: "Atendimentos", value: atendimentos?.length || 0, icon: MessageSquare, color: "text-rose-600", bg: "bg-rose-50" },
+  // Mock Data for Sales
+  const vendasData = [
+    { name: "Seg", total: 1200 },
+    { name: "Ter", total: 2100 },
+    { name: "Qua", total: 800 },
+    { name: "Qui", total: 1600 },
+    { name: "Sex", total: 2400 },
+    { name: "Sáb", total: 3200 },
+  ]
+
+  const contasBancarias = [
+    { banco: "Itaú", saldo: "R$ 12.450,00", logo: "bg-orange-500" },
+    { banco: "Bradesco", saldo: "R$ 5.320,00", logo: "bg-red-600" },
+    { banco: "Nubank", saldo: "R$ 8.900,00", logo: "bg-purple-600" },
+    { banco: "Caixa", saldo: "R$ 1.200,00", logo: "bg-blue-600" },
+  ]
+
+  const agenda = [
+    { hora: "09:00", evento: "Reunião Fornecedor", tipo: "Reunião" },
+    { hora: "14:30", evento: "Pagamento Aluguel", tipo: "Vencimento" },
+    { hora: "16:00", evento: "Entrega de Mercadoria", tipo: "Logística" },
+  ]
+
+  const topCards = [
+    { 
+      title: "Receitas Hoje", 
+      value: "R$ 1.250,00", 
+      icon: TrendingUp, 
+      borderColor: "border-t-[#0073b7]", 
+      iconColor: "text-[#0073b7]",
+      bgColor: "bg-[#0073b7]/10",
+      link: "/pdv" 
+    },
+    { 
+      title: "A Receber", 
+      value: "R$ 4.500,00", 
+      icon: Banknote, 
+      borderColor: "border-t-[#00a65a]", 
+      iconColor: "text-[#00a65a]",
+      bgColor: "bg-[#00a65a]/10",
+      link: "/contas-receber" 
+    },
+    { 
+      title: "A Pagar", 
+      value: "R$ 3.200,00", 
+      icon: AlertCircle, 
+      borderColor: "border-t-[#dd4b39]", 
+      iconColor: "text-[#dd4b39]",
+      bgColor: "bg-[#dd4b39]/10",
+      link: "/contas-pagar" 
+    },
+    { 
+      title: "Clientes Ativos", 
+      value: "128", 
+      icon: Users, 
+      borderColor: "border-t-primary", 
+      iconColor: "text-primary",
+      bgColor: "bg-primary/10",
+      link: "/clientes" 
+    },
   ]
 
   return (
-    <div className="space-y-8">
-      <div>
-        <h1 className="text-3xl font-headline font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Bem-vindo ao CRManager. Resumo das operações.</p>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-1">
+        <h1 className="text-2xl font-headline font-bold text-foreground">Visão Geral</h1>
+        <p className="text-sm text-muted-foreground">Acompanhe os principais indicadores do seu negócio.</p>
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        {stats.map((stat, idx) => (
-          <Card key={idx} className={`border-none shadow-sm ${stat.bg}`}>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">{stat.label}</CardTitle>
-              <stat.icon className={`h-4 w-4 ${stat.color}`} />
+      {/* Top Row - Cards ERP */}
+      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        {topCards.map((card, idx) => (
+          <Card key={idx} className={`relative overflow-hidden border-0 shadow-sm border-t-4 ${card.borderColor} rounded-md bg-white`}>
+            <div className="absolute right-[-20px] top-[-10px] opacity-10 pointer-events-none">
+              <card.icon className="h-32 w-32" />
+            </div>
+            <CardHeader className="flex flex-row items-center justify-between pb-2 space-y-0 relative z-10">
+              <CardTitle className="text-sm font-medium text-muted-foreground uppercase tracking-wider">{card.title}</CardTitle>
+              <div className={`p-2 rounded-md ${card.bgColor}`}>
+                <card.icon className={`h-4 w-4 ${card.iconColor}`} />
+              </div>
             </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stat.value}</div>
+            <CardContent className="relative z-10 pb-0">
+              <div className="text-2xl font-bold text-foreground">{card.value}</div>
             </CardContent>
+            <CardFooter className="pt-4 pb-3 mt-4 bg-muted/20 border-t relative z-10">
+              <Link href={card.link} className="flex items-center text-xs font-medium text-muted-foreground hover:text-primary transition-colors w-full justify-between">
+                Ir para {card.title.split(' ')[0]} <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardFooter>
           </Card>
         ))}
       </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-7">
-        <Card className="lg:col-span-4 shadow-sm">
+      {/* Main Grid */}
+      <div className="grid gap-6 md:grid-cols-1 lg:grid-cols-3">
+        
+        {/* Fluxo de Caixa */}
+        <Card className="lg:col-span-2 border-0 shadow-sm border-t-4 border-t-[#00a65a] rounded-md bg-white">
           <CardHeader>
-            <CardTitle>Vendas Recentes</CardTitle>
-            <CardDescription>Resumo de faturamento por dia.</CardDescription>
+            <CardTitle className="text-base font-semibold">Fluxo de Caixa</CardTitle>
           </CardHeader>
           <CardContent>
-            <ChartContainer config={{
-              total: {
-                label: "Vendas",
-                color: "hsl(var(--primary))",
-              },
-            }} className="h-[300px] w-full">
+            <div className="h-[300px] w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
+                <BarChart data={fluxoCaixaData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
-                  <XAxis 
-                    dataKey="name" 
-                    stroke="#888888" 
-                    fontSize={12} 
-                    tickLine={false} 
-                    axisLine={false} 
-                  />
-                  <YAxis 
-                    stroke="#888888" 
-                    fontSize={12} 
-                    tickLine={false} 
-                    axisLine={false} 
-                    tickFormatter={(value) => `R$${value}`}
-                  />
-                  <ChartTooltip content={<ChartTooltipContent />} />
-                  <Bar 
-                    dataKey="total" 
-                    fill="var(--color-total)" 
-                    radius={[4, 4, 0, 0]} 
-                  />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v/1000}k`} />
+                  <RechartsTooltip cursor={{fill: 'transparent'}} />
+                  <Legend iconType="circle" wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
+                  <Bar name="Entradas" dataKey="entradas" fill="#00a65a" radius={[2, 2, 0, 0]} barSize={20} />
+                  <Bar name="Saídas" dataKey="saidas" fill="#dd4b39" radius={[2, 2, 0, 0]} barSize={20} />
                 </BarChart>
               </ResponsiveContainer>
-            </ChartContainer>
+            </div>
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-3 shadow-sm">
+        {/* Gráfico de Vendas */}
+        <Card className="lg:col-span-1 border-0 shadow-sm border-t-4 border-t-[#0073b7] rounded-md bg-white">
           <CardHeader>
-            <CardTitle>Últimas Vendas</CardTitle>
-            <CardDescription>Movimentações reais no PDV.</CardDescription>
+            <CardTitle className="text-base font-semibold">Vendas Recentes</CardTitle>
           </CardHeader>
           <CardContent>
-            {isLoadingVendas ? (
-              <div className="flex justify-center py-10">
-                <Loader2 className="h-6 w-6 animate-spin text-primary" />
-              </div>
-            ) : !vendas || vendas.length === 0 ? (
-              <div className="text-center py-10 text-muted-foreground text-sm">
-                Nenhuma venda registrada ainda.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {vendas.map((sale: any) => (
-                  <div key={sale.id} className="flex items-center justify-between p-3 rounded-lg border bg-secondary/20">
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium leading-none">Pedido #{sale.numero || sale.id.slice(0, 5)}</p>
-                      <p className="text-xs text-muted-foreground">{new Date(sale.dataVenda).toLocaleDateString()}</p>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <p className="text-sm font-bold text-primary">R$ {sale.total?.toFixed(2)}</p>
-                      <Badge variant="outline" className="text-[10px] h-4 px-1">
-                        {sale.status}
-                      </Badge>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="h-[300px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={vendasData} margin={{ top: 5, right: 0, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                  <XAxis dataKey="name" stroke="#888888" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis stroke="#888888" fontSize={12} tickLine={false} axisLine={false} tickFormatter={(v) => `R$${v}`} />
+                  <RechartsTooltip cursor={{fill: 'transparent'}} />
+                  <Bar dataKey="total" fill="#0073b7" radius={[2, 2, 0, 0]} barSize={30} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
+        </Card>
+
+        {/* Contas Bancárias */}
+        <Card className="lg:col-span-2 border-0 shadow-sm border-t-4 border-t-gray-400 rounded-md bg-white">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <Building className="h-5 w-5 text-gray-500" /> Saldos em Conta
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {contasBancarias.map((conta, idx) => (
+                <div key={idx} className="flex items-center justify-between p-4 border rounded-md hover:bg-muted/30 transition-colors">
+                  <div className="flex items-center gap-3">
+                    <div className={`w-10 h-10 rounded-md flex items-center justify-center text-white font-bold text-xs ${conta.logo}`}>
+                      {conta.banco.substring(0, 2).toUpperCase()}
+                    </div>
+                    <span className="font-medium text-sm">{conta.banco}</span>
+                  </div>
+                  <span className="font-bold text-foreground">{conta.saldo}</span>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Agenda */}
+        <Card className="lg:col-span-1 border-0 shadow-sm border-t-4 border-t-[#f39c12] rounded-md bg-white">
+          <CardHeader>
+            <CardTitle className="text-base font-semibold flex items-center gap-2">
+              <CalendarDays className="h-5 w-5 text-[#f39c12]" /> Agenda do Dia
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {agenda.map((item, idx) => (
+                <div key={idx} className="flex items-start gap-3 relative before:absolute before:left-[19px] before:top-6 before:bottom-[-16px] before:w-[2px] before:bg-border last:before:hidden">
+                  <div className="w-10 text-xs font-bold text-muted-foreground pt-1 shrink-0 text-right">
+                    {item.hora}
+                  </div>
+                  <div className="w-2 h-2 rounded-full bg-[#f39c12] mt-2 shrink-0 z-10 ring-4 ring-white" />
+                  <div className="bg-muted/30 border rounded-md p-3 flex-1">
+                    <p className="text-sm font-semibold">{item.evento}</p>
+                    <p className="text-xs text-muted-foreground mt-1">{item.tipo}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+          <CardFooter className="pt-2">
+            <Link href="/agenda" className="text-sm text-primary font-medium hover:underline w-full text-center">
+              Ver agenda completa
+            </Link>
+          </CardFooter>
         </Card>
       </div>
     </div>

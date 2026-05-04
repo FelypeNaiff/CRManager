@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    --background: 262 15% 99%;
+    --background: 213 22% 94%; /* #ecf0f5 */
     --foreground: 222 47% 11%;
     --card: 0 0% 100%;
     --card-foreground: 222 47% 11%;
@@ -28,15 +28,21 @@
     --chart-3: 142 71% 45%;
     --chart-4: 47 95% 55%;
     --chart-5: 0 84% 60%;
-    --radius: 0.75rem;
-    --sidebar-background: 222 47% 11%;
-    --sidebar-foreground: 215 20% 65%;
-    --sidebar-primary: 262 77% 58%;
+    --radius: 0.5rem; /* Leve arredondamento (quadrado) */
+    
+    /* Sidebar ERP Master */
+    --sidebar-background: 210 17% 98%; /* #f8f9fa */
+    --sidebar-foreground: 222 47% 11%; /* Cinza escuro */
+    --sidebar-primary: 262 77% 58%; /* Roxo vibrante */
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 262 77% 30%;
-    --sidebar-accent-foreground: 210 40% 98%;
-    --sidebar-border: 217 33% 17%;
+    --sidebar-accent: 262 77% 95%;
+    --sidebar-accent-foreground: 262 77% 58%;
+    --sidebar-border: 214.3 31.8% 91.4%;
     --sidebar-ring: 262 77% 58%;
+
+    /* Header ERP Master */
+    --header-background: 214 12% 12%; /* #1a1d21 */
+    --header-foreground: 0 0% 100%;
   }
 
   .dark {
