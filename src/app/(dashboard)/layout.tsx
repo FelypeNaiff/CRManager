@@ -68,20 +68,16 @@ export default function DashboardLayout({
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset>
-          <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-[#1a1d21] bg-[#1a1d21] text-white px-4 transition-[width,height] ease-linear">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger className="-ml-1" />
-              <div className="hidden md:flex relative max-w-sm">
-                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-                <Input
-                  type="search"
-                  placeholder="Pesquisar..."
-                  className="w-[300px] pl-9 bg-white/10 border-none text-white placeholder:text-white/50 h-9 focus-visible:ring-1 focus-visible:ring-primary"
-                />
+          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between bg-[var(--header-background)] text-white px-4 transition-[width,height] ease-linear shadow-sm">
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 font-headline font-bold text-xl mr-6">
+                <Store className="h-5 w-5 text-primary" />
+                <span>gestão<span className="text-primary font-normal">click</span></span>
               </div>
+              <SidebarTrigger className="text-white hover:bg-white/10" />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative hover:bg-white/10 text-white">
+              <Button variant="ghost" size="icon" className="relative hover:bg-white/10 text-white rounded-none h-14 w-12">
                 <Bell className="h-5 w-5" />
                 <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
               </Button>

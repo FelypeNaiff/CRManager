@@ -52,6 +52,15 @@ service cloud.firestore {
     // --- COLLECTION RULES ---
 
     /**
+     * @description Collection group rule for global "filhos" queries.
+     * @path /{document=**}/filhos/{filhoId}
+     * @allow (read) Any authorized staff member.
+     */
+    match /{document=**}/filhos/{filhoId} {
+      allow read: if isAuthorized();
+    }
+
+    /**
      * @description Global company configuration. Access restricted to administrators.
      * @path /empresa/{empresaId}
      * @allow (get) Any authorized staff member.

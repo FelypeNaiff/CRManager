@@ -91,6 +91,14 @@ export function useCollection<T = any>(
             ? (memoizedTargetRefOrQuery as CollectionReference).path
             : (memoizedTargetRefOrQuery as unknown as InternalQuery)._query.path.canonicalString()
 
+        if (error.code === 'failed-precondition') {
+          // Preserve missing index errors so the UI can display the link
+          setError(error)
+          setData(null)
+          setIsLoading(false)
+          return
+        }
+
         const contextualError = new FirestorePermissionError({
           operation: 'list',
           path,

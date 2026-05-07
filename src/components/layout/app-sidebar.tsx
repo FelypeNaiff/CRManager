@@ -129,14 +129,16 @@ export function AppSidebar() {
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border/50 py-4">
-        <div className="flex items-center gap-3 px-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <Store className="h-5 w-5" />
+      <SidebarHeader className="border-b border-sidebar-border py-6 bg-white flex flex-col items-center justify-center">
+        <div className="flex flex-col items-center gap-1 group-data-[collapsible=icon]:hidden">
+          <div className="h-12 w-12 text-primary font-bold text-2xl flex items-center justify-center">
+            Tk
           </div>
-          <div className="flex flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
-            <span className="truncate font-headline font-bold text-sidebar-foreground">CRManager</span>
-          </div>
+          <span className="font-headline font-bold text-lg text-primary">Trupe<span className="text-orange-400">Kids</span></span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">CRManager</span>
+        </div>
+        <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 text-primary font-bold text-xl items-center justify-center">
+          Tk
         </div>
       </SidebarHeader>
       <SidebarContent>

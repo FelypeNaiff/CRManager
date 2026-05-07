@@ -36,9 +36,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake } from "lucide-react"
+import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake, AlertCircle } from "lucide-react"
 import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
 import { collection, collectionGroup, addDoc, updateDoc, deleteDoc, doc, query, where, serverTimestamp } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
@@ -72,7 +71,7 @@ export default function FilhosPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [editingFilho, setEditingFilho] = useState<any>(null)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [deletingFilho, setDeletingFilho] = useState<any>(null)
   const [form, setForm] = useState(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
 
@@ -85,7 +84,7 @@ export default function FilhosPage() {
     }
   }, [db, clienteId])
 
-  const { data: filhos, isLoading } = useCollection(filhosQuery)
+  const { data: filhos, isLoading, error } = useCollection(filhosQuery)
 
   const openNewDialog = () => {
     setEditingFilho(null)
@@ -104,8 +103,8 @@ export default function FilhosPage() {
     setIsDialogOpen(true)
   }
 
-  const openDeleteDialog = (id: string) => {
-    setDeletingId(id)
+  const openDeleteDialog = (filho: any) => {
+    setDeletingFilho(filho)
     setIsDeleteOpen(true)
   }
 
@@ -114,21 +113,26 @@ export default function FilhosPage() {
       toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o nome da criança." })
       return
     }
-    if (!clienteId) return
+
+    const targetClientId = clienteId || editingFilho?.clientId;
+    if (!targetClientId) {
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível identificar o cliente vinculado." })
+      return
+    }
 
     setIsSaving(true)
     try {
       if (editingFilho) {
-        await updateDoc(doc(db, "clientes", clienteId, "filhos", editingFilho.id), {
+        await updateDoc(doc(db, "clientes", targetClientId, "filhos", editingFilho.id), {
           ...form,
-          clientId: clienteId,
+          clientId: targetClientId,
           updatedAt: serverTimestamp(),
         })
         toast({ title: "Filho atualizado!", description: `${form.nome} foi atualizado.` })
       } else {
-        await addDoc(collection(db, "clientes", clienteId, "filhos"), {
+        await addDoc(collection(db, "clientes", targetClientId, "filhos"), {
           ...form,
-          clientId: clienteId,
+          clientId: targetClientId,
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),
         })
@@ -144,14 +148,17 @@ export default function FilhosPage() {
   }
 
   const handleDelete = async () => {
-    if (!deletingId || !clienteId) return
+    if (!deletingFilho) return
+    const targetClientId = clienteId || deletingFilho.clientId;
+    if (!targetClientId) return;
+
     try {
-      await deleteDoc(doc(db, "clientes", clienteId, "filhos", deletingId))
+      await deleteDoc(doc(db, "clientes", targetClientId, "filhos", deletingFilho.id))
       toast({ title: "Filho excluído", description: "Registro removido com sucesso." })
     } catch {
       toast({ variant: "destructive", title: "Erro ao excluir" })
     } finally {
-      setDeletingId(null)
+      setDeletingFilho(null)
       setIsDeleteOpen(false)
     }
   }
@@ -195,6 +202,30 @@ export default function FilhosPage() {
           </Button>
         )}
       </div>
+
+      {error && (error as any).code === "failed-precondition" && (
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm flex-1">
+            <h3 className="font-semibold text-base">Ação Necessária no Banco de Dados</h3>
+            <p>
+              Para listar todos os filhos de uma vez, é necessário configurar um índice no Firebase. 
+            </p>
+            {error.message.includes("https://") ? (
+              <a 
+                href={error.message.match(/https:\/\/[^\s]+/)?.[0]} 
+                target="_blank" 
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 mt-2 text-primary font-semibold hover:underline bg-background/50 p-2 rounded break-all"
+              >
+                Clique aqui para criar o índice automaticamente
+              </a>
+            ) : (
+              <p className="font-mono text-xs mt-2 p-2 bg-background/50 rounded">{error.message}</p>
+            )}
+          </div>
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
@@ -242,7 +273,7 @@ export default function FilhosPage() {
                         <Pencil className="mr-2 h-4 w-4" /> Editar
                       </DropdownMenuItem>
                       <DropdownMenuSeparator />
-                      <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(filho.id)}>
+                      <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(filho)}>
                         <Trash2 className="mr-2 h-4 w-4" /> Excluir
                       </DropdownMenuItem>
                     </DropdownMenuContent>

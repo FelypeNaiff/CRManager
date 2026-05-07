@@ -4,44 +4,47 @@
 
 @layer base {
   :root {
-    --background: 213 22% 94%; /* #ecf0f5 */
-    --foreground: 222 47% 11%;
+    --background: 210 20% 96%; /* #f4f6f8 */
+    --foreground: 210 10% 23%; /* #343a40 */
     --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
+    --card-foreground: 210 10% 23%;
     --popover: 0 0% 100%;
-    --popover-foreground: 222 47% 11%;
-    --primary: 262 77% 58%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 262 15% 95%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96.1%;
+    --popover-foreground: 210 10% 23%;
+    --primary: 211 100% 50%; /* #007bff */
+    --primary-foreground: 0 0% 100%;
+    --secondary: 210 20% 96%;
+    --secondary-foreground: 210 10% 23%;
+    --muted: 210 20% 96%;
     --muted-foreground: 215.4 16.3% 46.9%;
-    --accent: 262 15% 95%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84.2% 60.2%;
-    --destructive-foreground: 210 40% 98%;
+    --accent: 210 20% 96%;
+    --accent-foreground: 210 10% 23%;
+    --destructive: 354 70% 54%; /* #dc3545 */
+    --destructive-foreground: 0 0% 100%;
     --border: 214.3 31.8% 91.4%;
     --input: 214.3 31.8% 91.4%;
-    --ring: 262 77% 58%;
-    --chart-1: 262 77% 58%;
-    --chart-2: 232 90% 40%;
-    --chart-3: 142 71% 45%;
-    --chart-4: 47 95% 55%;
-    --chart-5: 0 84% 60%;
-    --radius: 0.5rem; /* Leve arredondamento (quadrado) */
+    --ring: 211 100% 50%;
     
-    /* Sidebar ERP Master */
-    --sidebar-background: 210 17% 98%; /* #f8f9fa */
-    --sidebar-foreground: 222 47% 11%; /* Cinza escuro */
-    --sidebar-primary: 262 77% 58%; /* Roxo vibrante */
+    /* Chart Colors */
+    --chart-1: 211 100% 50%;
+    --chart-2: 134 61% 41%;
+    --chart-3: 27 98% 54%;
+    --chart-4: 354 70% 54%;
+    --chart-5: 194 61% 61%;
+    
+    --radius: 0.25rem; /* Menos arredondado para visual ERP clássico */
+    
+    /* Sidebar GestãoClick Style */
+    --sidebar-background: 0 0% 100%; /* Branco */
+    --sidebar-foreground: 210 10% 23%; /* #343a40 */
+    --sidebar-primary: 211 100% 50%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 262 77% 95%;
-    --sidebar-accent-foreground: 262 77% 58%;
+    --sidebar-accent: 210 20% 96%;
+    --sidebar-accent-foreground: 211 100% 50%; /* Azul quando ativo */
     --sidebar-border: 214.3 31.8% 91.4%;
-    --sidebar-ring: 262 77% 58%;
+    --sidebar-ring: 211 100% 50%;
 
-    /* Header ERP Master */
-    --header-background: 214 12% 12%; /* #1a1d21 */
+    /* Header GestãoClick Style */
+    --header-background: 220 15% 15%; /* #1e2229 escuro */
     --header-foreground: 0 0% 100%;
   }
 
@@ -52,7 +55,7 @@
     --card-foreground: 210 40% 98%;
     --popover: 222 47% 11%;
     --popover-foreground: 210 40% 98%;
-    --primary: 263 70% 50%;
+    --primary: 211 100% 50%;
     --primary-foreground: 210 40% 98%;
     --secondary: 217.2 32.6% 17.5%;
     --secondary-foreground: 210 40% 98%;
@@ -60,11 +63,11 @@
     --muted-foreground: 215 20.2% 65.1%;
     --accent: 217.2 32.6% 17.5%;
     --accent-foreground: 210 40% 98%;
-    --destructive: 0 62.8% 30.6%;
+    --destructive: 354 70% 54%;
     --destructive-foreground: 210 40% 98%;
     --border: 217.2 32.6% 17.5%;
     --input: 217.2 32.6% 17.5%;
-    --ring: 263 70% 50%;
+    --ring: 211 100% 50%;
   }
 }
 
@@ -73,9 +76,31 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-body;
+    @apply bg-background text-foreground font-body text-[13px]; /* Fonte menor padrão ERP */
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline;
+    @apply font-headline text-foreground;
+  }
+}
+
+/* Utilitários Extras para Botões de Ação ERP */
+@layer utilities {
+  .btn-erp-green {
+    @apply bg-[#5cb85c] hover:bg-[#449d44] text-white border-transparent shadow-sm;
+  }
+  .btn-erp-dark {
+    @apply bg-[#1e2229] hover:bg-[#15181d] text-white border-transparent shadow-sm;
+  }
+  .btn-erp-action-blue {
+    @apply bg-[#5bc0de] hover:bg-[#31b0d5] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
+  }
+  .btn-erp-action-orange {
+    @apply bg-[#f0ad4e] hover:bg-[#ec971f] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
+  }
+  .btn-erp-action-red {
+    @apply bg-[#d9534f] hover:bg-[#c9302c] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
+  }
+  .btn-erp-action-green {
+    @apply bg-[#5cb85c] hover:bg-[#449d44] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
   }
 }

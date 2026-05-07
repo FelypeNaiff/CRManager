@@ -1,119 +1,153 @@
 "use client"
 
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Package, Plus, Loader2, MoreVertical, Pencil, Trash2 } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus } from "lucide-react"
 import { useCollection, useFirestore } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import { Badge } from "@/components/ui/badge"
 
 export default function ProdutosPage() {
   const router = useRouter()
   const db = useFirestore()
+  const [searchTerm, setSearchTerm] = useState("")
 
   const produtosQuery = db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
   const { data: produtos, isLoading } = useCollection(produtosQuery)
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-3xl font-headline font-bold tracking-tight flex items-center gap-2">
-            <Package className="h-8 w-8 text-primary" /> Produtos
-          </h1>
-          <p className="text-muted-foreground">Gerencie o catálogo e estoque de produtos.</p>
-        </div>
-        <Button 
-          className="gap-2 bg-[#28a745] hover:bg-[#218838] text-white" 
-          onClick={() => router.push("/produtos/novo")}
-        >
-          <Plus className="h-4 w-4" /> Adicionar
-        </Button>
+    <div className="space-y-4 max-w-full overflow-hidden">
+      {/* Breadcrumb simulado */}
+      <div className="flex justify-end text-[11px] text-muted-foreground uppercase tracking-wider mb-2">
+        <span className="cursor-pointer hover:underline">Início</span>
+        <span className="mx-2">-</span>
+        <span className="cursor-pointer hover:underline">Produtos</span>
+        <span className="mx-2">-</span>
+        <span className="font-semibold text-foreground">Listar</span>
       </div>
 
-      {isLoading ? (
-        <div className="flex flex-col items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-          <p className="text-muted-foreground">Carregando produtos...</p>
-        </div>
-      ) : !produtos || produtos.length === 0 ? (
-        <div className="text-center py-20 border rounded-xl bg-muted/10">
-          <Package className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
-          <p className="text-muted-foreground font-medium">Nenhum produto cadastrado.</p>
-          <p className="text-muted-foreground text-sm mt-1">Comece adicionando seu primeiro produto ao catálogo.</p>
+      {/* Header Clássico ERP */}
+      <div className="border-b pb-2 mb-4">
+        <h1 className="text-xl font-headline font-bold text-foreground flex items-center gap-2">
+          <Package className="h-5 w-5 text-sidebar-foreground" /> Produtos
+        </h1>
+      </div>
+
+      {/* Toolbar ERP */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 border shadow-sm rounded-sm">
+        <div className="flex items-center gap-1">
           <Button 
-            variant="outline" 
-            className="mt-4" 
+            className="btn-erp-green gap-1 h-8 rounded-sm px-3 text-[13px]" 
             onClick={() => router.push("/produtos/novo")}
           >
-            Cadastrar Produto
+            <Plus className="h-3.5 w-3.5" /> Adicionar
+          </Button>
+          <Button className="btn-erp-dark gap-1 h-8 rounded-sm px-3 text-[13px]">
+            <List className="h-3.5 w-3.5" /> Mais ações <ChevronDown className="h-3.5 w-3.5 ml-1" />
+          </Button>
+          <Button variant="outline" className="h-8 w-8 p-0 rounded-sm ml-1 bg-gray-100 border-gray-300">
+            <List className="h-4 w-4 text-gray-700" />
           </Button>
         </div>
-      ) : (
-        <div className="bg-card border rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-muted/50 border-b">
+
+        <div className="flex items-center gap-1 w-full sm:w-auto">
+          <Input 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-8 rounded-sm w-full sm:w-[300px] border-gray-300 focus-visible:ring-0 focus-visible:border-primary text-[13px]"
+            placeholder="Pesquisar..."
+          />
+          <Button className="btn-erp-dark h-8 w-8 p-0 rounded-sm shrink-0">
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+          <Button className="btn-erp-dark h-8 rounded-sm px-3 shrink-0 text-[13px]">
+            <Search className="h-3.5 w-3.5 mr-1.5" /> Busca avançada
+          </Button>
+        </div>
+      </div>
+
+      {/* Tabela de Alta Densidade ERP */}
+      <div className="bg-white border rounded-sm shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px] text-left">
+            <thead className="text-foreground uppercase bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Código</th>
+                <th className="px-3 py-2 font-semibold">Nome</th>
+                <th className="px-3 py-2 font-semibold">Valor</th>
+                <th className="px-3 py-2 font-semibold">Estoque</th>
+                <th className="px-3 py-2 font-semibold">Cadastrado em</th>
+                <th className="px-3 py-2 font-semibold text-center w-32">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoading ? (
                 <tr>
-                  <th className="px-4 py-3 font-medium">Código</th>
-                  <th className="px-4 py-3 font-medium">Nome</th>
-                  <th className="px-4 py-3 font-medium text-right">Valor Venda</th>
-                  <th className="px-4 py-3 font-medium text-center">Estoque</th>
-                  <th className="px-4 py-3 font-medium">Grupo</th>
-                  <th className="px-4 py-3 font-medium text-right">Ações</th>
+                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    Carregando dados...
+                  </td>
                 </tr>
-              </thead>
-              <tbody>
-                {produtos.map((produto) => (
-                  <tr key={produto.id} className="border-b last:border-0 hover:bg-muted/30 transition-colors">
-                    <td className="px-4 py-3 font-medium text-muted-foreground">
+              ) : !produtos || produtos.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
+                    Nenhum produto encontrado.
+                  </td>
+                </tr>
+              ) : (
+                produtos.map((produto) => (
+                  <tr key={produto.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors group">
+                    <td className="px-3 py-2.5 text-muted-foreground">
                       {produto.codigoInterno || "-"}
                     </td>
-                    <td className="px-4 py-3 font-medium text-foreground">
-                      {produto.nome}
+                    <td className="px-3 py-2.5 font-medium text-primary">
+                      <span className="bg-primary/10 px-1 py-0.5 rounded cursor-pointer hover:underline">
+                        {produto.nome}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-right text-primary font-bold">
-                      R$ {Number(produto.valorVenda || 0).toFixed(2)}
+                    <td className="px-3 py-2.5">
+                      {Number(produto.valorVenda || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge variant="outline" className="bg-background">
-                        {produto.estoqueAtual || 0} {produto.unidadeMedida || "UN"}
-                      </Badge>
+                    <td className="px-3 py-2.5">
+                      {Number(produto.estoqueAtual || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="px-4 py-3">
-                      <span className="capitalize">{produto.grupo || "-"}</span>
+                    <td className="px-3 py-2.5 text-muted-foreground">
+                      {produto.createdAt 
+                        ? new Date(produto.createdAt?.seconds * 1000).toLocaleString("pt-BR")
+                        : "-"}
                     </td>
-                    <td className="px-4 py-3 text-right">
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-8 w-8">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => router.push(`/produtos/${produto.id}`)}>
-                            <Pencil className="mr-2 h-4 w-4" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuSeparator />
-                          <DropdownMenuItem className="text-destructive">
-                            <Trash2 className="mr-2 h-4 w-4" /> Excluir
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                    <td className="px-3 py-2.5">
+                      <div className="flex items-center justify-center gap-1">
+                        <button title="Visualizar" className="btn-erp-action-blue">
+                          <Search className="h-3.5 w-3.5" />
+                        </button>
+                        <button 
+                          title="Editar" 
+                          className="btn-erp-action-orange"
+                          onClick={() => router.push(`/produtos/${produto.id}`)}
+                        >
+                          <Pencil className="h-3.5 w-3.5" />
+                        </button>
+                        <button title="Excluir" className="btn-erp-action-red">
+                          <X className="h-4 w-4" />
+                        </button>
+                        <button title="Desativar" className="btn-erp-action-green">
+                          <Minus className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      
+      {!isLoading && produtos && (
+        <div className="text-[12px] text-muted-foreground">
+          Mostrando 1 a {produtos.length} de um total de {produtos.length}
         </div>
       )}
     </div>
