@@ -8,7 +8,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Bell, Search, User, Loader2, LogOut } from "lucide-react"
+import { Bell, Search, User, Loader2, LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useUser, useAuth } from "@/firebase"
