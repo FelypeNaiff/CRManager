@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle } from "lucide-react"
-import { useCollection, useFirestore } from "@/firebase"
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 
 export default function ProdutosPage() {
@@ -13,7 +13,9 @@ export default function ProdutosPage() {
   const db = useFirestore()
   const [searchTerm, setSearchTerm] = useState("")
 
-  const produtosQuery = db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
+  const produtosQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
+  }, [db])
   const { data: produtos, isLoading, error } = useCollection(produtosQuery)
 
   return (

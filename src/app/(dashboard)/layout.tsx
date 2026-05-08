@@ -68,11 +68,11 @@ export default function DashboardLayout({
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset>
-          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between bg-[var(--header-background)] text-white px-4 transition-[width,height] ease-linear shadow-sm">
+          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between bg-[#1e2229] text-white px-4 transition-[width,height] ease-linear shadow-sm">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 font-headline font-bold text-xl mr-6">
+              <div className="flex items-center gap-2 font-headline font-bold text-lg mr-6">
                 <Store className="h-5 w-5 text-primary" />
-                <span>gestão<span className="text-primary font-normal">click</span></span>
+                <span className="tracking-tight uppercase">TRUPE KIDS <span className="text-primary font-normal text-sm">MODA INFANTIL</span></span>
               </div>
               <SidebarTrigger className="text-white hover:bg-white/10" />
             </div>

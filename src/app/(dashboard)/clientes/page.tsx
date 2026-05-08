@@ -150,7 +150,7 @@ export default function ClientesPage() {
   }
 
   const handleAddFilho = () => {
-    setFilhos([...filhos, { nome: "", dataNascimento: "", tamanhoRoupa: "" }])
+    setFilhos([...filhos, { nome: "", dataNascimento: "", tamanhoRoupa: "", sexo: "" }])
   }
 
   const handleFilhoChange = (index: number, field: string, value: string) => {
@@ -206,6 +206,7 @@ export default function ClientesPage() {
             nome: filho.nome,
             dataNascimento: filho.dataNascimento || "",
             tamanhoRoupa: filho.tamanhoRoupa || "",
+            sexo: filho.sexo || "",
             clientId: currentClientId,
             updatedAt: serverTimestamp(),
           })
@@ -214,6 +215,7 @@ export default function ClientesPage() {
             nome: filho.nome,
             dataNascimento: filho.dataNascimento || "",
             tamanhoRoupa: filho.tamanhoRoupa || "",
+            sexo: filho.sexo || "",
             clientId: currentClientId,
             createdAt: serverTimestamp(),
             updatedAt: serverTimestamp(),
@@ -461,7 +463,7 @@ export default function ClientesPage() {
                           className="bg-background/50"
                         />
                       </div>
-                      <div className="w-full sm:w-[120px] space-y-2">
+                      <div className="w-full sm:w-[100px] space-y-2">
                         <Label>Tamanho</Label>
                         <Select value={filho.tamanhoRoupa || ""} onValueChange={(v) => handleFilhoChange(index, "tamanhoRoupa", v)}>
                           <SelectTrigger className="bg-background/50">
@@ -471,6 +473,18 @@ export default function ClientesPage() {
                             {["RN", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
                               <SelectItem key={t} value={t}>{t}</SelectItem>
                             ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="w-full sm:w-[110px] space-y-2">
+                        <Label>Sexo</Label>
+                        <Select value={filho.sexo || ""} onValueChange={(v) => handleFilhoChange(index, "sexo", v)}>
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue placeholder="Sexo" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="M">Menino</SelectItem>
+                            <SelectItem value="F">Menina</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>

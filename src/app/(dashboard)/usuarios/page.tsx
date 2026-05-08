@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { UserCog, Plus, Shield, Loader2, AlertCircle, Trash2, ShieldCheck, Mail } from "lucide-react"
+import { UserCog, Plus, Shield, Loader2, AlertCircle, Trash2, ShieldCheck, Pencil } from "lucide-react"
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
 import { collection, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
@@ -17,6 +17,7 @@ export default function UsuariosPage() {
   const [loadingAction, setLoadingAction] = useState<string | null>(null)
   
   const [form, setForm] = useState({ uid: "", email: "", nome: "", role: "vendedor" })
+  const [editingUid, setEditingUid] = useState<string | null>(null)
 
   const adminQuery = useMemoFirebase(() => db ? collection(db, "roles_admin") : null, [db])
   const vendQuery = useMemoFirebase(() => db ? collection(db, "vendedores") : null, [db])
@@ -58,6 +59,7 @@ export default function UsuariosPage() {
 
       toast({ title: "Usuário atualizado com sucesso!" })
       setForm({ uid: "", email: "", nome: "", role: "vendedor" })
+      setEditingUid(null)
       setIsAdding(false)
     } catch (err: any) {
       console.error(err)
@@ -85,6 +87,23 @@ export default function UsuariosPage() {
     }
   }
 
+  const handleEditClick = (vend: any) => {
+    setForm({
+      uid: vend.id,
+      email: vend.email || "",
+      nome: vend.nome || "",
+      role: vend.role || "vendedor"
+    })
+    setEditingUid(vend.id)
+    setIsAdding(true)
+  }
+
+  const handleCancelClick = () => {
+    setForm({ uid: "", email: "", nome: "", role: "vendedor" })
+    setEditingUid(null)
+    setIsAdding(false)
+  }
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -94,7 +113,7 @@ export default function UsuariosPage() {
           </h1>
           <p className="text-muted-foreground">Gerencie o acesso da sua equipe ao sistema.</p>
         </div>
-        <Button onClick={() => setIsAdding(!isAdding)} variant={isAdding ? "outline" : "default"}>
+        <Button onClick={handleCancelClick} variant={isAdding ? "outline" : "default"}>
           {isAdding ? "Cancelar" : <><Plus className="mr-2 h-4 w-4" /> Adicionar Usuário</>}
         </Button>
       </div>
@@ -112,16 +131,16 @@ export default function UsuariosPage() {
       {isAdding && !hasError && (
         <Card className="border-primary/20 shadow-md">
           <CardHeader>
-            <CardTitle>Conceder Acesso</CardTitle>
+            <CardTitle>{editingUid ? "Editar Permissões" : "Conceder Acesso"}</CardTitle>
             <CardDescription>
-              Para adicionar um membro da equipe, você precisa do <b>UID</b> gerado quando ele criar a conta na tela de Login.
+              {editingUid ? "Atualize os dados e o nível de acesso do membro da equipe." : "Para adicionar um membro da equipe, você precisa do UID gerado quando ele criar a conta na tela de Login."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddUser} className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>UID do Usuário (Firebase Auth) *</Label>
-                <Input value={form.uid} onChange={e => setForm(p => ({...p, uid: e.target.value}))} placeholder="ex: aX1b...29C" required />
+                <Input value={form.uid} onChange={e => setForm(p => ({...p, uid: e.target.value}))} placeholder="ex: aX1b...29C" required disabled={!!editingUid} />
               </div>
               <div className="space-y-2">
                 <Label>E-mail *</Label>
@@ -207,7 +226,18 @@ export default function UsuariosPage() {
                     <p className="font-semibold">{vend.nome} <span className="text-sm font-normal text-muted-foreground">({vend.email})</span></p>
                     <p className="text-xs text-muted-foreground font-mono">UID: {vend.id}</p>
                   </div>
-                  <Badge variant="outline" className="capitalize">{vend.role || "Vendedor"}</Badge>
+                  <div className="flex items-center gap-3">
+                    <Badge variant="outline" className="capitalize">{vend.role || "Vendedor"}</Badge>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="text-primary h-8 w-8 hover:bg-primary/10"
+                      onClick={() => handleEditClick(vend)}
+                      title="Editar Permissões"
+                    >
+                      <Pencil className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               ))}
             </CardContent>
