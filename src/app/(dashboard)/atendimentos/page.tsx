@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -85,7 +85,7 @@ const prioridadeColor: Record<string, string> = {
   "Urgente": "bg-red-100 text-red-700",
 }
 
-export default function AtendimentosPage() {
+function AtendimentosPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const clienteId = searchParams.get("clienteId")
@@ -106,7 +106,7 @@ export default function AtendimentosPage() {
     return query(collection(db, "atendimentos"), orderBy("createdAt", "desc"))
   }, [db])
 
-  const { data: allAtendimentos, isLoading } = useCollection(atendimentosQuery)
+  const { data: allAtendimentos, isLoading, error } = useCollection(atendimentosQuery)
 
   // Filtra por cliente se vier da página de clientes, senão mostra todos
   const atendimentos = (allAtendimentos || [])
@@ -263,6 +263,16 @@ export default function AtendimentosPage() {
         </Select>
       </div>
 
+      {error && (
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm flex-1">
+            <h3 className="font-semibold text-base">Erro ao carregar atendimentos</h3>
+            <p>{(error as any).message || "Verifique suas permissões no banco de dados."}</p>
+          </div>
+        </div>
+      )}
+
       {/* Lista */}
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
@@ -416,5 +426,18 @@ export default function AtendimentosPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function AtendimentosPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    }>
+      <AtendimentosPageContent />
+    </Suspense>
   )
 }

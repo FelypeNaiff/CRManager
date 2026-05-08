@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { Suspense, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -61,7 +61,7 @@ function calcIdade(dataNascimento: string): string {
   return `${meses} mês${meses > 1 ? "es" : ""}`
 }
 
-export default function FilhosPage() {
+function FilhosPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const clienteId = searchParams.get("clienteId")
@@ -227,6 +227,16 @@ export default function FilhosPage() {
         </div>
       )}
 
+      {error && (error as any).code !== "failed-precondition" && (
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3 mb-4">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm flex-1">
+            <h3 className="font-semibold text-base">Erro ao carregar filhos</h3>
+            <p>{(error as any).message || "Verifique suas permissões no banco de dados."}</p>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
@@ -360,5 +370,18 @@ export default function FilhosPage() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+  )
+}
+
+export default function FilhosPage() {
+  return (
+    <Suspense fallback={
+      <div className="flex flex-col items-center justify-center py-20">
+        <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
+        <p className="text-muted-foreground">Carregando...</p>
+      </div>
+    }>
+      <FilhosPageContent />
+    </Suspense>
   )
 }

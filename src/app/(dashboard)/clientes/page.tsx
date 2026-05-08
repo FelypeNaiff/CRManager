@@ -38,6 +38,7 @@ import {
   Pencil,
   Trash2,
   Plus,
+  AlertCircle,
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -101,7 +102,7 @@ export default function ClientesPage() {
     return collection(db, "clientes")
   }, [db])
 
-  const { data: customers, isLoading } = useCollection(clientesQuery)
+  const { data: customers, isLoading, error } = useCollection(clientesQuery)
 
   const filteredCustomers = (customers || []).filter(c =>
     c.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -284,6 +285,16 @@ export default function ClientesPage() {
       </div>
 
       {/* List */}
+      {error && (
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3 mb-4">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm flex-1">
+            <h3 className="font-semibold text-base">Erro ao carregar clientes</h3>
+            <p>{(error as any).message || "Verifique suas permissões no banco de dados."}</p>
+          </div>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />

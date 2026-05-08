@@ -4,7 +4,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus } from "lucide-react"
+import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle } from "lucide-react"
 import { useCollection, useFirestore } from "@/firebase"
 import { collection, query, orderBy } from "firebase/firestore"
 
@@ -14,7 +14,7 @@ export default function ProdutosPage() {
   const [searchTerm, setSearchTerm] = useState("")
 
   const produtosQuery = db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
-  const { data: produtos, isLoading } = useCollection(produtosQuery)
+  const { data: produtos, isLoading, error } = useCollection(produtosQuery)
 
   return (
     <div className="space-y-4 max-w-full overflow-hidden">
@@ -66,6 +66,16 @@ export default function ProdutosPage() {
           </Button>
         </div>
       </div>
+
+      {error && (
+        <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-sm flex items-start gap-3">
+          <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+          <div className="space-y-1 text-sm flex-1">
+            <h3 className="font-semibold text-base">Erro ao carregar produtos</h3>
+            <p>{(error as any).message || "Verifique suas permissões no banco de dados."}</p>
+          </div>
+        </div>
+      )}
 
       {/* Tabela de Alta Densidade ERP */}
       <div className="bg-white border rounded-sm shadow-sm overflow-hidden">
