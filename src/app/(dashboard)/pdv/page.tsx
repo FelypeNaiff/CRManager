@@ -34,7 +34,7 @@ export default function PDVPage() {
     return collection(db, "produtos")
   }, [db])
 
-  const { data: products, isLoading } = useCollection(produtosQuery)
+  const { data: products, isLoading, error } = useCollection(produtosQuery)
 
   const filteredProducts = (products || []).filter(p => 
     p.nome?.toLowerCase().includes(searchTerm.toLowerCase())
@@ -115,6 +115,11 @@ export default function PDVPage() {
             <div className="flex flex-col items-center justify-center py-20">
               <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
               <p className="text-muted-foreground">Carregando produtos...</p>
+            </div>
+          ) : error ? (
+            <div className="text-center py-20 border rounded-xl bg-destructive/10 text-destructive m-4">
+              <p className="font-semibold">Erro ao carregar produtos</p>
+              <p className="text-sm mt-1">{(error as any).message}</p>
             </div>
           ) : filteredProducts.length === 0 ? (
             <div className="text-center py-20 border rounded-xl bg-muted/10">

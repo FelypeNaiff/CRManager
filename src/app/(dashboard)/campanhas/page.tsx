@@ -13,7 +13,8 @@ import {
   Plus,
   BarChart3,
   Clock,
-  Loader2
+  Loader2,
+  AlertCircle
 } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -30,7 +31,7 @@ export default function CampanhasPage() {
   const db = useFirestore()
 
   const campanhasQuery = useMemoFirebase(() => db ? collection(db, "campanhas_marketing") : null, [db])
-  const { data: campaigns, isLoading } = useCollection(campanhasQuery)
+  const { data: campaigns, isLoading, error } = useCollection(campanhasQuery)
 
   const handleGenerateContent = async () => {
     if (!targetAudience || !objective) {
@@ -82,7 +83,15 @@ export default function CampanhasPage() {
             <Clock className="h-5 w-5 text-primary" /> Campanhas Recentes
           </h2>
           
-          {isLoading ? (
+          {error ? (
+            <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3">
+              <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
+              <div className="space-y-1 text-sm flex-1">
+                <h3 className="font-semibold text-base">Erro ao carregar campanhas</h3>
+                <p>{(error as any).message || "Acesso Negado."}</p>
+              </div>
+            </div>
+          ) : isLoading ? (
             <div className="flex justify-center py-10">
               <Loader2 className="h-6 w-6 animate-spin text-primary" />
             </div>
