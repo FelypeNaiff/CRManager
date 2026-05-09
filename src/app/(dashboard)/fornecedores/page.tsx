@@ -52,16 +52,21 @@ import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "
 import { toast } from "@/hooks/use-toast"
 
 const emptyForm = {
-  razaoSocial: "",
-  nomeFantasia: "",
+  nomeFornecedor: "",
   cnpj: "",
+  whatsapp: "",
   telefone: "",
   email: "",
+  site: "",
+  instagram: "",
+  loginSite: "",
+  senhaSite: "",
   cep: "",
   cidade: "",
   estado: "",
   endereco: "",
-  observacoes: "",
+  produtosVende: [] as string[],
+  genero: "" as string,
 }
 
 export default function FornecedoresPage() {
@@ -82,8 +87,7 @@ export default function FornecedoresPage() {
   const { data: fornecedores, isLoading, error } = useCollection(fornecedoresQuery)
 
   const filteredItems = (fornecedores || []).filter(c =>
-    c.razaoSocial?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    c.nomeFantasia?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    c.nomeFornecedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.cnpj?.includes(searchTerm)
   )
 
@@ -96,16 +100,21 @@ export default function FornecedoresPage() {
   const openEditDialog = (item: any) => {
     setEditingItem(item)
     setForm({
-      razaoSocial: item.razaoSocial || "",
-      nomeFantasia: item.nomeFantasia || "",
+      nomeFornecedor: item.nomeFornecedor || "",
       cnpj: item.cnpj || "",
+      whatsapp: item.whatsapp || "",
       telefone: item.telefone || "",
       email: item.email || "",
+      site: item.site || "",
+      instagram: item.instagram || "",
+      loginSite: item.loginSite || "",
+      senhaSite: item.senhaSite || "",
       cep: item.cep || "",
       cidade: item.cidade || "",
       estado: item.estado || "",
       endereco: item.endereco || "",
-      observacoes: item.observacoes || "",
+      produtosVende: item.produtosVende || [],
+      genero: item.genero || "",
     })
     setIsDialogOpen(true)
   }
@@ -116,8 +125,8 @@ export default function FornecedoresPage() {
   }
 
   const handleSave = async () => {
-    if (!form.razaoSocial.trim() && !form.nomeFantasia.trim()) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha a Razão Social ou Nome Fantasia." })
+    if (!form.nomeFornecedor.trim()) {
+      toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o Nome do Fornecedor." })
       return
     }
     
@@ -233,11 +242,11 @@ export default function FornecedoresPage() {
               <CardHeader className="p-4 pb-0 flex flex-row items-start justify-between space-y-0">
                 <div className="flex items-center gap-3">
                   <div className="h-10 w-10 rounded bg-primary/10 flex items-center justify-center text-primary font-bold">
-                    {(item.nomeFantasia || item.razaoSocial)?.charAt(0)?.toUpperCase() || "F"}
+                    {(item.nomeFornecedor)?.charAt(0)?.toUpperCase() || "F"}
                   </div>
                   <div>
-                    <h3 className="font-bold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1" title={item.nomeFantasia || item.razaoSocial}>
-                      {item.nomeFantasia || item.razaoSocial}
+                    <h3 className="font-bold text-sm leading-tight group-hover:text-primary transition-colors line-clamp-1" title={item.nomeFornecedor}>
+                      {item.nomeFornecedor}
                     </h3>
                     <div className="text-[11px] text-muted-foreground mt-0.5">{item.cnpj || "Sem CNPJ/CPF"}</div>
                   </div>
@@ -287,25 +296,46 @@ export default function FornecedoresPage() {
             <DialogDescription>Preencha os dados do fornecedor.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
-            <div className="space-y-2">
-              <Label htmlFor="razaoSocial">Razão Social *</Label>
-              <Input id="razaoSocial" {...field("razaoSocial")} />
+            {/* INFORMAÇÕES BÁSICAS */}
+            <div className="md:col-span-2">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-4">Informações Básicas</h3>
             </div>
+            
             <div className="space-y-2">
-              <Label htmlFor="nomeFantasia">Nome Fantasia *</Label>
-              <Input id="nomeFantasia" {...field("nomeFantasia")} />
+              <Label htmlFor="nomeFornecedor">Nome do Fornecedor *</Label>
+              <Input id="nomeFornecedor" {...field("nomeFornecedor")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="cnpj">CNPJ / CPF</Label>
               <Input id="cnpj" {...field("cnpj")} />
             </div>
             <div className="space-y-2">
+              <Label htmlFor="whatsapp">WhatsApp</Label>
+              <Input id="whatsapp" {...field("whatsapp")} placeholder="85 99215-7538" />
+            </div>
+            <div className="space-y-2">
               <Label htmlFor="telefone">Telefone</Label>
-              <Input id="telefone" {...field("telefone")} />
+              <Input id="telefone" {...field("telefone")} placeholder="(11) 9999-9999" />
             </div>
             <div className="md:col-span-2 space-y-2">
               <Label htmlFor="email">E-mail</Label>
               <Input id="email" type="email" {...field("email")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="site">Site</Label>
+              <Input id="site" {...field("site")} placeholder="https://example.com.br/" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="instagram">Instagram</Label>
+              <Input id="instagram" {...field("instagram")} placeholder="@usuario" />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="loginSite">Login do site</Label>
+              <Input id="loginSite" {...field("loginSite")} />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="senhaSite">Senha do site</Label>
+              <Input id="senhaSite" type="password" {...field("senhaSite")} />
             </div>
             <div className="space-y-2">
               <Label htmlFor="cep">CEP</Label>
@@ -319,13 +349,56 @@ export default function FornecedoresPage() {
               <Label htmlFor="estado">Estado (UF)</Label>
               <Input id="estado" maxLength={2} {...field("estado")} />
             </div>
-            <div className="space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <Label htmlFor="endereco">Endereço</Label>
               <Input id="endereco" {...field("endereco")} />
             </div>
-            <div className="md:col-span-2 space-y-2">
-              <Label htmlFor="observacoes">Observações</Label>
-              <Input id="observacoes" {...field("observacoes")} />
+
+            {/* PRODUTOS QUE VENDE */}
+            <div className="md:col-span-2 mt-4">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Produtos que vende</h3>
+              <div className="space-y-2">
+                <div className="flex flex-wrap gap-3">
+                  {["Normal", "Moda Praia", "Jeans", "Pijamas", "Acessórios", "Calçados"].map((produto) => (
+                    <label key={produto} className="flex items-center gap-2 cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={form.produtosVende.includes(produto)}
+                        onChange={(e) => {
+                          setForm(prev => ({
+                            ...prev,
+                            produtosVende: e.target.checked
+                              ? [...prev.produtosVende, produto]
+                              : prev.produtosVende.filter(p => p !== produto)
+                          }))
+                        }}
+                        className="h-4 w-4 rounded border-gray-300"
+                      />
+                      <span className="text-sm">{produto}</span>
+                    </label>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* GÊNERO */}
+            <div className="md:col-span-2">
+              <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Gênero</h3>
+              <div className="flex flex-wrap gap-3">
+                {["Menino", "Menina", "Unissex"].map((genero) => (
+                  <label key={genero} className="flex items-center gap-2 cursor-pointer">
+                    <input
+                      type="radio"
+                      name="genero"
+                      value={genero}
+                      checked={form.genero === genero}
+                      onChange={(e) => setForm(prev => ({ ...prev, genero: e.target.value }))}
+                      className="h-4 w-4 border-gray-300"
+                    />
+                    <span className="text-sm">{genero}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>

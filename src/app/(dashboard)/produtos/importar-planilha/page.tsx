@@ -28,14 +28,37 @@ export default function ImportarPlanilhaPage() {
     "Unidade",
     "NCM",
     "Grupo do Produto",
+    "Tamanho",
+    "Cor",
     "FORNECEDOR"
   ]
 
+  const fornecedorHeadersPadrao = [
+    "Nome do Fornecedor *",
+    "CNPJ / CPF",
+    "WhatsApp",
+    "Telefone",
+    "E-mail",
+    "Site",
+    "Instagram",
+    "Login do site",
+    "Senha do site",
+    "CEP",
+    "Cidade",
+    "Estado",
+    "Endereço",
+    "Observações",
+    "Produtos que vende",
+    "Gênero"
+  ]
+
   const baixarPlanilhaPadrao = () => {
-    // Cria uma planilha vazia apenas com os cabeçalhos
-    const ws = XLSX.utils.aoa_to_sheet([colunasPadrao])
+    // Cria uma planilha com duas abas: Produtos e Fornecedores
+    const wsProdutos = XLSX.utils.aoa_to_sheet([colunasPadrao])
+    const wsFornecedores = XLSX.utils.aoa_to_sheet([fornecedorHeadersPadrao])
     const wb = XLSX.utils.book_new()
-    XLSX.utils.book_append_sheet(wb, ws, "Produtos")
+    XLSX.utils.book_append_sheet(wb, wsProdutos, "Produtos")
+    XLSX.utils.book_append_sheet(wb, wsFornecedores, "Fornecedores")
     XLSX.writeFile(wb, "planilha_padrao_produtos.xlsx")
   }
 
@@ -64,21 +87,105 @@ export default function ImportarPlanilhaPage() {
   const getFornecedorId = async (nome: string) => {
     if (!nome || !db) return ""
     try {
-      const q = query(collection(db, "fornecedores"), where("razaoSocial", "==", nome))
+      const q = query(collection(db, "fornecedores"), where("nomeFornecedor", "==", nome))
       const querySnapshot = await getDocs(q)
       if (!querySnapshot.empty) {
         return querySnapshot.docs[0].id
-      }
-      // Se não achar pela razaoSocial, tenta nomeFantasia
-      const q2 = query(collection(db, "fornecedores"), where("nomeFantasia", "==", nome))
-      const querySnapshot2 = await getDocs(q2)
-      if (!querySnapshot2.empty) {
-        return querySnapshot2.docs[0].id
       }
     } catch (e) {
       console.error(e)
     }
     return ""
+  }
+
+  const getGrupoId = async (nome: string) => {
+    if (!nome || !db) return ""
+    try {
+      const q = query(collection(db, "gruposProdutos"), where("nome", "==", nome))
+      const querySnapshot = await getDocs(q)
+      if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].id
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    return ""
+  }
+
+  const getGradeId = async (nome: string) => {
+    if (!nome || !db) return ""
+    try {
+      const q = query(collection(db, "gradesVariacoes"), where("nome", "==", nome))
+      const querySnapshot = await getDocs(q)
+      if (!querySnapshot.empty) {
+        return querySnapshot.docs[0].id
+      }
+    } catch (e) {
+      console.error(e)
+    }
+    return ""
+  }
+
+  const importSheetFornecedores = async (worksheet: XLSX.WorkSheet) => {
+    const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
+    if (rows.length <= 1) return
+
+    const headers: string[] = rows[0].map((h: any) => h?.toString().trim() || "")
+    const idx = {
+      nomeFornecedor: headers.findIndex(h => h.toLowerCase().includes("nome")),
+      cnpj: headers.findIndex(h => h.toLowerCase().includes("cnpj") || h.toLowerCase().includes("cpf")),
+      whatsapp: headers.findIndex(h => h.toLowerCase().includes("whatsapp")),
+      telefone: headers.findIndex(h => h.toLowerCase().includes("telefone")),
+      email: headers.findIndex(h => h.toLowerCase().includes("e-mail") || h.toLowerCase().includes("email")),
+      site: headers.findIndex(h => h.toLowerCase().includes("site")),
+      instagram: headers.findIndex(h => h.toLowerCase().includes("instagram")),
+      loginSite: headers.findIndex(h => h.toLowerCase().includes("login")),
+      senhaSite: headers.findIndex(h => h.toLowerCase().includes("senha")),
+      cep: headers.findIndex(h => h.toLowerCase().includes("cep")),
+      cidade: headers.findIndex(h => h.toLowerCase().includes("cidade")),
+      estado: headers.findIndex(h => h.toLowerCase().includes("estado")),
+      endereco: headers.findIndex(h => h.toLowerCase().includes("endereço") || h.toLowerCase().includes("endereco")),
+      observacoes: headers.findIndex(h => h.toLowerCase().includes("observa")),
+      produtosVende: headers.findIndex(h => h.toLowerCase().includes("produtos") && h.toLowerCase().includes("vende")),
+      genero: headers.findIndex(h => h.toLowerCase().includes("gênero") || h.toLowerCase().includes("genero")),
+    }
+
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i]
+      const nomeFornecedor = idx.nomeFornecedor !== -1 ? row[idx.nomeFornecedor]?.toString().trim() : ""
+      if (!nomeFornecedor) continue
+
+      const existingId = await getFornecedorId(nomeFornecedor)
+      if (existingId) continue
+
+      const payload = {
+        nomeFornecedor,
+        cnpj: idx.cnpj !== -1 ? row[idx.cnpj]?.toString().trim() || "" : "",
+        whatsapp: idx.whatsapp !== -1 ? row[idx.whatsapp]?.toString().trim() || "" : "",
+        telefone: idx.telefone !== -1 ? row[idx.telefone]?.toString().trim() || "" : "",
+        email: idx.email !== -1 ? row[idx.email]?.toString().trim() || "" : "",
+        site: idx.site !== -1 ? row[idx.site]?.toString().trim() || "" : "",
+        instagram: idx.instagram !== -1 ? row[idx.instagram]?.toString().trim() || "" : "",
+        loginSite: idx.loginSite !== -1 ? row[idx.loginSite]?.toString().trim() || "" : "",
+        senhaSite: idx.senhaSite !== -1 ? row[idx.senhaSite]?.toString().trim() || "" : "",
+        cep: idx.cep !== -1 ? row[idx.cep]?.toString().trim() || "" : "",
+        cidade: idx.cidade !== -1 ? row[idx.cidade]?.toString().trim() || "" : "",
+        estado: idx.estado !== -1 ? row[idx.estado]?.toString().trim() || "" : "",
+        endereco: idx.endereco !== -1 ? row[idx.endereco]?.toString().trim() || "" : "",
+        observacoes: idx.observacoes !== -1 ? row[idx.observacoes]?.toString().trim() || "" : "",
+        produtosVende: idx.produtosVende !== -1 ? row[idx.produtosVende]?.toString().split(",").map((p: string) => p.trim()).filter(Boolean) : [],
+        genero: idx.genero !== -1 ? row[idx.genero]?.toString().trim() || "" : "",
+        ativo: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      }
+
+      try {
+        await addDoc(collection(db, "fornecedores"), payload)
+      } catch (err) {
+        console.error("Erro ao importar fornecedor:", err)
+      }
+    }
   }
 
   const handleImportar = async () => {
@@ -97,7 +204,13 @@ export default function ImportarPlanilhaPage() {
     try {
       const data = await file.arrayBuffer()
       const workbook = XLSX.read(data)
-      const worksheet = workbook.Sheets[workbook.SheetNames[0]]
+      const sheetNameFornecedores = workbook.SheetNames.find(name => name?.toLowerCase().includes("fornecedor"))
+      if (sheetNameFornecedores) {
+        await importSheetFornecedores(workbook.Sheets[sheetNameFornecedores])
+      }
+
+      const sheetNameProdutos = workbook.SheetNames.find(name => name?.toLowerCase().includes("produto")) || workbook.SheetNames[0]
+      const worksheet = workbook.Sheets[sheetNameProdutos]
       const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
 
       if (rows.length <= 1) {
@@ -130,6 +243,8 @@ export default function ImportarPlanilhaPage() {
         unidade: headers.findIndex(h => h?.toString().toLowerCase().includes("unidade")),
         ncm: headers.findIndex(h => h?.toString().toLowerCase().includes("ncm")),
         grupo: headers.findIndex(h => h?.toString().toLowerCase().includes("grupo")),
+        tamanho: headers.findIndex(h => h?.toString().toLowerCase().includes("tamanho")),
+        cor: headers.findIndex(h => h?.toString().toLowerCase().includes("cor")),
         fornecedor: headers.findIndex(h => h?.toString().toLowerCase().includes("fornecedor")),
       }
 
@@ -146,6 +261,62 @@ export default function ImportarPlanilhaPage() {
         let fornecedorId = ""
         if (fornecedorNome) {
           fornecedorId = await getFornecedorId(fornecedorNome)
+          if (!fornecedorId) {
+            const newFornecedorRef = await addDoc(collection(db, "fornecedores"), {
+              nomeFornecedor: fornecedorNome,
+              ativo: true,
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            })
+            fornecedorId = newFornecedorRef.id
+          }
+        }
+
+        const grupoNome = idx.grupo !== -1 ? row[idx.grupo]?.toString().trim() : ""
+        let grupoId = ""
+        if (grupoNome) {
+          grupoId = await getGrupoId(grupoNome)
+          if (!grupoId) {
+            const newGrupoRef = await addDoc(collection(db, "gruposProdutos"), {
+              nome: grupoNome,
+              descricao: "",
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            })
+            grupoId = newGrupoRef.id
+          }
+        }
+
+        const tamanhoNome = idx.tamanho !== -1 ? row[idx.tamanho]?.toString().trim() : ""
+        let tamanhoId = ""
+        if (tamanhoNome) {
+          tamanhoId = await getGradeId(tamanhoNome)
+          if (!tamanhoId) {
+            const newGradeRef = await addDoc(collection(db, "gradesVariacoes"), {
+              nome: tamanhoNome,
+              tipo: "tamanho",
+              valores: [tamanhoNome],
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            })
+            tamanhoId = newGradeRef.id
+          }
+        }
+
+        const corNome = idx.cor !== -1 ? row[idx.cor]?.toString().trim() : ""
+        let corId = ""
+        if (corNome) {
+          corId = await getGradeId(corNome)
+          if (!corId) {
+            const newGradeRef = await addDoc(collection(db, "gradesVariacoes"), {
+              nome: corNome,
+              tipo: "cor",
+              valores: [corNome],
+              createdAt: serverTimestamp(),
+              updatedAt: serverTimestamp(),
+            })
+            corId = newGradeRef.id
+          }
         }
 
         const produtoData = {
@@ -161,9 +332,12 @@ export default function ImportarPlanilhaPage() {
           lucroUtilizado: 0,
           
           estoqueAtual: idx.estoque !== -1 ? parseNumber(row[idx.estoque]) : 0,
-          possuiVariacoes: "Não",
+          possuiVariacoes: tamanhoNome || corNome ? "Sim" : "Não",
+          tamanho: tamanhoNome,
+          cor: corNome,
           
           fornecedorId,
+          grupo: grupoId,
           
           createdAt: serverTimestamp(),
           updatedAt: serverTimestamp(),

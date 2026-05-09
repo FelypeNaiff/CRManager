@@ -1,6 +1,6 @@
 "use client"
 
-import { Suspense, useState } from "react"
+import { Suspense, useMemo, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -62,6 +62,16 @@ function calcIdade(dataNascimento: string): string {
   return `${meses} mês${meses > 1 ? "es" : ""}`
 }
 
+function getIdadeEmAnos(dataNascimento: string): number | null {
+  if (!dataNascimento) return null
+  const hoje = new Date()
+  const nasc = new Date(dataNascimento)
+  let anos = hoje.getFullYear() - nasc.getFullYear()
+  const mes = hoje.getMonth() - nasc.getMonth()
+  if (mes < 0 || (mes === 0 && hoje.getDate() < nasc.getDate())) anos--
+  return anos >= 0 ? anos : 0
+}
+
 function FilhosPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -75,6 +85,9 @@ function FilhosPageContent() {
   const [deletingFilho, setDeletingFilho] = useState<any>(null)
   const [form, setForm] = useState(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
+  const [sexoFilter, setSexoFilter] = useState("todos")
+  const [idadeMin, setIdadeMin] = useState("")
+  const [idadeMax, setIdadeMax] = useState("")
 
   const filhosQuery = useMemoFirebase(() => {
     if (!db) return null
@@ -85,7 +98,50 @@ function FilhosPageContent() {
     }
   }, [db, clienteId])
 
+  const clientesQuery = useMemoFirebase(() => {
+    if (!db) return null
+    return collection(db, "clientes")
+  }, [db])
+
   const { data: filhos, isLoading, error } = useCollection(filhosQuery)
+  const { data: clientes } = useCollection(clientesQuery)
+
+  const clientesMap = useMemo(() => {
+    return (clientes || []).reduce((acc: Record<string, string>, cliente: any) => {
+      acc[cliente.id] = cliente.nome || cliente.razaoSocial || "Cliente"
+      return acc
+    }, {})
+  }, [clientes])
+
+  const filteredFilhos = useMemo(() => {
+    if (!filhos) return []
+    return filhos.filter((filho: any) => {
+      if (sexoFilter !== "todos" && filho.sexo !== sexoFilter) {
+        return false
+      }
+
+      const idade = getIdadeEmAnos(filho.dataNascimento)
+      if (idadeMin) {
+        const min = Number(idadeMin)
+        if (idade === null || idade < min) return false
+      }
+      if (idadeMax) {
+        const max = Number(idadeMax)
+        if (idade === null || idade > max) return false
+      }
+      return true
+    })
+  }, [filhos, sexoFilter, idadeMin, idadeMax])
+
+  const filhosPorCliente = useMemo(() => {
+    if (clienteId || !filteredFilhos) return {}
+    return filteredFilhos.reduce((acc: Record<string, any[]>, filho: any) => {
+      const clientId = filho.clientId || "sem-cliente"
+      acc[clientId] = acc[clientId] || []
+      acc[clientId].push(filho)
+      return acc
+    }, {})
+  }, [filteredFilhos, clienteId])
 
   const openNewDialog = () => {
     setEditingFilho(null)
@@ -204,6 +260,44 @@ function FilhosPageContent() {
         )}
       </div>
 
+      <div className="grid gap-4 md:grid-cols-3 items-end">
+        <div className="space-y-2">
+          <Label htmlFor="sexoFilter">Sexo</Label>
+          <Select value={sexoFilter} onValueChange={(value) => setSexoFilter(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Todos" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="M">Masculino</SelectItem>
+              <SelectItem value="F">Feminino</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="idadeMin">Idade mínima</Label>
+          <Input
+            id="idadeMin"
+            type="number"
+            min={0}
+            value={idadeMin}
+            onChange={(e) => setIdadeMin(e.target.value)}
+            placeholder="0"
+          />
+        </div>
+        <div className="space-y-2">
+          <Label htmlFor="idadeMax">Idade máxima</Label>
+          <Input
+            id="idadeMax"
+            type="number"
+            min={0}
+            value={idadeMax}
+            onChange={(e) => setIdadeMax(e.target.value)}
+            placeholder="99"
+          />
+        </div>
+      </div>
+
       {error && (error as any).code === "failed-precondition" && (
         <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
@@ -243,7 +337,7 @@ function FilhosPageContent() {
           <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
           <p className="text-muted-foreground">Carregando...</p>
         </div>
-      ) : !filhos || filhos.length === 0 ? (
+      ) : !filteredFilhos || filteredFilhos.length === 0 ? (
         <div className="text-center py-20 border rounded-xl bg-muted/10">
           <Baby className="h-12 w-12 mx-auto text-muted-foreground/40 mb-3" />
           <p className="text-muted-foreground font-medium">Nenhum filho cadastrado ainda.</p>
@@ -253,9 +347,9 @@ function FilhosPageContent() {
               : "Cadastre filhos através do perfil dos clientes."}
           </p>
         </div>
-      ) : (
+      ) : clienteId ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filhos.map((filho) => (
+          {filteredFilhos.map((filho) => (
             <Card key={filho.id} className="hover:border-primary/50 transition-colors shadow-sm group">
               <CardContent className="p-5">
                 <div className="flex items-start justify-between">
@@ -302,6 +396,71 @@ function FilhosPageContent() {
                 )}
               </CardContent>
             </Card>
+          ))}
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {Object.entries(filhosPorCliente).map(([clientId, filhosCliente]) => (
+            <div key={clientId} className="space-y-4">
+              <div className="rounded-2xl border bg-white p-5">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div>
+                    <p className="text-base font-semibold">{clientesMap[clientId] || "Cliente desconhecido"}</p>
+                    <p className="text-sm text-muted-foreground">{filhosCliente.length} filho{filhosCliente.length > 1 ? "s" : ""}</p>
+                  </div>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                {filhosCliente.map((filho) => (
+                  <Card key={filho.id} className="hover:border-primary/50 transition-colors shadow-sm group">
+                    <CardContent className="p-5">
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-3">
+                          <div className={`h-12 w-12 rounded-full flex items-center justify-center font-bold text-lg ${filho.sexo === "F" ? "bg-pink-100 text-pink-600" : "bg-blue-100 text-blue-600"}`}>
+                            {filho.nome?.charAt(0)?.toUpperCase() || "?"}
+                          </div>
+                          <div>
+                            <p className="font-bold text-base group-hover:text-primary transition-colors">{filho.nome}</p>
+                            {filho.dataNascimento && (
+                              <p className="text-xs text-muted-foreground flex items-center gap-1 mt-0.5">
+                                <Cake className="h-3 w-3" />
+                                {new Date(filho.dataNascimento + "T12:00:00").toLocaleDateString("pt-BR")} · {calcIdade(filho.dataNascimento)}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEditDialog(filho)}>
+                              <Pencil className="mr-2 h-4 w-4" /> Editar
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-destructive" onClick={() => openDeleteDialog(filho)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Excluir
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      </div>
+                      {filho.sexo && (
+                        <div className="mt-3">
+                          <Badge className={`text-[10px] h-5 border ${sexoColor(filho.sexo)}`}>
+                            {filho.sexo === "M" ? "Masculino" : filho.sexo === "F" ? "Feminino" : filho.sexo}
+                          </Badge>
+                        </div>
+                      )}
+                      {filho.observacoes && (
+                        <p className="text-xs text-muted-foreground mt-3 line-clamp-2">{filho.observacoes}</p>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
           ))}
         </div>
       )}

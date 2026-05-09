@@ -1,17 +1,18 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Package, Save, X, Info, UploadCloud, RefreshCw } from "lucide-react"
+import { Package, Save, X, Info, UploadCloud, RefreshCw, Plus } from "lucide-react"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
 import { collection, addDoc, serverTimestamp, query, orderBy } from "firebase/firestore"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
 
 export default function NovoProdutoPage() {
@@ -61,11 +62,41 @@ export default function NovoProdutoPage() {
   }, [form.custoBase, form.despesasAcessorias, form.outrasDespesas])
 
   const fornecedoresQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "fornecedores"), orderBy("nome", "asc")) : null;
+    return db ? query(collection(db, "fornecedores"), orderBy("nomeFornecedor", "asc")) : null;
   }, [db]);
   const { data: fornecedores } = useCollection(fornecedoresQuery);
 
+  const gruposQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null;
+  }, [db]);
+  const { data: grupos } = useCollection(gruposQuery);
+
+  const gradesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")) : null;
+  }, [db]);
+  const { data: grades } = useCollection(gradesQuery);
+
+  const unidadesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")) : null;
+  }, [db]);
+  const { data: unidades } = useCollection(unidadesQuery);
+
   const [variacoes, setVariacoes] = useState<any[]>([])
+  const [isNewGrupoDialogOpen, setIsNewGrupoDialogOpen] = useState(false)
+  const [isNewGradeDialogOpen, setIsNewGradeDialogOpen] = useState(false)
+  const [isNewUnidadeDialogOpen, setIsNewUnidadeDialogOpen] = useState(false)
+  const [isNewFornecedorDialogOpen, setIsNewFornecedorDialogOpen] = useState(false)
+  const [newGrupoName, setNewGrupoName] = useState("")
+  const [newGradeName, setNewGradeName] = useState("")
+  const [newGradeType, setNewGradeType] = useState("tamanho")
+  const [newGradeValues, setNewGradeValues] = useState("")
+  const [newUnidadeName, setNewUnidadeName] = useState("")
+  const [newUnidadeSigla, setNewUnidadeSigla] = useState("")
+  const [newFornecedorName, setNewFornecedorName] = useState("")
+  const [isCreatingGrupo, setIsCreatingGrupo] = useState(false)
+  const [isCreatingGrade, setIsCreatingGrade] = useState(false)
+  const [isCreatingUnidade, setIsCreatingUnidade] = useState(false)
+  const [isCreatingFornecedor, setIsCreatingFornecedor] = useState(false)
 
   const handleFieldChange = (field: string, value: string | number) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -98,13 +129,126 @@ export default function NovoProdutoPage() {
   const handleVariacaoChange = (index: number, field: string, value: any) => {
     const newVars = [...variacoes]
     newVars[index][field] = value
+    
+    // Auto-preenche o Código Interno da variação usando o padrão [Pai]-[Variação]
+    if (field === "tamanho" && value) {
+      const baseCode = form.codigoInterno ? `${form.codigoInterno}-` : ""
+      newVars[index].codigoInterno = `${baseCode}${value}`.trim().replace(/\s+/g, '-').toUpperCase()
+    }
+
     setVariacoes(newVars)
   }
+
+  useEffect(() => {
+    if (form.possuiVariacoes === "Sim") {
+      const totalEstoque = variacoes.reduce((acc, curr) => acc + (Number(curr.estoqueAtual) || 0), 0)
+      setForm(prev => prev.estoqueAtual === totalEstoque ? prev : { ...prev, estoqueAtual: totalEstoque })
+    }
+  }, [variacoes, form.possuiVariacoes])
 
   const gerarCodigo = () => {
     const timestamp = Date.now().toString(36).toUpperCase()
     const random = Math.random().toString(36).substring(2, 5).toUpperCase()
     handleFieldChange("codigoInterno", `PRD-${timestamp}-${random}`)
+  }
+
+  const handleCreateNewGrupo = async () => {
+    if (!newGrupoName.trim() || !db) {
+      toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
+      return
+    }
+    setIsCreatingGrupo(true)
+    try {
+      const docRef = await addDoc(collection(db, "gruposProdutos"), {
+        nome: newGrupoName,
+        descricao: "",
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      handleFieldChange("grupo", docRef.id)
+      setNewGrupoName("")
+      setIsNewGrupoDialogOpen(false)
+      toast({ title: "Grupo criado com sucesso!" })
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao criar grupo." })
+    } finally {
+      setIsCreatingGrupo(false)
+    }
+  }
+
+  const handleCreateNewGrade = async () => {
+    if (!newGradeName.trim() || !newGradeValues.trim() || !db) {
+      toast({ variant: "destructive", title: "Erro", description: "Nome e valores são obrigatórios." })
+      return
+    }
+    setIsCreatingGrade(true)
+    try {
+      await addDoc(collection(db, "gradesVariacoes"), {
+        nome: newGradeName,
+        tipo: newGradeType,
+        valores: newGradeValues.split(",").map(v => v.trim()).filter(Boolean),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      setNewGradeName("")
+      setNewGradeType("tamanho")
+      setNewGradeValues("")
+      setIsNewGradeDialogOpen(false)
+      toast({ title: "Grade criada com sucesso!" })
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao criar grade." })
+    } finally {
+      setIsCreatingGrade(false)
+    }
+  }
+
+  const handleCreateNewUnidade = async () => {
+    if (!newUnidadeName.trim() || !newUnidadeSigla.trim() || !db) {
+      toast({ variant: "destructive", title: "Erro", description: "Nome e sigla são obrigatórios." })
+      return
+    }
+    setIsCreatingUnidade(true)
+    try {
+      await addDoc(collection(db, "unidadesProdutos"), {
+        nome: newUnidadeName,
+        sigla: newUnidadeSigla.toUpperCase(),
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      handleFieldChange("unidadeMedida", newUnidadeSigla.toUpperCase())
+      setNewUnidadeName("")
+      setNewUnidadeSigla("")
+      setIsNewUnidadeDialogOpen(false)
+      toast({ title: "Unidade criada com sucesso!" })
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao criar unidade." })
+    } finally {
+      setIsCreatingUnidade(false)
+    }
+  }
+
+  const handleCreateNewFornecedor = async () => {
+    if (!newFornecedorName.trim() || !db) {
+      toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
+      return
+    }
+    setIsCreatingFornecedor(true)
+    try {
+      const docRef = await addDoc(collection(db, "fornecedores"), {
+        nomeFornecedor: newFornecedorName,
+        ativo: true,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      handleFieldChange("fornecedorId", docRef.id)
+      setNewFornecedorName("")
+      setIsNewFornecedorDialogOpen(false)
+      toast({ title: "Fornecedor criado com sucesso!" })
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao criar fornecedor." })
+    } finally {
+      setIsCreatingFornecedor(false)
+    }
   }
 
   const handleSave = async () => {
@@ -224,46 +368,82 @@ export default function NovoProdutoPage() {
               
               <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="grupo">Grupo do Produto</Label>
-                <Select value={form.grupo} onValueChange={(v) => handleFieldChange("grupo", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um grupo" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="roupas">Roupas</SelectItem>
-                    <SelectItem value="calcados">Calçados</SelectItem>
-                    <SelectItem value="acessorios">Acessórios</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={form.grupo} onValueChange={(v) => handleFieldChange("grupo", v)}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione um grupo" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grupos?.map(g => (
+                        <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setIsNewGrupoDialogOpen(true)}
+                    title="Criar novo grupo"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="unidadeMedida">Unidade de Medida</Label>
-                <Select value={form.unidadeMedida} onValueChange={(v) => handleFieldChange("unidadeMedida", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="UN">Unidade (UN)</SelectItem>
-                    <SelectItem value="CX">Caixa (CX)</SelectItem>
-                    <SelectItem value="KG">Quilograma (KG)</SelectItem>
-                    <SelectItem value="MT">Metro (MT)</SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={form.unidadeMedida} onValueChange={(v) => handleFieldChange("unidadeMedida", v)}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="UN">Unidade (UN)</SelectItem>
+                      <SelectItem value="CX">Caixa (CX)</SelectItem>
+                      <SelectItem value="KG">Quilograma (KG)</SelectItem>
+                      <SelectItem value="MT">Metro (MT)</SelectItem>
+                      {unidades?.filter(u => !["UN", "CX", "KG", "MT"].includes(u.sigla)).map(u => (
+                        <SelectItem key={u.id} value={u.sigla}>{u.nome} ({u.sigla})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setIsNewUnidadeDialogOpen(true)}
+                    title="Criar nova unidade"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="fornecedor">Fornecedor</Label>
-                <Select value={form.fornecedorId} onValueChange={(v) => handleFieldChange("fornecedorId", v)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione um fornecedor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {fornecedores?.map(f => (
-                      <SelectItem key={f.id} value={f.id}>{f.nomeFantasia || f.razaoSocial || f.nome}</SelectItem>
-                    ))}
-                    {!fornecedores?.length && (
-                      <SelectItem value="none" disabled>Nenhum fornecedor cadastrado</SelectItem>
-                    )}
-                  </SelectContent>
-                </Select>
+                <div className="flex gap-2">
+                  <Select value={form.fornecedorId} onValueChange={(v) => handleFieldChange("fornecedorId", v)}>
+                    <SelectTrigger className="flex-1">
+                      <SelectValue placeholder="Selecione um fornecedor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {fornecedores?.map(f => (
+                        <SelectItem key={f.id} value={f.id}>{f.nomeFornecedor || f.nomeFantasia || f.razaoSocial || f.nome}</SelectItem>
+                      ))}
+                      {!fornecedores?.length && (
+                        <SelectItem value="none" disabled>Nenhum fornecedor cadastrado</SelectItem>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  <Button 
+                    type="button"
+                    variant="outline" 
+                    size="icon"
+                    onClick={() => setIsNewFornecedorDialogOpen(true)}
+                    title="Criar novo fornecedor"
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
               <div className="space-y-2 lg:col-span-2">
                 <Label htmlFor="unidadeConversao">Conversão (Qtd em 1 {form.unidadeMedida})</Label>
@@ -415,7 +595,19 @@ export default function NovoProdutoPage() {
                                 <Input value={v.codigoBarras} onChange={(e) => handleVariacaoChange(i, "codigoBarras", e.target.value)} />
                               </td>
                               <td className="px-2 py-2">
-                                <Input value={v.tamanho} placeholder="Ex: M, Azul" onChange={(e) => handleVariacaoChange(i, "tamanho", e.target.value)} />
+                                <Select value={v.tamanho} onValueChange={(val) => handleVariacaoChange(i, "tamanho", val)}>
+                                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                                  <SelectContent>
+                                    {grades?.map(grade => (
+                                      <SelectGroup key={grade.id}>
+                                        <SelectLabel className="bg-muted/50 text-muted-foreground">{grade.nome}</SelectLabel>
+                                        {grade.valores?.map((valor: string) => (
+                                          <SelectItem key={`${grade.id}-${valor}`} value={valor}>{valor}</SelectItem>
+                                        ))}
+                                      </SelectGroup>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
                               </td>
                               <td className="px-2 py-2">
                                 <Input type="number" value={v.estoqueAtual} onChange={(e) => handleVariacaoChange(i, "estoqueAtual", Number(e.target.value))} />
@@ -512,6 +704,147 @@ export default function NovoProdutoPage() {
           </TabsContent>
         </div>
       </Tabs>
+
+      {/* Dialog para criar novo grupo */}
+      <Dialog open={isNewGrupoDialogOpen} onOpenChange={setIsNewGrupoDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Grupo de Produtos</DialogTitle>
+            <DialogDescription>Crie um novo grupo para categorizar seus produtos</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newGrupoName">Nome do Grupo *</Label>
+              <Input 
+                id="newGrupoName"
+                value={newGrupoName}
+                onChange={(e) => setNewGrupoName(e.target.value)}
+                placeholder="Ex: Roupas, Calçados, Acessórios"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsNewGrupoDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreateNewGrupo} disabled={isCreatingGrupo} className="bg-blue-600 hover:bg-blue-700">
+                {isCreatingGrupo ? "Criando..." : "Criar Grupo"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para criar nova grade */}
+      <Dialog open={isNewGradeDialogOpen} onOpenChange={setIsNewGradeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Grade de Variação</DialogTitle>
+            <DialogDescription>Crie uma nova grade para definir variações de produtos</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newGradeName">Nome da Grade *</Label>
+              <Input 
+                id="newGradeName"
+                value={newGradeName}
+                onChange={(e) => setNewGradeName(e.target.value)}
+                placeholder="Ex: Tamanhos, Cores"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newGradeType">Tipo</Label>
+              <select 
+                id="newGradeType"
+                value={newGradeType}
+                onChange={(e) => setNewGradeType(e.target.value)}
+                className="w-full px-3 py-2 border rounded-md"
+              >
+                <option value="tamanho">Tamanho</option>
+                <option value="cor">Cor</option>
+                <option value="modelo">Modelo</option>
+                <option value="outro">Outro</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="newGradeValues">Valores * (separados por vírgula)</Label>
+              <Input 
+                id="newGradeValues"
+                value={newGradeValues}
+                onChange={(e) => setNewGradeValues(e.target.value)}
+                placeholder="Ex: P, M, G, GG"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setIsNewGradeDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreateNewGrade} disabled={isCreatingGrade} className="bg-blue-600 hover:bg-blue-700">
+                {isCreatingGrade ? "Criando..." : "Criar Grade"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para criar nova unidade */}
+      <Dialog open={isNewUnidadeDialogOpen} onOpenChange={setIsNewUnidadeDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Nova Unidade de Medida</DialogTitle>
+            <DialogDescription>Cadastre uma nova unidade de medida no sistema</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newUnidadeName">Nome da Unidade *</Label>
+              <Input 
+                id="newUnidadeName"
+                value={newUnidadeName}
+                onChange={(e) => setNewUnidadeName(e.target.value)}
+                placeholder="Ex: Centímetro, Pacote, Galão"
+              />
+            </div>
+            <div>
+              <Label htmlFor="newUnidadeSigla">Sigla *</Label>
+              <Input 
+                id="newUnidadeSigla"
+                value={newUnidadeSigla}
+                onChange={(e) => setNewUnidadeSigla(e.target.value)}
+                placeholder="Ex: CM, PCT, GAL"
+                maxLength={4}
+              />
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button variant="outline" onClick={() => setIsNewUnidadeDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreateNewUnidade} disabled={isCreatingUnidade} className="bg-blue-600 hover:bg-blue-700">
+                {isCreatingUnidade ? "Criando..." : "Criar Unidade"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog para criar novo fornecedor rápido */}
+      <Dialog open={isNewFornecedorDialogOpen} onOpenChange={setIsNewFornecedorDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Novo Fornecedor Rápido</DialogTitle>
+            <DialogDescription>Cadastre um fornecedor rapidamente. Detalhes completos poderão ser inseridos depois no menu Fornecedores.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="newFornecedorName">Nome do Fornecedor *</Label>
+              <Input 
+                id="newFornecedorName"
+                value={newFornecedorName}
+                onChange={(e) => setNewFornecedorName(e.target.value)}
+                placeholder="Ex: Distribuidora Silva"
+              />
+            </div>
+            <div className="flex gap-2 justify-end mt-4">
+              <Button variant="outline" onClick={() => setIsNewFornecedorDialogOpen(false)}>Cancelar</Button>
+              <Button onClick={handleCreateNewFornecedor} disabled={isCreatingFornecedor} className="bg-blue-600 hover:bg-blue-700">
+                {isCreatingFornecedor ? "Criando..." : "Criar Fornecedor"}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

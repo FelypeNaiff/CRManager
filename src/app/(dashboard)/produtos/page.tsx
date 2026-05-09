@@ -1,10 +1,11 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy } from "lucide-react"
+import { Label } from "@/components/ui/label"
+import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
 import { collection, query, orderBy, deleteDoc, doc } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
@@ -16,6 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { MovimentacoesModal } from "@/components/produtos/MovimentacoesModal"
 
 export default function ProdutosPage() {
@@ -26,10 +28,30 @@ export default function ProdutosPage() {
   const [selectedProdutoForMov, setSelectedProdutoForMov] = useState<{id: string, nome: string} | null>(null)
   const [isMovimentacoesOpen, setIsMovimentacoesOpen] = useState(false)
 
+  const [isAdvSearchOpen, setIsAdvSearchOpen] = useState(false)
+  const [advFilters, setAdvFilters] = useState({
+    grupo: "",
+    nome: "",
+    codigo: "",
+    fornecedor: "",
+    marca: ""
+  })
+  const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null)
+
   const produtosQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
   }, [db])
   const { data: produtos, isLoading, error } = useCollection(produtosQuery)
+
+  const gruposQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null
+  }, [db])
+  const { data: grupos } = useCollection(gruposQuery)
+
+  const fornecedoresQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "fornecedores"), orderBy("nomeFornecedor", "asc")) : null
+  }, [db])
+  const { data: fornecedores } = useCollection(fornecedoresQuery)
 
   const [cols, setCols] = useState({
     codigo: true,
@@ -38,6 +60,72 @@ export default function ProdutosPage() {
     estoque: true,
     cadastrado: true,
   })
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc'
+    if (sortConfig && sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc'
+    }
+    setSortConfig({ key, direction })
+  }
+
+  const renderSortIcon = (columnKey: string) => {
+    if (sortConfig?.key !== columnKey) return <ArrowUpDown className="h-3 w-3 ml-1 inline text-muted-foreground opacity-50" />
+    return sortConfig.direction === 'asc' 
+      ? <ArrowUp className="h-3 w-3 ml-1 inline text-primary" /> 
+      : <ArrowDown className="h-3 w-3 ml-1 inline text-primary" />
+  }
+
+  const processedProdutos = useMemo(() => {
+    if (!produtos) return []
+    
+    let result = [...produtos]
+
+    // Filtro da busca principal
+    if (searchTerm) {
+      const lowerSearch = searchTerm.toLowerCase()
+      result = result.filter(p => 
+        p.nome?.toLowerCase().includes(lowerSearch) ||
+        p.codigoInterno?.toLowerCase().includes(lowerSearch)
+      )
+    }
+
+    // Filtros da busca avançada
+    if (isAdvSearchOpen) {
+      if (advFilters.nome) result = result.filter(p => p.nome?.toLowerCase().includes(advFilters.nome.toLowerCase()))
+      if (advFilters.codigo) result = result.filter(p => p.codigoInterno?.toLowerCase().includes(advFilters.codigo.toLowerCase()))
+      if (advFilters.grupo) result = result.filter(p => p.grupo === advFilters.grupo)
+      if (advFilters.fornecedor) result = result.filter(p => p.fornecedorId === advFilters.fornecedor)
+      if (advFilters.marca) result = result.filter(p => p.marca?.toLowerCase().includes(advFilters.marca.toLowerCase()))
+    }
+
+    // Ordenação
+    if (sortConfig) {
+      result.sort((a, b) => {
+        let aValue = a[sortConfig.key]
+        let bValue = b[sortConfig.key]
+
+        if (sortConfig.key === 'valor') {
+          aValue = Number(a.valorVenda || 0)
+          bValue = Number(b.valorVenda || 0)
+        } else if (sortConfig.key === 'estoque') {
+          aValue = Number(a.estoqueAtual || 0)
+          bValue = Number(b.estoqueAtual || 0)
+        } else if (sortConfig.key === 'cadastrado') {
+          aValue = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0
+          bValue = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0
+        } else if (sortConfig.key === 'codigo') {
+          aValue = a.codigoInterno || ""
+          bValue = b.codigoInterno || ""
+        }
+
+        if (aValue < bValue) return sortConfig.direction === 'asc' ? -1 : 1
+        if (aValue > bValue) return sortConfig.direction === 'asc' ? 1 : -1
+        return 0
+      })
+    }
+    return result
+  }, [produtos, searchTerm, isAdvSearchOpen, advFilters, sortConfig])
 
   const handleDelete = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este produto?")) {
@@ -124,11 +212,68 @@ export default function ProdutosPage() {
           <Button className="btn-erp-dark h-8 w-8 p-0 rounded-sm shrink-0">
             <Search className="h-3.5 w-3.5" />
           </Button>
-          <Button className="btn-erp-dark h-8 rounded-sm px-3 shrink-0 text-[13px]">
+          <Button 
+            className="btn-erp-dark h-8 rounded-sm px-3 shrink-0 text-[13px]"
+            onClick={() => setIsAdvSearchOpen(!isAdvSearchOpen)}
+          >
             <Search className="h-3.5 w-3.5 mr-1.5" /> Busca avançada
           </Button>
         </div>
       </div>
+
+      {/* Painel de Busca Avançada */}
+      {isAdvSearchOpen && (
+        <div className="bg-gray-50 p-4 border shadow-sm rounded-sm grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">Grupo</Label>
+            <Select value={advFilters.grupo || "todos"} onValueChange={v => setAdvFilters(p => ({...p, grupo: v === "todos" ? "" : v}))}>
+              <SelectTrigger className="h-8 text-[13px] bg-white border-gray-300">
+                <SelectValue placeholder="Todos os grupos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os grupos</SelectItem>
+                {grupos?.map(g => (
+                  <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">Nome</Label>
+            <Input value={advFilters.nome} onChange={e => setAdvFilters(p => ({...p, nome: e.target.value}))} className="h-8 text-[13px] bg-white border-gray-300" placeholder="Nome do produto" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">Código</Label>
+            <Input value={advFilters.codigo} onChange={e => setAdvFilters(p => ({...p, codigo: e.target.value}))} className="h-8 text-[13px] bg-white border-gray-300" placeholder="Cód. interno" />
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">Fornecedor</Label>
+            <Select value={advFilters.fornecedor || "todos"} onValueChange={v => setAdvFilters(p => ({...p, fornecedor: v === "todos" ? "" : v}))}>
+              <SelectTrigger className="h-8 text-[13px] bg-white border-gray-300">
+                <SelectValue placeholder="Todos os fornecedores" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos os fornecedores</SelectItem>
+                {fornecedores?.map(f => (
+                  <SelectItem key={f.id} value={f.id}>{f.nomeFornecedor || f.nomeFantasia || f.razaoSocial || f.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label className="text-xs font-semibold text-gray-700">Marca</Label>
+            <Input value={advFilters.marca} onChange={e => setAdvFilters(p => ({...p, marca: e.target.value}))} className="h-8 text-[13px] bg-white border-gray-300" placeholder="Marca do produto" />
+          </div>
+          <div className="col-span-full flex justify-end gap-2 mt-2">
+            <Button variant="destructive" className="h-8 text-xs px-4" onClick={() => setAdvFilters({grupo: "", nome: "", codigo: "", fornecedor: "", marca: ""})}>
+              Limpar
+            </Button>
+            <Button className="bg-green-600 hover:bg-green-700 text-white h-8 text-xs px-4">
+              Buscar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {error && (
         <div className="bg-destructive/10 text-destructive border border-destructive/20 p-4 rounded-sm flex items-start gap-3">
@@ -146,11 +291,11 @@ export default function ProdutosPage() {
           <table className="w-full text-[13px] text-left">
             <thead className="text-foreground uppercase bg-gray-50 border-b border-gray-200">
               <tr>
-                {cols.codigo && <th className="px-3 py-2 font-semibold">Código</th>}
-                {cols.nome && <th className="px-3 py-2 font-semibold">Nome</th>}
-                {cols.valor && <th className="px-3 py-2 font-semibold">Valor</th>}
-                {cols.estoque && <th className="px-3 py-2 font-semibold">Estoque</th>}
-                {cols.cadastrado && <th className="px-3 py-2 font-semibold">Cadastrado em</th>}
+                {cols.codigo && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('codigo')}>Código {renderSortIcon('codigo')}</th>}
+                {cols.nome && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('nome')}>Nome {renderSortIcon('nome')}</th>}
+                {cols.valor && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('valor')}>Valor {renderSortIcon('valor')}</th>}
+                {cols.estoque && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('estoque')}>Estoque {renderSortIcon('estoque')}</th>}
+                {cols.cadastrado && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('cadastrado')}>Cadastrado em {renderSortIcon('cadastrado')}</th>}
                 <th className="px-3 py-2 font-semibold text-center w-36">Ações</th>
               </tr>
             </thead>
@@ -162,14 +307,14 @@ export default function ProdutosPage() {
                     Carregando dados...
                   </td>
                 </tr>
-              ) : !produtos || produtos.length === 0 ? (
+              ) : processedProdutos.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-3 py-8 text-center text-muted-foreground">
                     Nenhum produto encontrado.
                   </td>
                 </tr>
               ) : (
-                produtos.map((produto) => (
+                processedProdutos.map((produto) => (
                   <tr key={produto.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors group">
                     {cols.codigo && (
                       <td className="px-3 py-2.5 text-muted-foreground">
@@ -189,7 +334,7 @@ export default function ProdutosPage() {
                       </td>
                     )}
                     {cols.estoque && (
-                      <td className="px-3 py-2.5">
+                      <td className={`px-3 py-2.5 ${Number(produto.estoqueAtual || 0) === 0 ? 'text-red-600 font-bold' : ''}`}>
                         {Number(produto.estoqueAtual || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                       </td>
                     )}
@@ -247,7 +392,7 @@ export default function ProdutosPage() {
       
       {!isLoading && produtos && (
         <div className="text-[12px] text-muted-foreground">
-          Mostrando 1 a {produtos.length} de um total de {produtos.length}
+          Mostrando {processedProdutos.length} de um total de {produtos.length} produtos
         </div>
       )}
 
