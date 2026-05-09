@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy, deleteDoc, doc } from "firebase/firestore"
+import { collection, query, orderBy, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDocs } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
 import {
   DropdownMenu,
@@ -18,6 +18,8 @@ import {
   DropdownMenuCheckboxItem,
 } from "@/components/ui/dropdown-menu"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MovimentacoesModal } from "@/components/produtos/MovimentacoesModal"
 
 export default function ProdutosPage() {
@@ -37,6 +39,14 @@ export default function ProdutosPage() {
     marca: ""
   })
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null)
+
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [editingProduto, setEditingProduto] = useState<any>(null)
+  const [isSaving, setIsSaving] = useState(false)
+
+  const [isViewModalOpen, setIsViewModalOpen] = useState(false)
+  const [viewingProduto, setViewingProduto] = useState<any>(null)
+  const [historicoValores, setHistoricoValores] = useState<any[]>([])
 
   const produtosQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
@@ -135,6 +145,46 @@ export default function ProdutosPage() {
       } catch (err) {
         toast({ variant: "destructive", title: "Erro ao excluir produto." })
       }
+    }
+  }
+
+  const handleView = async (produto: any) => {
+    setViewingProduto(produto)
+    setIsViewModalOpen(true)
+    
+    if (db) {
+        const hq = query(collection(db, "produtos", produto.id, "historico_precos"), orderBy("dataAlteracao", "desc"))
+        const snaps = await getDocs(hq)
+        setHistoricoValores(snaps.docs.map(d => ({id: d.id, ...d.data()})))
+    }
+  }
+
+  const handleOpenEditModal = (produto: any) => {
+    setEditingProduto({
+      id: produto.id,
+      nome: produto.nome || "",
+      valorVenda: produto.valorVenda || 0,
+      originalValorVenda: produto.valorVenda || 0,
+      estoqueAtual: produto.estoqueAtual || 0,
+    })
+    setIsEditModalOpen(true)
+  }
+
+  const handleSaveEdit = async () => {
+    if (!editingProduto || !db) return
+    setIsSaving(true)
+    try {
+      await updateDoc(doc(db, "produtos", editingProduto.id), {
+        valorVenda: Number(editingProduto.valorVenda),
+        estoqueAtual: Number(editingProduto.estoqueAtual),
+        updatedAt: serverTimestamp()
+      })
+      toast({ title: "Produto atualizado com sucesso!" })
+      setIsEditModalOpen(false)
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao atualizar produto." })
+    } finally {
+      setIsSaving(false)
     }
   }
 
@@ -347,13 +397,13 @@ export default function ProdutosPage() {
                     )}
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-center gap-1">
-                        <button title="Visualizar" className="btn-erp-action-blue">
+                        <button title="Visualizar" className="btn-erp-action-blue" onClick={() => handleView(produto)}>
                           <Search className="h-3.5 w-3.5" />
                         </button>
                         <button 
                           title="Editar" 
                           className="btn-erp-action-orange"
-                          onClick={() => router.push(`/produtos/${produto.id}`)}
+                          onClick={() => handleOpenEditModal(produto)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -376,8 +426,8 @@ export default function ProdutosPage() {
                             >
                               <ArrowLeftRight className="h-4 w-4 mr-2" /> Movimentações de estoque
                             </DropdownMenuItem>
-                            <DropdownMenuItem><History className="h-4 w-4 mr-2" /> Histórico de valores</DropdownMenuItem>
-                            <DropdownMenuItem><Copy className="h-4 w-4 mr-2" /> Clonar produto</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleView(produto)}><History className="h-4 w-4 mr-2" /> Histórico de valores</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => router.push(`/produtos/novo?cloneId=${produto.id}`)}><Copy className="h-4 w-4 mr-2" /> Clonar produto</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -404,6 +454,137 @@ export default function ProdutosPage() {
           produtoNome={selectedProdutoForMov.nome}
         />
       )}
+
+      {/* Modal de Edição Rápida */}
+      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edição Rápida de Produto</DialogTitle>
+            <DialogDescription>Edite o valor de venda e o estoque atual de <span className="font-semibold text-foreground">{editingProduto?.nome}</span>.</DialogDescription>
+          </DialogHeader>
+          {editingProduto && (
+            <div className="space-y-4 mt-4">
+              <div className="space-y-2">
+                <Label>Valor Venda (R$)</Label>
+                <Input 
+                  type="number"
+                  step="0.01"
+                  value={editingProduto.valorVenda}
+                  onChange={(e) => setEditingProduto({ ...editingProduto, valorVenda: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Estoque Atual</Label>
+                <Input 
+                  type="number"
+                  value={editingProduto.estoqueAtual}
+                  onChange={(e) => setEditingProduto({ ...editingProduto, estoqueAtual: e.target.value })}
+                />
+              </div>
+              <div className="flex gap-2 justify-end mt-6 pt-4 border-t">
+                <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
+                <Button variant="secondary" onClick={() => router.push(`/produtos/editar/${editingProduto.id}`)}>
+                  Edição Completa
+                </Button>
+                <Button onClick={handleSaveEdit} disabled={isSaving}>
+                  {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Salvar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Visualização */}
+      <Dialog open={isViewModalOpen} onOpenChange={setIsViewModalOpen}>
+        <DialogContent className="max-w-3xl min-h-[500px]">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Produto</DialogTitle>
+            <DialogDescription>Visão geral e histórico detalhado do produto.</DialogDescription>
+          </DialogHeader>
+          {viewingProduto && (
+            <Tabs defaultValue="geral" className="w-full mt-4">
+              <TabsList className="grid grid-cols-4">
+                <TabsTrigger value="geral">Geral</TabsTrigger>
+                <TabsTrigger value="estoque">Estoque</TabsTrigger>
+                <TabsTrigger value="vendas">Vendas</TabsTrigger>
+                <TabsTrigger value="valores">Valores</TabsTrigger>
+              </TabsList>
+              <TabsContent value="geral" className="space-y-4 mt-4">
+                <div className="grid grid-cols-2 gap-4 p-4 border rounded-sm bg-gray-50">
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Nome</p>
+                    <p className="font-medium text-sm">{viewingProduto.nome}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Código Interno</p>
+                    <p className="font-medium text-sm">{viewingProduto.codigoInterno || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Código de Barras</p>
+                    <p className="font-medium text-sm">{viewingProduto.codigoBarras || "-"}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Valor de Venda</p>
+                    <p className="font-bold text-green-600 text-sm">R$ {Number(viewingProduto.valorVenda || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Estoque Atual</p>
+                    <p className={`font-bold text-sm ${Number(viewingProduto.estoqueAtual) === 0 ? 'text-red-600' : 'text-gray-900'}`}>{viewingProduto.estoqueAtual}</p>
+                  </div>
+                </div>
+              </TabsContent>
+              <TabsContent value="estoque" className="mt-4">
+                <div className="p-4 border rounded-sm">
+                  <p className="text-sm font-medium mb-2">Movimentações Recentes (Entradas/Saídas)</p>
+                  <p className="text-xs text-muted-foreground mb-4">Para visualizar os registros completos de entradas e saídas, acesse a opção "Movimentações de Estoque" no menu de ações da listagem principal.</p>
+                  <Button variant="outline" size="sm" onClick={() => {
+                    setIsViewModalOpen(false)
+                    setSelectedProdutoForMov({ id: viewingProduto.id, nome: viewingProduto.nome })
+                    setIsMovimentacoesOpen(true)
+                  }}>
+                    Abrir Movimentações de Estoque
+                  </Button>
+                </div>
+              </TabsContent>
+              <TabsContent value="vendas" className="mt-4">
+                <div className="p-4 border rounded-sm">
+                  <p className="text-sm font-medium mb-2">Últimas Vendas</p>
+                  <p className="text-xs text-muted-foreground">O histórico detalhado de vendas que contêm este produto aparecerá aqui.</p>
+                </div>
+              </TabsContent>
+              <TabsContent value="valores" className="mt-4">
+                <div className="p-4 border rounded-sm">
+                  <p className="text-sm font-medium mb-3">Histórico de Alterações de Preço</p>
+                  {historicoValores.length === 0 ? (
+                    <p className="text-xs text-muted-foreground">Nenhuma alteração de preço registrada ainda.</p>
+                  ) : (
+                    <table className="w-full text-xs text-left">
+                      <thead className="border-b bg-gray-50">
+                        <tr>
+                          <th className="p-2">Data</th>
+                          <th className="p-2 text-right">Valor Antigo</th>
+                          <th className="p-2 text-right">Valor Novo</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {historicoValores.map((h, idx) => (
+                          <tr key={h.id || idx} className="border-b">
+                            <td className="p-2 text-muted-foreground">{h.dataAlteracao?.seconds ? new Date(h.dataAlteracao.seconds * 1000).toLocaleString('pt-BR') : "-"}</td>
+                            <td className="p-2 text-right text-red-600">R$ {Number(h.valorAntigo || 0).toFixed(2)}</td>
+                            <td className="p-2 text-right text-green-600 font-medium">R$ {Number(h.valorNovo || 0).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              </TabsContent>
+            </Tabs>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
