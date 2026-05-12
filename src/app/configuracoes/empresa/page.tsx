@@ -2,7 +2,7 @@
 
 export const dynamic = 'force-dynamic'
 
-import { useEffect, useState } from "react"
+import { Suspense, useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -39,7 +39,7 @@ const horarioPadrao = [
   { dia: "Sexta-feira", abertura: "08:00", fechamento: "17:00", almoco: "12:00 - 13:00" },
 ]
 
-export default function ConfiguracoesEmpresaPage() {
+function ConfiguracoesEmpresaPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const queryTab = searchParams.get("tab") ?? "dados-gerais"
@@ -651,5 +651,13 @@ export default function ConfiguracoesEmpresaPage() {
         </Tabs>
       </div>
     </div>
+  )
+}
+
+export default function ConfiguracoesEmpresaPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-sm text-slate-500">Carregando configurações da empresa…</div>}>
+      <ConfiguracoesEmpresaPageContent />
+    </Suspense>
   )
 }

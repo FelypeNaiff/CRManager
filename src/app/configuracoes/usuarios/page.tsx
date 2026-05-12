@@ -3,7 +3,7 @@
 export const dynamic = 'force-dynamic'
 
 import Link from "next/link"
-import { useEffect, useMemo, useState } from "react"
+import { Suspense, useEffect, useMemo, useState } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -116,7 +116,7 @@ const defaultUserForm: UserForm = {
   ultimoAcesso: "Nunca",
 }
 
-export default function ConfiguracoesUsuariosPage() {
+function ConfiguracoesUsuariosPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const queryTab = searchParams.get("tab") ?? "usuarios"
@@ -592,5 +592,13 @@ export default function ConfiguracoesUsuariosPage() {
         </DialogContent>
       </Dialog>
     </div>
+  )
+}
+
+export default function ConfiguracoesUsuariosPage() {
+  return (
+    <Suspense fallback={<div className="p-6 text-center text-sm text-slate-500">Carregando usuários...</div>}>
+      <ConfiguracoesUsuariosPageContent />
+    </Suspense>
   )
 }
