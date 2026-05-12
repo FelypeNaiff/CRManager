@@ -40,10 +40,10 @@ export default function ProdutosPage() {
   })
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc' | 'desc'} | null>(null)
 
-  const [isEditModalOpen, setIsEditModalOpen] = useState(false)
-  const [editingProduto, setEditingProduto] = useState<any>(null)
   const [isSaving, setIsSaving] = useState(false)
 
+  const [isStockModalOpen, setIsStockModalOpen] = useState(false)
+  const [stockProduto, setStockProduto] = useState<any>(null)
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [viewingProduto, setViewingProduto] = useState<any>(null)
   const [historicoValores, setHistoricoValores] = useState<any[]>([])
@@ -159,30 +159,88 @@ export default function ProdutosPage() {
     }
   }
 
-  const handleOpenEditModal = (produto: any) => {
-    setEditingProduto({
+  const handleOpenStockModal = (produto: any) => {
+    setStockProduto({
       id: produto.id,
       nome: produto.nome || "",
-      valorVenda: produto.valorVenda || 0,
-      originalValorVenda: produto.valorVenda || 0,
       estoqueAtual: produto.estoqueAtual || 0,
     })
-    setIsEditModalOpen(true)
+    setIsStockModalOpen(true)
   }
 
-  const handleSaveEdit = async () => {
-    if (!editingProduto || !db) return
+  const createStockMovementRecord = async (
+    produtoId: string,
+    oldQty: number,
+    newQty: number,
+    custoUnit: number,
+    descricao: string
+  ) => {
+    if (!db) return
+    const diff = Number(newQty) - Number(oldQty)
+    if (diff === 0) return
+
+    const tipo = diff > 0 ? "Entrada" : "Saída"
+    try {
+      await addDoc(collection(db, "movimentacoes_estoque"), {
+        produtoId,
+        dataHora: serverTimestamp(),
+        entidade: "Estoque manual",
+        tipo,
+        qntMovim: diff,
+        qntFinal: Number(newQty),
+        custoUnit: Number(custoUnit || 0),
+        custoTotal: Number(custoUnit || 0) * diff,
+        descricao,
+      })
+    } catch (err) {
+      console.error("Erro ao criar movimentação de estoque:", err)
+    }
+  }
+
+  const handleSaveStock = async () => {
+    if (!stockProduto || !db) return
     setIsSaving(true)
     try {
-      await updateDoc(doc(db, "produtos", editingProduto.id), {
-        valorVenda: Number(editingProduto.valorVenda),
-        estoqueAtual: Number(editingProduto.estoqueAtual),
-        updatedAt: serverTimestamp()
+      const existingProduto = produtos?.find((p: any) => p.id === stockProduto.id)
+      const oldStock = Number(existingProduto?.estoqueAtual || 0)
+      const newStock = Number(stockProduto.estoqueAtual)
+      const custoUnit = Number(existingProduto?.valorVenda || 0)
+
+      await updateDoc(doc(db, "produtos", stockProduto.id), {
+        estoqueAtual: newStock,
+        updatedAt: serverTimestamp(),
       })
-      toast({ title: "Produto atualizado com sucesso!" })
-      setIsEditModalOpen(false)
+
+      await createStockMovementRecord(
+        stockProduto.id,
+        oldStock,
+        newStock,
+        custoUnit,
+        `Ajuste manual de estoque pelo usuário`
+      )
+
+      toast({ title: "Estoque atualizado com sucesso!" })
+      setIsStockModalOpen(false)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao atualizar produto." })
+      toast({ variant: "destructive", title: "Erro ao atualizar estoque." })
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleCloneProduct = async (produto: any) => {
+    setIsSaving(true)
+    try {
+      await addDoc(collection(db, "produtos"), {
+        ...produto,
+        id: undefined,
+        nome: `${produto.nome} (Cópia)`,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+      toast({ title: "Produto clonado com sucesso!" })
+    } catch (err) {
+      toast({ variant: "destructive", title: "Erro ao clonar produto." })
     } finally {
       setIsSaving(false)
     }
@@ -398,12 +456,19 @@ export default function ProdutosPage() {
                     <td className="px-3 py-2.5">
                       <div className="flex items-center justify-center gap-1">
                         <button title="Visualizar" className="btn-erp-action-blue" onClick={() => handleView(produto)}>
-                          <Search className="h-3.5 w-3.5" />
+                          <Eye className="h-3.5 w-3.5" />
+                        </button>
+                        <button 
+                          title="Alterar estoque" 
+                          className="btn-erp-action-yellow"
+                          onClick={() => handleOpenStockModal(produto)}
+                        >
+                          <Package className="h-3.5 w-3.5" />
                         </button>
                         <button 
                           title="Editar" 
                           className="btn-erp-action-orange"
-                          onClick={() => handleOpenEditModal(produto)}
+                          onClick={() => router.push(`/produtos/editar/${produto.id}`)}
                         >
                           <Pencil className="h-3.5 w-3.5" />
                         </button>
@@ -413,7 +478,7 @@ export default function ProdutosPage() {
                         
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <button title="Mais opções" className="btn-erp-action-green flex items-center px-1">
+                            <button title="Outras funcionalidades" className="btn-erp-action-green flex items-center px-1">
                               <ChevronDown className="h-3.5 w-3.5" />
                             </button>
                           </DropdownMenuTrigger>
@@ -427,7 +492,7 @@ export default function ProdutosPage() {
                               <ArrowLeftRight className="h-4 w-4 mr-2" /> Movimentações de estoque
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={() => handleView(produto)}><History className="h-4 w-4 mr-2" /> Histórico de valores</DropdownMenuItem>
-                            <DropdownMenuItem onClick={() => router.push(`/produtos/novo?cloneId=${produto.id}`)}><Copy className="h-4 w-4 mr-2" /> Clonar produto</DropdownMenuItem>
+                            <DropdownMenuItem onClick={() => handleCloneProduct(produto)}><Copy className="h-4 w-4 mr-2" /> Clonar produto</DropdownMenuItem>
                           </DropdownMenuContent>
                         </DropdownMenu>
                       </div>
@@ -455,40 +520,30 @@ export default function ProdutosPage() {
         />
       )}
 
-      {/* Modal de Edição Rápida */}
-      <Dialog open={isEditModalOpen} onOpenChange={setIsEditModalOpen}>
+      {/* Modal de Edição Rápida removido. Agora a edição completa abre em nova página. */}
+
+      {/* Modal de Alterar Estoque */}
+      <Dialog open={isStockModalOpen} onOpenChange={setIsStockModalOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Edição Rápida de Produto</DialogTitle>
-            <DialogDescription>Edite o valor de venda e o estoque atual de <span className="font-semibold text-foreground">{editingProduto?.nome}</span>.</DialogDescription>
+            <DialogTitle>Alterar Estoque</DialogTitle>
+            <DialogDescription>Atualize a quantidade disponível do produto <span className="font-semibold text-foreground">{stockProduto?.nome}</span>.</DialogDescription>
           </DialogHeader>
-          {editingProduto && (
+          {stockProduto && (
             <div className="space-y-4 mt-4">
-              <div className="space-y-2">
-                <Label>Valor Venda (R$)</Label>
-                <Input 
-                  type="number"
-                  step="0.01"
-                  value={editingProduto.valorVenda}
-                  onChange={(e) => setEditingProduto({ ...editingProduto, valorVenda: e.target.value })}
-                />
-              </div>
               <div className="space-y-2">
                 <Label>Estoque Atual</Label>
                 <Input 
                   type="number"
-                  value={editingProduto.estoqueAtual}
-                  onChange={(e) => setEditingProduto({ ...editingProduto, estoqueAtual: e.target.value })}
+                  value={stockProduto.estoqueAtual}
+                  onChange={(e) => setStockProduto({ ...stockProduto, estoqueAtual: e.target.value })}
                 />
               </div>
               <div className="flex gap-2 justify-end mt-6 pt-4 border-t">
-                <Button variant="outline" onClick={() => setIsEditModalOpen(false)}>Cancelar</Button>
-                <Button variant="secondary" onClick={() => router.push(`/produtos/editar/${editingProduto.id}`)}>
-                  Edição Completa
-                </Button>
-                <Button onClick={handleSaveEdit} disabled={isSaving}>
+                <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>Cancelar</Button>
+                <Button onClick={handleSaveStock} disabled={isSaving}>
                   {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Salvar
+                  Salvar estoque
                 </Button>
               </div>
             </div>

@@ -97,6 +97,9 @@
   .btn-erp-action-orange {
     @apply bg-[#f0ad4e] hover:bg-[#ec971f] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
   }
+  .btn-erp-action-yellow {
+    @apply bg-[#ffc107] hover:bg-[#e0a800] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
+  }
   .btn-erp-action-red {
     @apply bg-[#d9534f] hover:bg-[#c9302c] text-white h-[26px] w-[26px] p-0 rounded-[3px] flex items-center justify-center;
   }

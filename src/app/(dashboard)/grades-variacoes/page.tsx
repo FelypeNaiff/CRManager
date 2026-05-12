@@ -42,18 +42,19 @@ export default function GradesVariacoesPage() {
   }
 
   const handleSave = async () => {
-    if (!form.nome.trim() || !form.valores.trim()) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome e valores são obrigatórios." })
+    if (!form.valores.trim()) {
+      toast({ variant: "destructive", title: "Erro", description: "Variação é obrigatória." })
       return
     }
 
     const valoresArray = form.valores.split(",").map(v => v.trim()).filter(Boolean)
+    const nomeGerado = valoresArray.join("/") || "Variação"
 
     setIsSaving(true)
     try {
       if (editingId) {
         await updateDoc(doc(db, "gradesVariacoes", editingId), {
-          nome: form.nome,
+          nome: nomeGerado,
           valores: valoresArray,
           updatedAt: serverTimestamp(),
         })
@@ -172,15 +173,7 @@ export default function GradesVariacoesPage() {
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold">Nome *</label>
-              <Input 
-                value={form.nome}
-                onChange={(e) => setForm({ ...form, nome: e.target.value })}
-                placeholder="Ex: Tamanhos, Cores, Modelos"
-              />
-            </div>
-            <div>
-              <label className="text-sm font-semibold">Variação * (separados por vírgula)</label>
+              <label className="text-sm font-semibold">VARIAÇÃO</label>
               <Input 
                 value={form.valores}
                 onChange={(e) => setForm({ ...form, valores: e.target.value })}

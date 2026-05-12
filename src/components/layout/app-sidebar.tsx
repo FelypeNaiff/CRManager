@@ -22,11 +22,17 @@ import {
   CalendarDays,
   Settings,
   UserCog,
+  Building2,
+  Image,
+  Key,
   Store,
   Wallet,
   ChevronRight,
   Tag,
-  Boxes
+  Boxes,
+  MapPin,
+  Link as LinkIcon,
+  ShieldCheck
 } from "lucide-react"
 
 import {
@@ -129,8 +135,33 @@ const navItems = [
     title: "Configurações",
     icon: Settings,
     items: [
-      { title: "Usuários", url: "/usuarios", icon: UserCog },
-      { title: "Minha Loja", url: "/configuracoes", icon: Settings },
+      {
+        title: "Usuários",
+        icon: Users,
+        items: [
+          { title: "Usuários", url: "/configuracoes/usuarios?tab=usuarios", icon: Users },
+          { title: "Perfis de Acesso", url: "/configuracoes/usuarios?tab=perfis", icon: UserCog },
+          { title: "Permissões por Módulo", url: "/configuracoes/usuarios?tab=permissoes", icon: ShieldCheck },
+          { title: "Histórico de Acessos", url: "/configuracoes/usuarios?tab=historico", icon: History },
+          { title: "Logs de Atividades", url: "/configuracoes/usuarios?tab=logs", icon: FileText },
+        ],
+      },
+      {
+        title: "Dados da Empresa",
+        icon: Building2,
+        items: [
+          { title: "Dados Gerais", url: "/configuracoes/empresa?tab=dados-gerais", icon: Building2 },
+          { title: "Endereços", url: "/configuracoes/empresa?tab=enderecos", icon: MapPin },
+          { title: "Contatos", url: "/configuracoes/empresa?tab=contatos", icon: MessageSquare },
+          { title: "Financeiro/Fiscal", url: "/configuracoes/empresa?tab=financeiro-fiscal", icon: DollarSign },
+          { title: "Branding", url: "/configuracoes/empresa?tab=branding", icon: Image },
+          { title: "Configurações Operacionais", url: "/configuracoes/empresa?tab=configuracoes-operacionais", icon: Settings },
+          { title: "Integrações", url: "/configuracoes/empresa?tab=integracoes", icon: LinkIcon },
+          { title: "Horários", url: "/configuracoes/empresa?tab=horarios", icon: CalendarDays },
+          { title: "Filiais", url: "/configuracoes/empresa?tab=filiais", icon: Store },
+        ],
+      },
+      { title: "Certificado Digital", url: "/configuracoes/certificado-digital", icon: Key },
     ],
   },
 ]

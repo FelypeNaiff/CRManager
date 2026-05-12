@@ -1,263 +1,345 @@
 "use client"
 
-import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
+import { useState, useMemo } from "react"
+import { useRouter } from "next/navigation"
+import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
+import { collection, query, orderBy, getDocs } from "firebase/firestore"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { 
-  Search, 
-  Plus, 
-  Minus, 
-  Trash2, 
-  CreditCard, 
-  Receipt,
-  User,
-  ShoppingBag,
-  TicketPercent,
-  QrCode,
-  Loader2
-} from "lucide-react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Badge } from "@/components/ui/badge"
-import { ScrollArea } from "@/components/ui/scroll-area"
-import { Separator } from "@/components/ui/separator"
+import { History, Search, Eye, Loader2, Receipt, Calendar, CreditCard, User, DollarSign, Printer } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection } from "firebase/firestore"
 
-export default function PDVPage() {
-  const [cart, setCart] = useState<{product: any, quantity: number}[]>([])
-  const [searchTerm, setSearchTerm] = useState("")
+export default function VendasPage() {
+  const router = useRouter()
   const db = useFirestore()
+  const [searchTerm, setSearchTerm] = useState("")
+  
+  // Estados para o modal de detalhes
+  const [selectedVenda, setSelectedVenda] = useState<any>(null)
+  const [vendaItens, setVendaItens] = useState<any[]>([])
+  const [isLoadingItens, setIsLoadingItens] = useState(false)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
-  const produtosQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return collection(db, "produtos")
+  // Carrega as vendas (ordenadas da mais recente para a mais antiga)
+  const vendasQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "vendas"), orderBy("dataVenda", "desc")) : null
   }, [db])
+  const { data: vendas, isLoading: isLoadingVendas } = useCollection(vendasQuery)
 
-  const { data: products, isLoading, error } = useCollection(produtosQuery)
+  // Carrega os clientes para podermos cruzar o ID com o Nome
+  const clientesQuery = useMemoFirebase(() => {
+    return db ? query(collection(db, "clientes")) : null
+  }, [db])
+  const { data: clientes } = useCollection(clientesQuery)
 
-  const filteredProducts = (products || []).filter(p => 
-    p.nome?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  const addToCart = (product: any) => {
-    setCart(prev => {
-      const existing = prev.find(item => item.product.id === product.id)
-      if (existing) {
-        return prev.map(item => 
-          item.product.id === product.id 
-            ? { ...item, quantity: item.quantity + 1 } 
-            : item
-        )
-      }
-      return [...prev, { product, quantity: 1 }]
-    })
-    toast({
-      title: "Produto adicionado",
-      description: `${product.nome} foi adicionado ao carrinho.`
-    })
-  }
-
-  const removeFromCart = (productId: string) => {
-    setCart(prev => prev.filter(item => item.product.id !== productId))
-  }
-
-  const updateQuantity = (productId: string, delta: number) => {
-    setCart(prev => prev.map(item => {
-      if (item.product.id === productId) {
-        const newQty = Math.max(1, item.quantity + delta)
-        return { ...item, quantity: newQty }
-      }
-      return item
-    }))
-  }
-
-  const subtotal = cart.reduce((acc, item) => acc + (item.product.precoVenda * item.quantity), 0)
-  const discount = 0
-  const total = subtotal - discount
-
-  const handleCheckout = () => {
-    if (cart.length === 0) {
-      toast({
-        variant: "destructive",
-        title: "Carrinho vazio",
-        description: "Adicione produtos antes de finalizar a venda."
+  // Cria um mapa rápido de Clientes (ID -> Nome) para a tabela
+  const clientesMap = useMemo(() => {
+    const map: Record<string, string> = {}
+    if (clientes) {
+      clientes.forEach(c => {
+        map[c.id] = c.nome || c.razaoSocial || "Cliente sem nome"
       })
+    }
+    return map
+  }, [clientes])
+
+  // Filtra as vendas com base no termo de busca (busca pelo nome do cliente)
+  const filteredVendas = useMemo(() => {
+    if (!vendas) return []
+    if (!searchTerm) return vendas
+    const lowerSearch = searchTerm.toLowerCase()
+    return vendas.filter(v => {
+      const clienteNome = clientesMap[v.clientId]?.toLowerCase() || ""
+      return clienteNome.includes(lowerSearch) || v.id.toLowerCase().includes(lowerSearch)
+    })
+  }, [vendas, clientesMap, searchTerm])
+
+  // Função para formatar as datas do Firestore
+  const formatDate = (timestamp: any) => {
+    if (!timestamp || !timestamp.seconds) return "-"
+    return new Date(timestamp.seconds * 1000).toLocaleString("pt-BR")
+  }
+
+  // Função para abrir o modal e carregar os itens vendidos daquela venda
+  const handleViewVenda = async (venda: any) => {
+    setSelectedVenda(venda)
+    setIsModalOpen(true)
+    setVendaItens([])
+    
+    if (!db) return
+    setIsLoadingItens(true)
+    
+    try {
+      const q = query(collection(db, `vendas/${venda.id}/venda_itens`))
+      const snapshot = await getDocs(q)
+      const itens = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))
+      setVendaItens(itens)
+    } catch (error) {
+      console.error("Erro ao carregar itens da venda", error)
+    } finally {
+      setIsLoadingItens(false)
+    }
+  }
+
+  // Função para abrir e imprimir o comprovante estilo cupom não fiscal
+  const handlePrintReceipt = () => {
+    if (!selectedVenda) return
+
+    // Abre uma nova janela limpa para gerar o cupom
+    const printWindow = window.open('', '_blank', 'width=400,height=600')
+    if (!printWindow) {
+      toast({ variant: "destructive", title: "Erro", description: "O bloqueador de pop-ups impediu a impressão." })
       return
     }
-    toast({
-      title: "Venda finalizada",
-      description: `Venda de R$ ${total.toFixed(2)} processada com sucesso!`
-    })
-    setCart([])
+
+    // HTML otimizado para bobinas térmicas (aprox. 80mm de largura = 300px)
+    const html = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Comprovante - ${selectedVenda.id}</title>
+          <style>
+            @page { margin: 0; }
+            body { font-family: 'Courier New', Courier, monospace; font-size: 12px; margin: 0; padding: 10px; width: 300px; color: #000; }
+            .center { text-align: center; }
+            .bold { font-weight: bold; }
+            .divider { border-bottom: 1px dashed #000; margin: 8px 0; }
+            .flex { display: flex; justify-content: space-between; }
+            table { width: 100%; border-collapse: collapse; margin: 8px 0; }
+            th, td { text-align: left; padding: 4px 0; vertical-align: top; }
+            .right { text-align: right; }
+            .mb-1 { margin-bottom: 4px; }
+          </style>
+        </head>
+        <body>
+          <div class="center bold mb-1">TRUPE KIDS MODA INFANTIL</div>
+          <div class="center">CUPOM NÃO FISCAL</div>
+          <div class="divider"></div>
+          <div><span class="bold">Data:</span> ${formatDate(selectedVenda.dataVenda)}</div>
+          <div><span class="bold">Pedido:</span> ${selectedVenda.id}</div>
+          <div><span class="bold">Cliente:</span> ${clientesMap[selectedVenda.clientId] || "Consumidor"}</div>
+          <div class="divider"></div>
+          <table>
+            <thead><tr><th>Qtd</th><th>Produto</th><th class="right">Total</th></tr></thead>
+            <tbody>
+              ${vendaItens.map(item => `
+                <tr>
+                  <td>${item.quantidade}x</td>
+                  <td>${item.nomeProduto}<br><small>R$ ${Number(item.precoUnitario).toFixed(2)}</small></td>
+                  <td class="right">R$ ${Number(item.total).toFixed(2)}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+          <div class="divider"></div>
+          <div class="flex"><span>Subtotal:</span><span>R$ ${Number(selectedVenda.subtotal || 0).toFixed(2)}</span></div>
+          <div class="flex"><span>Desconto:</span><span>R$ ${Number(selectedVenda.descontoTotal || 0).toFixed(2)}</span></div>
+          <div class="flex bold" style="font-size: 14px; margin-top: 4px;"><span>TOTAL:</span><span>R$ ${Number(selectedVenda.total || 0).toFixed(2)}</span></div>
+          <div class="divider"></div>
+          <div class="flex"><span>Forma Pgto:</span><span>${selectedVenda.formaPagamento || "Não informada"}</span></div>
+          <div class="divider"></div>
+          <div class="center" style="margin-top: 10px;">Obrigado pela preferência!</div>
+          <script>window.onload = () => { window.print(); setTimeout(() => window.close(), 500); }</script>
+        </body>
+      </html>
+    `
+    printWindow.document.open()
+    printWindow.document.write(html)
+    printWindow.document.close()
   }
 
   return (
-    <div className="flex h-full flex-col lg:flex-row gap-6">
-      <div className="flex-1 flex flex-col gap-4">
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar produtos por nome ou código..." 
-              className="pl-10 h-11"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-          </div>
-          <Button variant="outline" className="h-11">
-            <ShoppingBag className="mr-2 h-4 w-4" /> Categorias
+    <div className="space-y-4 max-w-full overflow-hidden">
+      {/* Breadcrumb simulado */}
+      <div className="flex justify-end text-[11px] text-muted-foreground uppercase tracking-wider mb-2">
+        <span className="cursor-pointer hover:underline" onClick={() => router.push("/")}>Início</span>
+        <span className="mx-2">-</span>
+        <span className="cursor-pointer hover:underline">Vendas</span>
+        <span className="mx-2">-</span>
+        <span className="font-semibold text-foreground">Histórico</span>
+      </div>
+
+      {/* Header Clássico ERP */}
+      <div className="border-b pb-2 mb-4">
+        <h1 className="text-xl font-headline font-bold text-foreground flex items-center gap-2">
+          <History className="h-5 w-5 text-sidebar-foreground" /> Vendas Realizadas
+        </h1>
+      </div>
+
+      {/* Toolbar ERP */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 border shadow-sm rounded-sm">
+        <div className="flex items-center gap-1">
+          <Button 
+            className="btn-erp-green gap-1 h-8 rounded-sm px-3 text-[13px]" 
+            onClick={() => router.push("/pdv")}
+          >
+            <Receipt className="h-3.5 w-3.5" /> Novo Pedido (PDV)
           </Button>
         </div>
 
-        <ScrollArea className="flex-1">
-          {isLoading ? (
-            <div className="flex flex-col items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-primary mb-2" />
-              <p className="text-muted-foreground">Carregando produtos...</p>
-            </div>
-          ) : error ? (
-            <div className="text-center py-20 border rounded-xl bg-destructive/10 text-destructive m-4">
-              <p className="font-semibold">Erro ao carregar produtos</p>
-              <p className="text-sm mt-1">{(error as any).message}</p>
-            </div>
-          ) : filteredProducts.length === 0 ? (
-            <div className="text-center py-20 border rounded-xl bg-muted/10">
-              <p className="text-muted-foreground">Nenhum produto disponível.</p>
-            </div>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-4 pb-4">
-              {filteredProducts.map((product) => (
-                <Card 
-                  key={product.id} 
-                  className="overflow-hidden group hover:shadow-md transition-all cursor-pointer border-secondary"
-                  onClick={() => addToCart(product)}
-                >
-                  <div className="aspect-square relative overflow-hidden bg-secondary/30">
-                    <img 
-                      src={product.fotoUrl || "https://picsum.photos/seed/placeholder/200/200"} 
-                      alt={product.nome} 
-                      className="object-cover w-full h-full group-hover:scale-105 transition-transform"
-                    />
-                    <Badge className="absolute top-2 left-2 bg-primary/90">
-                      {product.categoria || "Geral"}
-                    </Badge>
-                  </div>
-                  <CardContent className="p-3">
-                    <h3 className="font-medium text-sm line-clamp-1">{product.nome}</h3>
-                    <div className="flex items-center justify-between mt-2">
-                      <span className="font-bold text-primary">R$ {product.precoVenda?.toFixed(2)}</span>
-                      <span className={`text-[10px] ${product.estoqueAtual < 10 ? 'text-amber-500' : 'text-emerald-500'}`}>
-                        Estoque: {product.estoqueAtual}
-                      </span>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          )}
-        </ScrollArea>
+        <div className="flex items-center gap-1 w-full sm:w-auto">
+          <Input 
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-8 rounded-sm w-full sm:w-[300px] border-gray-300 focus-visible:ring-0 focus-visible:border-primary text-[13px]"
+            placeholder="Buscar por cliente ou ID da venda..."
+          />
+          <Button className="btn-erp-dark h-8 w-8 p-0 rounded-sm shrink-0">
+            <Search className="h-3.5 w-3.5" />
+          </Button>
+        </div>
       </div>
 
-      <Card className="w-full lg:w-[400px] flex flex-col h-[calc(100vh-10rem)] shadow-lg border-primary/10">
-        <CardHeader className="bg-primary/5 py-4 border-b">
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg flex items-center gap-2">
-              <ShoppingBag className="h-5 w-5 text-primary" /> Carrinho
-            </CardTitle>
-            <Badge variant="secondary">{cart.length} itens</Badge>
-          </div>
-        </CardHeader>
-        <CardContent className="flex-1 p-0 overflow-hidden flex flex-col">
-          <div className="p-4 bg-secondary/10 border-b flex items-center gap-3">
-            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center text-primary">
-              <User className="h-5 w-5" />
-            </div>
-            <div className="flex-1">
-              <p className="text-xs font-medium text-muted-foreground uppercase">Cliente</p>
-              <p className="text-sm font-semibold">Consumidor Final</p>
-            </div>
-            <Button variant="ghost" size="sm" className="text-primary">Alterar</Button>
-          </div>
+      {/* Tabela de Vendas */}
+      <div className="bg-white border rounded-sm shadow-sm overflow-hidden">
+        <div className="overflow-x-auto">
+          <table className="w-full text-[13px] text-left">
+            <thead className="text-foreground uppercase bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th className="px-3 py-2 font-semibold">Data/Hora</th>
+                <th className="px-3 py-2 font-semibold">Cliente</th>
+                <th className="px-3 py-2 font-semibold text-right">Subtotal</th>
+                <th className="px-3 py-2 font-semibold text-right">Desconto</th>
+                <th className="px-3 py-2 font-semibold text-right">Total</th>
+                <th className="px-3 py-2 font-semibold text-center">Pagamento</th>
+                <th className="px-3 py-2 font-semibold text-center">Status</th>
+                <th className="px-3 py-2 font-semibold text-center w-24">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {isLoadingVendas ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
+                    Carregando histórico...
+                  </td>
+                </tr>
+              ) : filteredVendas.length === 0 ? (
+                <tr>
+                  <td colSpan={8} className="px-3 py-8 text-center text-muted-foreground">
+                    Nenhuma venda encontrada.
+                  </td>
+                </tr>
+              ) : (
+                filteredVendas.map((venda) => (
+                  <tr key={venda.id} className="border-b last:border-0 hover:bg-gray-50 transition-colors">
+                    <td className="px-3 py-2.5 text-muted-foreground">
+                      {formatDate(venda.dataVenda)}
+                    </td>
+                    <td className="px-3 py-2.5 font-medium text-primary">
+                      {clientesMap[venda.clientId] || "Consumidor não identificado"}
+                    </td>
+                    <td className="px-3 py-2.5 text-right">R$ {Number(venda.subtotal || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 text-right text-red-600">R$ {Number(venda.descontoTotal || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 text-right font-bold text-green-700">R$ {Number(venda.total || 0).toFixed(2)}</td>
+                    <td className="px-3 py-2.5 text-center">
+                      <Badge variant="outline" className="font-normal text-[11px] bg-slate-50">{venda.formaPagamento || "Não informada"}</Badge>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 font-normal hover:bg-emerald-100 text-[11px]">{venda.status}</Badge>
+                    </td>
+                    <td className="px-3 py-2.5 text-center">
+                      <button 
+                        title="Visualizar Detalhes" 
+                        className="btn-erp-action-blue" 
+                        onClick={() => handleViewVenda(venda)}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-          <ScrollArea className="flex-1 px-4">
-            {cart.length === 0 ? (
-              <div className="flex flex-col items-center justify-center h-full py-20 text-muted-foreground">
-                <ShoppingBag className="h-12 w-12 opacity-20 mb-4" />
-                <p>Carrinho vazio</p>
+      {/* Modal de Detalhes da Venda */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Receipt className="h-5 w-5" /> Detalhes da Venda</DialogTitle>
+            <DialogDescription>ID: <span className="font-mono">{selectedVenda?.id}</span></DialogDescription>
+          </DialogHeader>
+
+          {selectedVenda && (
+            <div className="space-y-6">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 p-4 border rounded-sm bg-gray-50">
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"><Calendar className="h-3 w-3" /> Data</p>
+                  <p className="font-medium text-sm mt-1">{formatDate(selectedVenda.dataVenda)}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"><User className="h-3 w-3" /> Cliente</p>
+                  <p className="font-medium text-sm mt-1">{clientesMap[selectedVenda.clientId] || "Desconhecido"}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"><CreditCard className="h-3 w-3" /> Pagamento</p>
+                  <p className="font-medium text-sm mt-1">{selectedVenda.formaPagamento}</p>
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase flex items-center gap-1"><DollarSign className="h-3 w-3" /> Total</p>
+                  <p className="font-bold text-green-700 text-sm mt-1">R$ {Number(selectedVenda.total).toFixed(2)}</p>
+                </div>
               </div>
-            ) : (
-              <div className="py-4 space-y-4">
-                {cart.map((item) => (
-                  <div key={item.product.id} className="flex gap-3 animate-in fade-in slide-in-from-right-2 duration-200">
-                    <div className="h-14 w-14 rounded border overflow-hidden shrink-0 bg-secondary/20">
-                      <img src={item.product.fotoUrl || "https://picsum.photos/seed/placeholder/100/100"} className="w-full h-full object-cover" />
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.product.nome}</p>
-                      <p className="text-xs font-bold text-primary">R$ {item.product.precoVenda?.toFixed(2)}</p>
-                      <div className="flex items-center gap-3 mt-1">
-                        <div className="flex items-center border rounded h-7">
-                          <button 
-                            onClick={(e) => {e.stopPropagation(); updateQuantity(item.product.id, -1)}}
-                            className="px-2 hover:bg-secondary transition-colors"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <span className="px-2 text-xs font-bold w-6 text-center">{item.quantity}</span>
-                          <button 
-                            onClick={(e) => {e.stopPropagation(); updateQuantity(item.product.id, 1)}}
-                            className="px-2 hover:bg-secondary transition-colors"
-                          >
-                            <Plus className="h-3 w-3" />
-                          </button>
-                        </div>
-                        <button 
-                          onClick={(e) => {e.stopPropagation(); removeFromCart(item.product.id)}}
-                          className="text-muted-foreground hover:text-destructive transition-colors"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-sm font-bold">R$ {(item.product.precoVenda * item.quantity).toFixed(2)}</p>
-                    </div>
+
+              <div>
+                <h3 className="font-semibold text-sm mb-3">Itens do Pedido</h3>
+                {isLoadingItens ? (
+                  <div className="flex items-center gap-2 text-muted-foreground p-4 justify-center border rounded-sm">
+                    <Loader2 className="h-4 w-4 animate-spin" /> Carregando produtos...
                   </div>
-                ))}
+                ) : (
+                  <div className="border rounded-sm overflow-hidden">
+                    <table className="w-full text-xs text-left">
+                      <thead className="bg-gray-100 border-b">
+                        <tr>
+                          <th className="p-2 font-semibold">Produto</th>
+                          <th className="p-2 font-semibold text-center">Qtd</th>
+                          <th className="p-2 font-semibold text-right">Preço Unit.</th>
+                          <th className="p-2 font-semibold text-right">Subtotal</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {vendaItens.map(item => (
+                          <tr key={item.id} className="border-b last:border-0 hover:bg-gray-50">
+                            <td className="p-2 font-medium text-primary">{item.nomeProduto}</td>
+                            <td className="p-2 text-center">{item.quantidade}x</td>
+                            <td className="p-2 text-right">R$ {Number(item.precoUnitario).toFixed(2)}</td>
+                            <td className="p-2 text-right font-medium">R$ {Number(item.total).toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
-            )}
-          </ScrollArea>
-        </CardContent>
-        <CardFooter className="flex-col gap-4 p-4 bg-primary/5 border-t">
-          <div className="w-full space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Subtotal</span>
-              <span>R$ {subtotal.toFixed(2)}</span>
+
+              <div className="flex flex-col sm:flex-row justify-between items-end sm:items-center gap-4 text-sm bg-muted/20 p-4 rounded-sm border">
+                <Button variant="outline" className="w-full sm:w-auto hover:bg-slate-100" onClick={handlePrintReceipt}>
+                  <Printer className="h-4 w-4 mr-2" />
+                  Imprimir Comprovante
+                </Button>
+                <div className="flex justify-end gap-6 w-full sm:w-auto">
+                  <div className="text-right">
+                    <p className="text-muted-foreground mb-1">Subtotal:</p>
+                    <p className="text-red-600 mb-1">Desconto:</p>
+                    <p className="font-bold text-base mt-2">TOTAL:</p>
+                  </div>
+                  <div className="text-right font-medium">
+                    <p className="mb-1">R$ {Number(selectedVenda.subtotal || 0).toFixed(2)}</p>
+                    <p className="text-red-600 mb-1">- R$ {Number(selectedVenda.descontoTotal || 0).toFixed(2)}</p>
+                    <p className="font-bold text-base text-green-700 mt-2">R$ {Number(selectedVenda.total || 0).toFixed(2)}</p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="flex justify-between text-sm text-emerald-600">
-              <span className="flex items-center gap-1"><TicketPercent className="h-4 w-4" /> Desconto</span>
-              <span>- R$ {discount.toFixed(2)}</span>
-            </div>
-            <Separator />
-            <div className="flex justify-between items-center pt-1">
-              <span className="font-headline font-bold text-lg">Total</span>
-              <span className="font-headline font-bold text-2xl text-primary">R$ {total.toFixed(2)}</span>
-            </div>
-          </div>
-          <div className="grid grid-cols-2 gap-2 w-full">
-            <Button variant="outline" className="gap-2">
-              <QrCode className="h-4 w-4" /> PIX
-            </Button>
-            <Button variant="outline" className="gap-2">
-              <CreditCard className="h-4 w-4" /> Cartão
-            </Button>
-          </div>
-          <Button className="w-full h-12 text-lg font-bold shadow-lg shadow-primary/20" onClick={handleCheckout}>
-            <Receipt className="mr-2 h-5 w-5" /> Finalizar Venda (F10)
-          </Button>
-        </CardFooter>
-      </Card>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
