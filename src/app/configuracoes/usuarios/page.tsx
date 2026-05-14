@@ -12,10 +12,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { collection, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore"
+import { toast } from "@/hooks/use-toast"
 import { Users, UserCog, ShieldCheck, History, FileText, Plus, Eye, Edit3, ShieldOff, Key, Trash2 } from "lucide-react"
 
 type User = {
-  id: number
+  id: string
   nome: string
   email: string
   cargo: string
@@ -24,7 +27,7 @@ type User = {
   ultimoAcesso: string
 }
 
-type UserForm = Omit<User, "id"> & { id?: number }
+type UserForm = Omit<User, "id"> & { id?: string }
 
 type Filters = {
   nome: string
@@ -47,10 +50,10 @@ const accessProfiles = [
 const statusOptions = ["Ativo", "Inativo", "Bloqueado"]
 
 const initialUsers: User[] = [
-  { id: 1, nome: "Lucas Silva", email: "lucas@exemplo.com", cargo: "Gerente", perfil: "Gerente", status: "Ativo", ultimoAcesso: "2026-05-10 14:22" },
-  { id: 2, nome: "Mariana Costa", email: "mariana@exemplo.com", cargo: "Vendedor", perfil: "Vendedor", status: "Bloqueado", ultimoAcesso: "2026-05-09 08:03" },
-  { id: 3, nome: "Ana Pereira", email: "ana@exemplo.com", cargo: "Financeiro", perfil: "Financeiro", status: "Ativo", ultimoAcesso: "2026-05-08 17:40" },
-  { id: 4, nome: "Carlos Alves", email: "carlos@exemplo.com", cargo: "Estoque", perfil: "Estoque", status: "Inativo", ultimoAcesso: "2026-05-05 12:15" },
+  { id: "1", nome: "Lucas Silva", email: "lucas@exemplo.com", cargo: "Gerente", perfil: "Gerente", status: "Ativo", ultimoAcesso: "2026-05-10 14:22" },
+  { id: "2", nome: "Mariana Costa", email: "mariana@exemplo.com", cargo: "Vendedor", perfil: "Vendedor", status: "Bloqueado", ultimoAcesso: "2026-05-09 08:03" },
+  { id: "3", nome: "Ana Pereira", email: "ana@exemplo.com", cargo: "Financeiro", perfil: "Financeiro", status: "Ativo", ultimoAcesso: "2026-05-08 17:40" },
+  { id: "4", nome: "Carlos Alves", email: "carlos@exemplo.com", cargo: "Estoque", perfil: "Estoque", status: "Inativo", ultimoAcesso: "2026-05-05 12:15" },
 ]
 
 const perfisData = [
@@ -123,11 +126,30 @@ function ConfiguracoesUsuariosPageContent() {
   const [activeTab, setActiveTab] = useState(queryTab)
   const [filters, setFilters] = useState<Filters>({ nome: "", email: "", perfil: "Todos", status: "Todos" })
   const [users, setUsers] = useState<User[]>(initialUsers)
-  const [selectedUserId, setSelectedUserId] = useState<number | null>(null)
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
   const [userForm, setUserForm] = useState<UserForm>(defaultUserForm)
   const [showUserDialog, setShowUserDialog] = useState(false)
   const [showPasswordDialog, setShowPasswordDialog] = useState(false)
   const [passwordValue, setPasswordValue] = useState("")
+  const [isSaving, setIsSaving] = useState(false)
+
+  const db = useFirestore()
+  const usersQuery = useMemoFirebase(() => (db ? collection(db, "usuarios") : null), [db])
+  const { data: usersData } = useCollection<User>(usersQuery)
+
+  useEffect(() => {
+    if (usersData) {
+      setUsers(usersData.map((user) => ({
+        id: user.id,
+        nome: user.nome,
+        email: user.email,
+        cargo: user.cargo,
+        perfil: user.perfil,
+        status: user.status,
+        ultimoAcesso: user.ultimoAcesso || "Nunca",
+      })))
+    }
+  }, [usersData])
 
   const selectedUser = users.find((user) => user.id === selectedUserId) ?? null
 
@@ -166,51 +188,116 @@ function ConfiguracoesUsuariosPageContent() {
     setShowUserDialog(true)
   }
 
-  const handleSaveUser = () => {
+  const handleSaveUser = async () => {
     if (!userForm.nome || !userForm.email) {
+      toast({ title: "Erro", description: "Nome e e-mail são obrigatórios." })
       return
     }
 
-    if (selectedUserId) {
-      setUsers((prev) => prev.map((user) => (user.id === selectedUserId ? { ...user, ...userForm } : user)))
-    } else {
-      setUsers((prev) => [
-        ...prev,
-        {
-          id: Date.now(),
+    if (!db) {
+      toast({ title: "Erro", description: "Banco de dados ainda não está disponível." })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      if (selectedUserId) {
+        const updatedUser: User = {
+          id: selectedUserId,
+          nome: userForm.nome,
+          email: userForm.email,
+          cargo: userForm.cargo,
+          perfil: userForm.perfil,
+          status: userForm.status,
+          ultimoAcesso: userForm.ultimoAcesso || "Nunca",
+        }
+
+        setUsers((prev) => prev.map((user) => (user.id === selectedUserId ? updatedUser : user)))
+        await updateDoc(doc(db, "usuarios", selectedUserId), {
+          nome: updatedUser.nome,
+          email: updatedUser.email,
+          cargo: updatedUser.cargo,
+          perfil: updatedUser.perfil,
+          status: updatedUser.status,
+          ultimoAcesso: updatedUser.ultimoAcesso,
+        })
+        toast({ title: "Usuário atualizado", description: "As alterações foram salvas no banco de dados." })
+      } else {
+        const newUser = {
           nome: userForm.nome,
           email: userForm.email,
           cargo: userForm.cargo,
           perfil: userForm.perfil,
           status: userForm.status,
           ultimoAcesso: "Nunca",
-        },
-      ])
-    }
+        }
 
-    setShowUserDialog(false)
+        const newDocRef = await addDoc(collection(db, "usuarios"), newUser)
+        setUsers((prev) => [
+          ...prev,
+          {
+            id: newDocRef.id,
+            ...newUser,
+          },
+        ])
+        toast({ title: "Usuário criado", description: "O usuário foi cadastrado no banco de dados." })
+      }
+
+      setShowUserDialog(false)
+    } catch (error) {
+      console.error("Erro ao salvar usuário", error)
+      toast({ title: "Erro ao salvar", description: "Não foi possível salvar o usuário. Verifique sua conexão e permissões." })
+    } finally {
+      setIsSaving(false)
+    }
   }
 
-  const handleToggleStatus = (user: User) => {
+  const handleToggleStatus = async (user: User) => {
+    const nextStatus = user.status === "Ativo" ? "Bloqueado" : "Ativo"
     setUsers((prev) =>
       prev.map((item) =>
         item.id === user.id
           ? {
               ...item,
-              status: item.status === "Ativo" ? "Bloqueado" : "Ativo",
+              status: nextStatus,
             }
           : item
       )
     )
+
+    if (!db) {
+      console.warn("Firebase não disponível para atualizar status")
+      return
+    }
+
+    try {
+      await updateDoc(doc(db, "usuarios", user.id), {
+        status: nextStatus,
+      })
+    } catch (error) {
+      console.warn("Falha ao atualizar status no Firestore", error)
+    }
   }
 
-  const handleDeleteUser = (userId: number) => {
-    if (window.confirm("Tem certeza que deseja excluir este usuário?")) {
-      setUsers((prev) => prev.filter((user) => user.id !== userId))
-      if (selectedUserId === userId) {
-        setSelectedUserId(null)
-        setShowUserDialog(false)
+  const handleDeleteUser = async (userId: string) => {
+    if (!window.confirm("Tem certeza que deseja excluir este usuário?")) {
+      return
+    }
+
+    if (!db) {
+      console.warn("Firebase não disponível para excluir usuário")
+    } else {
+      try {
+        await deleteDoc(doc(db, "usuarios", userId))
+      } catch (error) {
+        console.warn("Falha ao excluir do Firestore, removendo localmente", error)
       }
+    }
+
+    setUsers((prev) => prev.filter((user) => user.id !== userId))
+    if (selectedUserId === userId) {
+      setSelectedUserId(null)
+      setShowUserDialog(false)
     }
   }
 
