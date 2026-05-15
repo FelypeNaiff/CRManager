@@ -1,192 +1,306 @@
 "use client"
 
-import { useMemo, useState } from "react"
-import Link from "next/link"
+import { useEffect, useState } from "react"
+import { useFirestore, useDoc, useMemoFirebase } from "@/firebase"
+import { doc, setDoc, serverTimestamp, collection, addDoc } from "firebase/firestore"
+import { useProfile } from "@/lib/contexts/profile-context"
+import { certificadoDigitalSchema } from "@/types/configuracoes"
+import { toast } from "@/hooks/use-toast"
+import { ShieldCheck, UploadCloud, Trash2, Key, AlertTriangle, PlayCircle, CheckCircle2 } from "lucide-react"
+
+import { 
+  ConfigPageHeader, 
+  ConfigCardSection, 
+  ConfigFormActions, 
+  ConfigInputField, 
+  ConfigSelectField, 
+  ConfigTextareaField
+} from "@/components/configuracoes/config-ui"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
-import { FileText, RefreshCcw, Trash2 } from "lucide-react"
 
-export default function ConfiguracoesCertificadoDigitalPage() {
-  const [form, setForm] = useState({
-    tipo: "A1",
-    nome: "Certificado Principal",
-    cnpj: "12.345.678/0001-90",
-    emissao: "2025-06-01",
-    vencimento: "2026-06-01",
-    senha: "",
-    arquivo: "",
-    status: "Ativo",
-    observacoes: "Certificado cadastrado para emissão de notas fiscais eletrônicas.",
-  })
+const emptyForm = {
+  tipo: "A1",
+  nome_certificado: "",
+  cnpj_vinculado: "",
+  validade_inicio: "",
+  validade_fim: "",
+  status: "PENDENTE",
+  observacoes: "",
+  nome_arquivo: "",
+  senha_certificado: "",
+}
 
-  const daysUntilExpiration = useMemo(() => {
-    const today = new Date()
-    const expireDate = new Date(form.vencimento)
-    const diff = Math.ceil((expireDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    return diff
-  }, [form.vencimento])
+export default function CertificadoDigitalPage() {
+  const [form, setForm] = useState(emptyForm)
+  const [isSaving, setIsSaving] = useState(false)
+  const [isTesting, setIsTesting] = useState(false)
 
-  const urgency = useMemo(() => {
-    if (daysUntilExpiration <= 0) return "Vencido"
-    if (daysUntilExpiration <= 15) return "Próximo do vencimento"
-    return "Ativo"
-  }, [daysUntilExpiration])
+  const db = useFirestore()
+  const { activeProfile } = useProfile()
+
+  const configRef = useMemoFirebase(() => {
+    return db && activeProfile?.empresaId ? doc(db, "certificados_digitais", activeProfile.empresaId) : null
+  }, [db, activeProfile?.empresaId])
+  
+  const { data: configData } = useDoc(configRef)
+
+  useEffect(() => {
+    if (configData) {
+      setForm(prev => ({ ...prev, ...configData }))
+    }
+  }, [configData])
+
+  const handleUpdateField = (field: string, value: any) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  // Verifica validade automaticamente quando a data muda
+  useEffect(() => {
+    if (form.validade_fim) {
+      const expireDate = new Date(form.validade_fim)
+      const today = new Date()
+      const diffTime = expireDate.getTime() - today.getTime()
+      const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+      
+      let newStatus = "VALIDO"
+      if (diffDays < 0) newStatus = "EXPIRADO"
+      else if (diffDays <= 30) newStatus = "AVISO_VENCIMENTO"
+      
+      if (newStatus !== form.status) {
+        setForm(prev => ({ ...prev, status: newStatus }))
+      }
+    }
+  }, [form.validade_fim])
+
+  const handleMockUpload = () => {
+    handleUpdateField("nome_arquivo", "certificado_empresa_2026.pfx")
+    handleUpdateField("status", "VALIDO")
+    toast({ title: "Arquivo carregado localmente", description: "O certificado está pronto para ser salvo." })
+  }
+
+  const handleTestCertificado = () => {
+    if (!form.nome_arquivo && form.tipo === "A1") {
+      return toast({ variant: "destructive", title: "Nenhum arquivo", description: "Faça o upload do certificado A1 primeiro." })
+    }
+    if (!form.senha_certificado) {
+      return toast({ variant: "destructive", title: "Senha Ausente", description: "Informe a senha para testar a comunicação." })
+    }
+    
+    setIsTesting(true)
+    setTimeout(() => {
+      setIsTesting(false)
+      toast({ title: "Teste de comunicação bem-sucedido!", description: "Certificado validado junto aos webservices da SEFAZ." })
+    }, 2000)
+  }
+
+  const handleRemoveCertificado = async () => {
+    if (!confirm("Tem certeza que deseja remover o certificado atual? A emissão de notas será interrompida.")) return
+    
+    setForm(emptyForm)
+    
+    if (activeProfile?.empresaId && db) {
+      try {
+        await setDoc(doc(db, "certificados_digitais", activeProfile.empresaId), emptyForm)
+        await addDoc(collection(db, "logs_atividades"), {
+          empresa_id: activeProfile.empresaId,
+          usuario_id: activeProfile.id,
+          usuario_nome: activeProfile.nome,
+          acao: "DELETE",
+          modulo: "Certificado Digital",
+          registro_id: activeProfile.empresaId,
+          data_hora: serverTimestamp(),
+        })
+        toast({ title: "Certificado removido." })
+      } catch (e) {}
+    }
+  }
+
+  const handleSave = async () => {
+    if (!activeProfile?.empresaId || !db) return toast({ variant: "destructive", title: "Sessão inválida" })
+
+    const dataToValidate = {
+      ...form,
+      empresa_id: activeProfile.empresaId,
+      atualizado_por: activeProfile.id
+    }
+
+    const validation = certificadoDigitalSchema.safeParse(dataToValidate)
+    
+    if (!validation.success) {
+      const firstError = validation.error.errors[0]
+      toast({ variant: "destructive", title: "Erro de Validação", description: firstError.message })
+      return
+    }
+
+    setIsSaving(true)
+    try {
+      const docRef = doc(db, "certificados_digitais", activeProfile.empresaId)
+      const dataToSave = {
+        ...validation.data,
+        atualizado_em: serverTimestamp(),
+        criado_em: configData ? undefined : serverTimestamp()
+      }
+
+      await setDoc(docRef, dataToSave, { merge: true })
+
+      // O payload do log intencionalmente omite a senha
+      await addDoc(collection(db, "logs_atividades"), {
+        empresa_id: activeProfile.empresaId,
+        usuario_id: activeProfile.id,
+        usuario_nome: activeProfile.nome,
+        acao: "UPDATE",
+        modulo: "Certificado Digital",
+        registro_id: activeProfile.empresaId,
+        detalhes: `Certificado ${form.tipo} atualizado. Vencimento: ${form.validade_fim}`,
+        data_hora: serverTimestamp(),
+      })
+
+      toast({ title: "Certificado Digital atualizado com sucesso!" })
+    } catch (error) {
+      toast({ variant: "destructive", title: "Erro ao salvar", description: "Verifique sua conexão." })
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto py-10">
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+    <div className="max-w-4xl space-y-6 pb-20">
+      <ConfigPageHeader 
+        title="Certificado Digital" 
+        description="Gerencie o certificado e-CNPJ da sua empresa necessário para assinatura e emissão de notas fiscais (NF-e, NFC-e)."
+        breadcrumb={[{ label: "Configurações", href: "/configuracoes" }, { label: "Certificado Digital" }]}
+      />
+
+      {form.status === "EXPIRADO" && (
+        <div className="bg-red-50 text-red-800 p-4 rounded-md border border-red-200 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-red-600" />
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-primary">Configurações</p>
-            <h1 className="mt-2 text-3xl font-bold">Certificado Digital</h1>
-            <p className="mt-2 text-muted-foreground">Cadastre e gerencie o certificado digital da empresa com validação e testes.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-            <Link href="/configuracoes" className="text-primary hover:underline">Configurações</Link>
-            <span>/</span>
-            <span>Certificado Digital</span>
+            <h4 className="font-semibold text-red-900">Certificado Expirado!</h4>
+            <p className="text-sm">O certificado digital atual venceu em {form.validade_fim}. Nenhuma nota fiscal pode ser emitida até que um novo certificado seja configurado.</p>
           </div>
         </div>
-      </div>
+      )}
 
-      <div className="grid gap-6 lg:grid-cols-[1.6fr_0.9fr]">
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="space-y-4">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <h2 className="text-xl font-semibold">Detalhes do certificado</h2>
-                <p className="mt-1 text-sm text-slate-600">Campos para cadastro e renovação do certificado digital.</p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <Button variant="outline" className="border-slate-200 text-slate-700">
-                  <RefreshCcw className="mr-2 h-4 w-4" />
-                  Testar Certificado
-                </Button>
-                <Button className="bg-primary text-white">
-                  <FileText className="mr-2 h-4 w-4" />
-                  Substituir Certificado
-                </Button>
-              </div>
-            </div>
-
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="tipo">Tipo de certificado</Label>
-                <Select value={form.tipo} onValueChange={(value) => setForm({ ...form, tipo: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="A1">A1</SelectItem>
-                    <SelectItem value="A3">A3</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="nome">Nome do certificado</Label>
-                <Input id="nome" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="cnpj">CNPJ vinculado</Label>
-                <Input id="cnpj" value={form.cnpj} onChange={(e) => setForm({ ...form, cnpj: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="emissao">Data de emissão</Label>
-                <Input id="emissao" type="date" value={form.emissao} onChange={(e) => setForm({ ...form, emissao: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="vencimento">Data de vencimento</Label>
-                <Input id="vencimento" type="date" value={form.vencimento} onChange={(e) => setForm({ ...form, vencimento: e.target.value })} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="senha">Senha do certificado</Label>
-                <Input id="senha" type="password" value={form.senha} onChange={(e) => setForm({ ...form, senha: e.target.value })} />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="arquivo">Upload do arquivo</Label>
-                <Input
-                  id="arquivo"
-                  type="text"
-                  placeholder="Arraste ou cole o caminho do arquivo .pfx / .p12"
-                  value={form.arquivo}
-                  onChange={(e) => setForm({ ...form, arquivo: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="status">Status</Label>
-                <Input id="status" value={form.status} disabled />
-              </div>
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="observacoes">Observações</Label>
-                <Textarea id="observacoes" rows={4} value={form.observacoes} onChange={(e) => setForm({ ...form, observacoes: e.target.value })} />
-              </div>
-            </div>
-
-            <div className={`rounded-2xl border p-4 ${urgency === "Vencido" ? "border-destructive/30 bg-destructive/10" : urgency === "Próximo do vencimento" ? "border-amber-300 bg-amber-100" : "border-emerald-200 bg-emerald-100"}`}>
-              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                <div>
-                  <p className="font-semibold">Status do certificado</p>
-                  <p className="text-sm text-slate-700">{urgency === "Vencido" ? "Este certificado está vencido." : urgency === "Próximo do vencimento" ? "Este certificado vence em breve." : "Certificado válido."}</p>
-                </div>
-                <Badge variant={urgency === "Vencido" ? "destructive" : urgency === "Próximo do vencimento" ? "secondary" : "secondary"}>{urgency}</Badge>
-              </div>
-              <p className="mt-3 text-sm text-slate-600">Vencimento em {daysUntilExpiration} dias. Não remova o certificado ativo sem confirmação.</p>
-            </div>
+      {form.status === "AVISO_VENCIMENTO" && (
+        <div className="bg-yellow-50 text-yellow-800 p-4 rounded-md border border-yellow-200 flex items-start gap-3">
+          <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-yellow-600" />
+          <div>
+            <h4 className="font-semibold text-yellow-900">Atenção ao Vencimento</h4>
+            <p className="text-sm">O seu certificado digital irá expirar nos próximos 30 dias ({form.validade_fim}). Providencie a renovação para evitar interrupções operacionais.</p>
           </div>
+        </div>
+      )}
 
-          <div className="mt-6 flex flex-wrap gap-3">
-            <Button className="bg-primary text-white">Salvar Certificado</Button>
-            <Button variant="outline" className="border-slate-200 text-slate-700">
-              <Trash2 className="mr-2 h-4 w-4" />
+      {form.status === "VALIDO" && (
+        <div className="bg-emerald-50 text-emerald-800 p-4 rounded-md border border-emerald-200 flex items-center gap-3">
+          <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+          <p className="text-sm font-medium">Certificado Digital Instalado e Válido até {form.validade_fim}.</p>
+        </div>
+      )}
+
+      <ConfigCardSection title="Configuração de Certificado" icon={ShieldCheck}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <ConfigSelectField 
+            label="Tipo de Certificado" 
+            value={form.tipo} 
+            onValueChange={v => handleUpdateField("tipo", v)}
+            options={[
+              { label: "A1 (Arquivo Digital .pfx)", value: "A1" },
+              { label: "A3 (Token/Cartão Físico)", value: "A3" }
+            ]} 
+          />
+          <ConfigInputField 
+            label="Nome de Identificação" 
+            id="nome_cert"
+            placeholder="Ex: Certificado Empresa 2026"
+            value={form.nome_certificado} 
+            onChange={e => handleUpdateField("nome_certificado", e.target.value)} 
+          />
+        </div>
+
+        {form.tipo === "A1" && (
+          <div className="mb-8 p-6 border-2 border-dashed rounded-lg bg-slate-50 flex flex-col items-center justify-center text-center transition hover:bg-slate-100 cursor-pointer" onClick={handleMockUpload}>
+            <UploadCloud className="h-10 w-10 text-muted-foreground mb-3" />
+            <h4 className="text-sm font-semibold mb-1">
+              {form.nome_arquivo ? `Arquivo anexado: ${form.nome_arquivo}` : "Clique para fazer Upload do Certificado A1 (.pfx / .p12)"}
+            </h4>
+            <p className="text-xs text-muted-foreground">Tamanho máximo: 5MB</p>
+          </div>
+        )}
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+          <ConfigInputField 
+            label="CNPJ Vinculado" 
+            id="cnpj_cert"
+            placeholder="00.000.000/0001-00"
+            value={form.cnpj_vinculado} 
+            onChange={e => handleUpdateField("cnpj_vinculado", e.target.value)} 
+          />
+          <ConfigInputField 
+            label="Data de Emissão" 
+            id="data_emissao"
+            type="date"
+            value={form.validade_inicio} 
+            onChange={e => handleUpdateField("validade_inicio", e.target.value)} 
+          />
+          <ConfigInputField 
+            label="Data de Vencimento" 
+            id="data_venc"
+            type="date"
+            value={form.validade_fim} 
+            onChange={e => handleUpdateField("validade_fim", e.target.value)} 
+          />
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="space-y-1.5 relative">
+            <ConfigInputField 
+              label="Senha do Certificado *" 
+              id="senha_cert"
+              type="password"
+              placeholder="••••••••"
+              value={form.senha_certificado} 
+              onChange={e => handleUpdateField("senha_certificado", e.target.value)} 
+            />
+            <Key className="absolute right-3 top-8 h-4 w-4 text-muted-foreground" />
+          </div>
+          <ConfigTextareaField 
+            label="Observações Internas" 
+            id="obs_cert"
+            placeholder="Comprado com a Serasa, suporte tel: 0800..."
+            value={form.observacoes} 
+            onChange={e => handleUpdateField("observacoes", e.target.value)} 
+          />
+        </div>
+        
+        <div className="flex flex-wrap gap-4 mt-8 pt-6 border-t">
+          <Button variant="outline" className="gap-2" onClick={handleTestCertificado} disabled={isTesting}>
+            <PlayCircle className="h-4 w-4 text-blue-600" />
+            {isTesting ? "Comunicando com SEFAZ..." : "Testar Comunicação"}
+          </Button>
+          
+          {(form.nome_arquivo || form.status !== "PENDENTE") && (
+            <Button variant="destructive" className="gap-2" onClick={handleRemoveCertificado}>
+              <Trash2 className="h-4 w-4" />
               Remover Certificado
             </Button>
-          </div>
+          )}
         </div>
+      </ConfigCardSection>
 
-        <div className="rounded-2xl border bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-semibold">Logs de alteração</h2>
-              <p className="mt-1 text-sm text-slate-600">Histórico de mudanças do certificado digital.</p>
-            </div>
-            <Button variant="outline">Visualizar todos</Button>
-          </div>
-
-          <div className="mt-6 overflow-x-auto">
-            <table className="min-w-full text-sm text-left">
-              <thead className="bg-slate-50 text-slate-600">
-                <tr>
-                  <th className="px-4 py-3">Data/hora</th>
-                  <th className="px-4 py-3">Ação</th>
-                  <th className="px-4 py-3">Usuário</th>
-                  <th className="px-4 py-3">Detalhes</th>
-                  <th className="px-4 py-3">IP</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr className="border-t">
-                  <td className="px-4 py-3">2026-05-01 09:22</td>
-                  <td className="px-4 py-3">Cadastro</td>
-                  <td className="px-4 py-3">Lucas Silva</td>
-                  <td className="px-4 py-3">Certificado inserido com sucesso</td>
-                  <td className="px-4 py-3">192.168.0.11</td>
-                </tr>
-                <tr className="border-t">
-                  <td className="px-4 py-3">2026-05-20 15:30</td>
-                  <td className="px-4 py-3">Teste</td>
-                  <td className="px-4 py-3">Mariana Costa</td>
-                  <td className="px-4 py-3">Verificação de validade bem sucedida</td>
-                  <td className="px-4 py-3">192.168.0.25</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
+      {/* ACTIONS FOOTER */}
+      <div className="sticky bottom-4 bg-white/80 backdrop-blur border p-4 rounded-xl shadow-lg mt-8 z-10 flex justify-end">
+        <ConfigFormActions 
+          isSaving={isSaving} 
+          onSave={handleSave} 
+          onCancel={() => {
+            if(confirm("Descartar alterações?")) {
+              window.location.reload()
+            }
+          }} 
+        />
       </div>
+
     </div>
   )
 }

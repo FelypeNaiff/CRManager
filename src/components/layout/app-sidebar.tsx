@@ -2,6 +2,8 @@
 
 import * as React from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
+import { useFirestore, useDoc, useMemoFirebase } from "@/firebase"
+import { doc } from "firebase/firestore"
 import {
   LayoutDashboard,
   Users,
@@ -108,9 +110,17 @@ const navItems = [
     title: "Financeiro",
     icon: DollarSign,
     items: [
-      { title: "Contas a Pagar", url: "/contas-pagar", icon: Wallet },
-      { title: "Contas a Receber", url: "/contas-receber", icon: DollarSign },
-      { title: "Contas Bancárias", url: "/contas-bancarias", icon: Store },
+      { title: "Dashboard", url: "/financeiro", icon: PieChart },
+      { title: "Contas a Pagar", url: "/financeiro/contas-a-pagar", icon: Wallet },
+      { title: "Contas a Receber", url: "/financeiro/contas-a-receber", icon: DollarSign },
+      { title: "Calendário", url: "/financeiro/calendario", icon: CalendarDays },
+      { title: "Fluxo de Caixa", url: "/financeiro/fluxo-caixa", icon: ArrowLeftRight },
+      { title: "Caixas", url: "/financeiro/caixas", icon: Store },
+      { title: "Contas Bancárias", url: "/financeiro/contas-bancarias", icon: Building2 },
+      { title: "Transferências", url: "/financeiro/transferencias", icon: Repeat },
+      { title: "Vales de Funcionários", url: "/financeiro/vales-funcionarios", icon: Users },
+      { title: "Relatórios", url: "/financeiro/relatorios", icon: FileText },
+      { title: "Opções Auxiliares", url: "/financeiro/opcoes-auxiliares", icon: Settings },
     ],
   },
   {
@@ -169,19 +179,38 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { activeProfile, logoutProfile } = useProfile()
+  const db = useFirestore()
+  const configRef = useMemoFirebase(() => {
+    return db && activeProfile?.empresaId ? doc(db, "configuracoes_empresa", activeProfile.empresaId) : null
+  }, [db, activeProfile?.empresaId])
+  const { data: empresaConfig } = useDoc(configRef)
+
+  const logoUrl = empresaConfig?.logo_url || empresaConfig?.logo_reduzida
+  const smallLogoUrl = empresaConfig?.logo_reduzida || empresaConfig?.logo_url
+  const companyName = empresaConfig?.nome_fantasia || "CRManager"
 
   return (
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border py-6 bg-white flex flex-col items-center justify-center">
         <div className="flex flex-col items-center gap-1 group-data-[collapsible=icon]:hidden">
-          <div className="h-12 w-12 text-primary font-bold text-2xl flex items-center justify-center">
-            Tk
-          </div>
-          <span className="font-headline font-bold text-lg text-primary">Trupe<span className="text-orange-400">Kids</span></span>
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo da empresa" className="h-12 w-auto max-w-full object-contain" />
+          ) : (
+            <div className="h-12 w-12 text-primary font-bold text-2xl flex items-center justify-center">
+              Tk
+            </div>
+          )}
+          <span className="font-headline font-bold text-lg text-primary">{companyName}</span>
           <span className="text-[10px] text-muted-foreground uppercase tracking-wider">CRManager</span>
         </div>
-        <div className="hidden group-data-[collapsible=icon]:flex h-8 w-8 text-primary font-bold text-xl items-center justify-center">
-          Tk
+        <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 items-center justify-center">
+          {smallLogoUrl ? (
+            <img src={smallLogoUrl} alt="Logo reduzida" className="h-8 w-auto object-contain" />
+          ) : (
+            <div className="h-8 w-8 text-primary font-bold text-xl flex items-center justify-center">
+              Tk
+            </div>
+          )}
         </div>
       </SidebarHeader>
       <SidebarContent>

@@ -1,691 +1,463 @@
-﻿"use client"
+"use client"
 
-export const dynamic = 'force-dynamic'
-
-import Link from "next/link"
-import { Suspense, useEffect, useMemo, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { Button } from "@/components/ui/button"
-import { Checkbox } from "@/components/ui/checkbox"
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { useState } from "react"
+import { useProfile } from "@/lib/contexts/profile-context"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, addDoc, updateDoc, deleteDoc, doc } from "firebase/firestore"
+import { collection, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc } from "firebase/firestore"
+import { Plus, Users, Search, Filter, Lock, Unlock, Eye, Edit3, Trash2, ShieldAlert } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
-import { Users, UserCog, ShieldCheck, History, FileText, Plus, Eye, Edit3, ShieldOff, Key, Trash2 } from "lucide-react"
+import Link from "next/link"
+import { usuarioSchema } from "@/types/configuracoes"
 
-type User = {
-  id: string
-  nome: string
-  email: string
-  cargo: string
-  perfil: string
-  status: string
-  ultimoAcesso: string
-}
+import {
+  ConfigPageHeader,
+  ConfigCardSection,
+  ConfigDataTable,
+  ConfigDataTableHeader,
+  ConfigDataTableRow,
+  ConfigDataTableHead,
+  ConfigDataTableBody,
+  ConfigDataTableCell,
+  ConfigStatusBadge,
+  ConfigInputField,
+  ConfigSelectField,
+  ConfigTextareaField,
+  ConfigSwitchField
+} from "@/components/configuracoes/config-ui"
 
-type UserForm = Omit<User, "id"> & { id?: string }
-
-type Filters = {
-  nome: string
-  email: string
-  perfil: string
-  status: string
-}
-
-const accessProfiles = [
-  "Administrador",
-  "Gerente",
-  "Vendedor",
-  "Financeiro",
-  "Estoque",
-  "Marketing",
-  "Atendimento",
-  "Somente leitura",
-]
-
-const statusOptions = ["Ativo", "Inativo", "Bloqueado"]
-
-const initialUsers: User[] = [
-  { id: "1", nome: "Lucas Silva", email: "lucas@exemplo.com", cargo: "Gerente", perfil: "Gerente", status: "Ativo", ultimoAcesso: "2026-05-10 14:22" },
-  { id: "2", nome: "Mariana Costa", email: "mariana@exemplo.com", cargo: "Vendedor", perfil: "Vendedor", status: "Bloqueado", ultimoAcesso: "2026-05-09 08:03" },
-  { id: "3", nome: "Ana Pereira", email: "ana@exemplo.com", cargo: "Financeiro", perfil: "Financeiro", status: "Ativo", ultimoAcesso: "2026-05-08 17:40" },
-  { id: "4", nome: "Carlos Alves", email: "carlos@exemplo.com", cargo: "Estoque", perfil: "Estoque", status: "Inativo", ultimoAcesso: "2026-05-05 12:15" },
-]
-
-const perfisData = [
-  { nome: "Administrador", descricao: "Acesso total ao sistema", status: "Ativo", usuarios: 4 },
-  { nome: "Gerente", descricao: "Controle de vendas e equipe", status: "Ativo", usuarios: 2 },
-  { nome: "Vendedor", descricao: "Acesso ao PDV e clientes", status: "Ativo", usuarios: 7 },
-  { nome: "Financeiro", descricao: "Acesso às contas e relatórios", status: "Ativo", usuarios: 3 },
-  { nome: "Estoque", descricao: "Gerência de estoque e produtos", status: "Ativo", usuarios: 2 },
-  { nome: "Marketing", descricao: "Campanhas e comunicação", status: "Ativo", usuarios: 1 },
-  { nome: "Atendimento", descricao: "Suporte ao cliente", status: "Ativo", usuarios: 3 },
-  { nome: "Somente leitura", descricao: "Apenas visualização", status: "Ativo", usuarios: 6 },
-]
-
-const modules = [
-  { name: "Dashboard" },
-  { name: "CRM" },
-  { name: "Vendas" },
-  { name: "Estoque" },
-  { name: "Financeiro" },
-  { name: "Marketing" },
-  { name: "Relatórios" },
-  { name: "Agenda" },
-  { name: "Configurações" },
-]
-
-const permissions = [
-  "Visualizar",
-  "Criar",
-  "Editar",
-  "Excluir",
-  "Exportar",
-  "Imprimir",
-  "Cancelar",
-  "Configurar",
-]
-
-const accessLogs = [
-  { id: 1, usuario: "Lucas Silva", data: "2026-05-10 14:22", ip: "192.168.0.11", dispositivo: "Desktop", navegador: "Chrome", status: "Sucesso" },
-  { id: 2, usuario: "Mariana Costa", data: "2026-05-09 08:03", ip: "192.168.0.25", dispositivo: "Mobile", navegador: "Safari", status: "Falha" },
-  { id: 3, usuario: "Ana Pereira", data: "2026-05-08 17:40", ip: "192.168.0.98", dispositivo: "Desktop", navegador: "Firefox", status: "Sucesso" },
-]
-
-const activityLogs = [
-  { id: 1, usuario: "Lucas Silva", acao: "Criou usuário", modulo: "Usuários", registro: "Mariana Costa", data: "2026-05-10 14:23", ip: "192.168.0.11" },
-  { id: 2, usuario: "Mariana Costa", acao: "Atualizou perfil", modulo: "Usuários", registro: "Vendedor", data: "2026-05-09 08:05", ip: "192.168.0.25" },
-  { id: 3, usuario: "Ana Pereira", acao: "Bloqueou usuário", modulo: "Usuários", registro: "Carlos Alves", data: "2026-05-08 17:45", ip: "192.168.0.98" },
-]
-
-const tabs = [
-  { value: "usuarios", label: "Usuários", icon: Users },
-  { value: "perfis", label: "Perfis de Acesso", icon: UserCog },
-  { value: "permissoes", label: "Permissões", icon: ShieldCheck },
-  { value: "historico", label: "Histórico de Acessos", icon: History },
-  { value: "logs", label: "Logs de Atividades", icon: FileText },
-]
-
-const defaultUserForm: UserForm = {
+const emptyForm = {
   nome: "",
   email: "",
+  telefone: "",
   cargo: "",
-  perfil: "Administrador",
-  status: "Ativo",
-  ultimoAcesso: "Nunca",
+  grupo_id: "",
+  status: "ATIVO" as "ATIVO" | "INATIVO" | "BLOQUEADO",
+  permitir_acesso: true,
+  observacoes: ""
 }
 
-function ConfiguracoesUsuariosPageContent() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
-  const queryTab = searchParams.get("tab") ?? "usuarios"
-  const [activeTab, setActiveTab] = useState(queryTab)
-  const [filters, setFilters] = useState<Filters>({ nome: "", email: "", perfil: "Todos", status: "Todos" })
-  const [users, setUsers] = useState<User[]>(initialUsers)
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null)
-  const [userForm, setUserForm] = useState<UserForm>(defaultUserForm)
-  const [showUserDialog, setShowUserDialog] = useState(false)
-  const [showPasswordDialog, setShowPasswordDialog] = useState(false)
-  const [passwordValue, setPasswordValue] = useState("")
+export default function UsuariosConfigPage() {
+  const [searchTerm, setSearchTerm] = useState("")
+  
+  // Modal States
+  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [form, setForm] = useState(emptyForm)
   const [isSaving, setIsSaving] = useState(false)
 
   const db = useFirestore()
-  const usersQuery = useMemoFirebase(() => (db ? collection(db, "usuarios") : null), [db])
-  const { data: usersData } = useCollection<User>(usersQuery)
+  const { activeProfile } = useProfile()
+  
+  // Queries
+  const usuariosQuery = useMemoFirebase(() => {
+    if (!db || !activeProfile?.empresaId) return null
+    return query(collection(db, "usuarios"), where("empresa_id", "==", activeProfile.empresaId))
+  }, [db, activeProfile?.empresaId])
 
-  useEffect(() => {
-    if (usersData) {
-      setUsers(usersData.map((user) => ({
-        id: user.id,
-        nome: user.nome,
-        email: user.email,
-        cargo: user.cargo,
-        perfil: user.perfil,
-        status: user.status,
-        ultimoAcesso: user.ultimoAcesso || "Nunca",
-      })))
+  const gruposQuery = useMemoFirebase(() => {
+    if (!db || !activeProfile?.empresaId) return null
+    return query(collection(db, "grupos_usuarios"), where("empresa_id", "==", activeProfile.empresaId))
+  }, [db, activeProfile?.empresaId])
+
+  const { data: usuariosData, isLoading } = useCollection(usuariosQuery)
+  const { data: gruposData } = useCollection(gruposQuery)
+
+  const usuarios = usuariosData ?? []
+  const grupos = gruposData ?? []
+
+  const filteredUsuarios = usuarios.filter((u: any) => {
+    const term = searchTerm.toLowerCase()
+    return (
+      (u.nome && u.nome.toLowerCase().includes(term)) || 
+      (u.email && u.email.toLowerCase().includes(term))
+    )
+  })
+
+  const getGrupoNome = (grupoId: string) => {
+    const grupo = grupos.find((g: any) => g.id === grupoId)
+    return grupo ? grupo.nome : "Sem grupo"
+  }
+
+  const openNewUser = () => {
+    setEditingId(null)
+    setForm(emptyForm)
+    setIsModalOpen(true)
+  }
+
+  const openEditUser = (user: any) => {
+    setEditingId(user.id)
+    setForm({
+      nome: user.nome || "",
+      email: user.email || "",
+      telefone: user.telefone || "",
+      cargo: user.cargo || "",
+      grupo_id: user.grupo_id || "",
+      status: user.status || "ATIVO",
+      permitir_acesso: user.permitir_acesso !== false,
+      observacoes: user.observacoes || ""
+    })
+    setIsModalOpen(true)
+  }
+
+  const handleUpdateField = (field: string, value: any) => {
+    setForm(prev => ({ ...prev, [field]: value }))
+  }
+
+  const isUserOnlyAdmin = (userId: string) => {
+    // Identificar todos os grupos que são "is_admin"
+    const adminGroupsIds = grupos.filter((g: any) => g.is_admin === true).map((g: any) => g.id)
+    if (adminGroupsIds.length === 0) return false // Se não há conceito de admin groups, não tem como bloquear
+
+    // Pessoas ativas nestes grupos
+    const adminsAtivos = usuarios.filter((u: any) => 
+      adminGroupsIds.includes(u.grupo_id) && u.status === "ATIVO"
+    )
+
+    // Se só tem 1 e é o ID alvo
+    if (adminsAtivos.length === 1 && adminsAtivos[0].id === userId) {
+      return true
     }
-  }, [usersData])
-
-  const selectedUser = users.find((user) => user.id === selectedUserId) ?? null
-
-  useEffect(() => {
-    setActiveTab(queryTab)
-  }, [queryTab])
-
-  const handleTabChange = (value: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    params.set("tab", value)
-    router.replace(`/configuracoes/usuarios?${params.toString()}`)
-    setActiveTab(value)
+    return false
   }
 
-  const filteredUsers = useMemo(
-    () =>
-      users.filter((user) => {
-        if (filters.nome && !user.nome.toLowerCase().includes(filters.nome.toLowerCase())) return false
-        if (filters.email && !user.email.toLowerCase().includes(filters.email.toLowerCase())) return false
-        if (filters.perfil !== "Todos" && user.perfil !== filters.perfil) return false
-        if (filters.status !== "Todos" && user.status !== filters.status) return false
-        return true
-      }),
-    [filters, users]
-  )
+  const handleSave = async () => {
+    if (!db || !activeProfile) return
 
-  const openNewUserDialog = () => {
-    setSelectedUserId(null)
-    setUserForm(defaultUserForm)
-    setShowUserDialog(true)
-  }
-
-  const openEditUserDialog = (user: User) => {
-    setSelectedUserId(user.id)
-    setUserForm({ ...user })
-    setShowUserDialog(true)
-  }
-
-  const handleSaveUser = async () => {
-    if (!userForm.nome || !userForm.email) {
-      toast({ title: "Erro", description: "Nome e e-mail são obrigatórios." })
-      return
+    // Validação de Duplicidade de E-mail
+    const emailExists = usuarios.some((u: any) => 
+      u.email.toLowerCase() === form.email.toLowerCase() && u.id !== editingId
+    )
+    if (emailExists) {
+      return toast({ variant: "destructive", title: "E-mail em uso", description: "Já existe um usuário com este e-mail na empresa." })
     }
 
-    if (!db) {
-      toast({ title: "Erro", description: "Banco de dados ainda não está disponível." })
-      return
+    const payloadToValidate = {
+      ...form,
+      empresa_id: activeProfile.empresaId,
+      atualizado_por: activeProfile.id
+    }
+
+    const validation = usuarioSchema.safeParse(payloadToValidate)
+    if (!validation.success) {
+      return toast({ variant: "destructive", title: "Erro", description: validation.error.errors[0].message })
+    }
+
+    // Regra de segurança: não remover admin power de si próprio se for o único
+    if (editingId && isUserOnlyAdmin(editingId)) {
+      const adminGroupsIds = grupos.filter((g: any) => g.is_admin === true).map((g: any) => g.id)
+      if (!adminGroupsIds.includes(form.grupo_id) || form.status !== "ATIVO" || !form.permitir_acesso) {
+        return toast({ variant: "destructive", title: "Ação não permitida", description: "Este é o único administrador ativo do sistema. Crie outro admin primeiro." })
+      }
     }
 
     setIsSaving(true)
     try {
-      if (selectedUserId) {
-        const updatedUser: User = {
-          id: selectedUserId,
-          nome: userForm.nome,
-          email: userForm.email,
-          cargo: userForm.cargo,
-          perfil: userForm.perfil,
-          status: userForm.status,
-          ultimoAcesso: userForm.ultimoAcesso || "Nunca",
-        }
-
-        setUsers((prev) => prev.map((user) => (user.id === selectedUserId ? updatedUser : user)))
-        await updateDoc(doc(db, "usuarios", selectedUserId), {
-          nome: updatedUser.nome,
-          email: updatedUser.email,
-          cargo: updatedUser.cargo,
-          perfil: updatedUser.perfil,
-          status: updatedUser.status,
-          ultimoAcesso: updatedUser.ultimoAcesso,
-        })
-        toast({ title: "Usuário atualizado", description: "As alterações foram salvas no banco de dados." })
-      } else {
-        const newUser = {
-          nome: userForm.nome,
-          email: userForm.email,
-          cargo: userForm.cargo,
-          perfil: userForm.perfil,
-          status: userForm.status,
-          ultimoAcesso: "Nunca",
-        }
-
-        const newDocRef = await addDoc(collection(db, "usuarios"), newUser)
-        setUsers((prev) => [
-          ...prev,
-          {
-            id: newDocRef.id,
-            ...newUser,
-          },
-        ])
-        toast({ title: "Usuário criado", description: "O usuário foi cadastrado no banco de dados." })
+      const dataToSave = {
+        ...validation.data,
+        atualizado_em: serverTimestamp(),
       }
 
-      setShowUserDialog(false)
-    } catch (error) {
-      console.error("Erro ao salvar usuário", error)
-      toast({ title: "Erro ao salvar", description: "Não foi possível salvar o usuário. Verifique sua conexão e permissões." })
+      let logAcao = "UPDATE"
+      if (editingId) {
+        await updateDoc(doc(db, "usuarios", editingId), dataToSave)
+      } else {
+        logAcao = "CREATE"
+        await addDoc(collection(db, "usuarios"), {
+          ...dataToSave,
+          criado_em: serverTimestamp()
+        })
+      }
+
+      await addDoc(collection(db, "logs_atividades"), {
+        empresa_id: activeProfile.empresaId,
+        usuario_id: activeProfile.id,
+        usuario_nome: activeProfile.nome,
+        acao: logAcao,
+        modulo: "Usuários",
+        registro_id: form.email,
+        data_hora: serverTimestamp(),
+      })
+
+      toast({ title: editingId ? "Usuário atualizado" : "Usuário criado com sucesso!" })
+      setIsModalOpen(false)
+    } catch (e) {
+      toast({ variant: "destructive", title: "Erro ao salvar usuário" })
     } finally {
       setIsSaving(false)
     }
   }
 
-  const handleToggleStatus = async (user: User) => {
-    const nextStatus = user.status === "Ativo" ? "Bloqueado" : "Ativo"
-    setUsers((prev) =>
-      prev.map((item) =>
-        item.id === user.id
-          ? {
-              ...item,
-              status: nextStatus,
-            }
-          : item
-      )
-    )
-
-    if (!db) {
-      console.warn("Firebase não disponível para atualizar status")
-      return
+  const toggleBlockStatus = async (user: any) => {
+    if (!db || !activeProfile) return
+    const novoStatus = user.status === "BLOQUEADO" ? "ATIVO" : "BLOQUEADO"
+    
+    if (novoStatus === "BLOQUEADO" && isUserOnlyAdmin(user.id)) {
+      return toast({ variant: "destructive", title: "Ação bloqueada", description: "Não é possível bloquear o único administrador ativo do sistema." })
     }
+
+    const confirmMsg = novoStatus === "BLOQUEADO" 
+      ? `Bloquear acesso de ${user.nome}?` 
+      : `Desbloquear acesso de ${user.nome}?`
+    
+    if (!confirm(confirmMsg)) return
 
     try {
       await updateDoc(doc(db, "usuarios", user.id), {
-        status: nextStatus,
+        status: novoStatus,
+        atualizado_em: serverTimestamp(),
+        atualizado_por: activeProfile.id
       })
-    } catch (error) {
-      console.warn("Falha ao atualizar status no Firestore", error)
+      
+      await addDoc(collection(db, "logs_atividades"), {
+        empresa_id: activeProfile.empresaId,
+        usuario_id: activeProfile.id,
+        usuario_nome: activeProfile.nome,
+        acao: "UPDATE",
+        modulo: "Usuários",
+        registro_id: user.id,
+        detalhes: `Status alterado para ${novoStatus}`,
+        data_hora: serverTimestamp(),
+      })
+
+      toast({ title: "Status atualizado com sucesso!" })
+    } catch (e) {
+      toast({ variant: "destructive", title: "Erro ao atualizar" })
     }
   }
 
-  const handleDeleteUser = async (userId: string) => {
-    if (!window.confirm("Tem certeza que deseja excluir este usuário?")) {
-      return
+  const handleDelete = async (user: any) => {
+    if (!db || !activeProfile) return
+
+    if (isUserOnlyAdmin(user.id)) {
+      return toast({ variant: "destructive", title: "Ação bloqueada", description: "Não é possível excluir o único administrador do sistema." })
     }
 
-    if (!db) {
-      console.warn("Firebase não disponível para excluir usuário")
-    } else {
-      try {
-        await deleteDoc(doc(db, "usuarios", userId))
-      } catch (error) {
-        console.warn("Falha ao excluir do Firestore, removendo localmente", error)
-      }
+    if (!confirm(`Tem certeza que deseja excluir o usuário ${user.nome}? Essa ação não pode ser desfeita.`)) return
+
+    try {
+      await deleteDoc(doc(db, "usuarios", user.id))
+      
+      await addDoc(collection(db, "logs_atividades"), {
+        empresa_id: activeProfile.empresaId,
+        usuario_id: activeProfile.id,
+        usuario_nome: activeProfile.nome,
+        acao: "DELETE",
+        modulo: "Usuários",
+        registro_id: user.id,
+        data_hora: serverTimestamp(),
+      })
+
+      toast({ title: "Usuário excluído." })
+    } catch (e) {
+      toast({ variant: "destructive", title: "Erro ao excluir" })
     }
-
-    setUsers((prev) => prev.filter((user) => user.id !== userId))
-    if (selectedUserId === userId) {
-      setSelectedUserId(null)
-      setShowUserDialog(false)
-    }
   }
 
-  const handleResetPassword = (user: User) => {
-    setSelectedUserId(user.id)
-    setPasswordValue("")
-    setShowPasswordDialog(true)
-  }
-
-  const savePassword = () => {
-    setShowPasswordDialog(false)
-    setPasswordValue("")
-  }
-
-  const handleUserFormChange = (field: keyof UserForm, value: string) => {
-    setUserForm((prev) => ({ ...prev, [field]: value }))
-  }
+  // Prepara as opções de grupos para o Select
+  const groupOptions = [
+    { label: "Nenhum grupo", value: "" },
+    ...grupos.map((g: any) => ({ label: g.nome, value: g.id }))
+  ]
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto py-10">
-      <div className="rounded-2xl border bg-white p-6 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-          <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-primary">Configurações</p>
-            <h1 className="mt-2 text-3xl font-bold">Usuários</h1>
-            <p className="mt-2 text-muted-foreground">Gerencie usuários, perfis e permissões com auditoria integrada.</p>
-          </div>
-          <div className="flex flex-wrap items-center gap-3 text-sm text-slate-600">
-            <Link href="/configuracoes" className="text-primary hover:underline">Configurações</Link>
-            <span>/</span>
-            <span>Usuários</span>
-          </div>
+    <div className="max-w-6xl space-y-6 pb-20">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+        <ConfigPageHeader 
+          title="Usuários" 
+          description="Gerencie os operadores, caixas e administradores do sistema."
+          breadcrumb={[{ label: "Configurações", href: "/configuracoes" }, { label: "Usuários" }]}
+        />
+        <div className="flex items-center gap-3">
+          <Button variant="secondary" asChild className="bg-rose-900 text-rose-50 hover:bg-rose-950">
+            <Link href="/configuracoes/grupos-usuarios">
+              <Users className="h-4 w-4 mr-2" />
+              Grupos de usuários
+            </Link>
+          </Button>
+          <Button className="bg-emerald-600 hover:bg-emerald-700 text-white" onClick={openNewUser}>
+            <Plus className="h-4 w-4 mr-2" />
+            Adicionar
+          </Button>
         </div>
       </div>
 
-      <div className="rounded-2xl border bg-white p-4 shadow-sm">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid grid-cols-2 md:grid-cols-5 gap-2 p-1">
-            {tabs.map((tab) => {
-              const Icon = tab.icon
-              return (
-                <TabsTrigger
-                  key={tab.value}
-                  value={tab.value}
-                  className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground border bg-card text-slate-700"
-                >
-                  <div className="flex items-center justify-center gap-2 text-sm font-medium">
-                    <Icon className="h-4 w-4" />
-                    {tab.label}
-                  </div>
-                </TabsTrigger>
-              )
-            })}
-          </TabsList>
-
-          <div className="mt-6">
-            <TabsContent value="usuarios">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Lista de usuários</h2>
-                  <p className="mt-1 text-sm text-slate-600">Filtros por nome, e-mail, perfil e status.</p>
-                </div>
-                <Button className="bg-primary text-white" onClick={openNewUserDialog}>
-                  <Plus className="h-4 w-4" />
-                  Novo Usuário
-                </Button>
-              </div>
-
-              <div className="mt-6 grid gap-3 lg:grid-cols-4">
-                <div className="space-y-2">
-                  <Label htmlFor="filtroNome">Nome</Label>
-                  <Input id="filtroNome" value={filters.nome} onChange={(e) => setFilters({ ...filters, nome: e.target.value })} placeholder="Buscar nome" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filtroEmail">E-mail</Label>
-                  <Input id="filtroEmail" value={filters.email} onChange={(e) => setFilters({ ...filters, email: e.target.value })} placeholder="Buscar e-mail" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filtroPerfil">Perfil</Label>
-                  <Select value={filters.perfil} onValueChange={(value) => setFilters({ ...filters, perfil: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Todos">Todos</SelectItem>
-                      {accessProfiles.map((perfil) => (
-                        <SelectItem key={perfil} value={perfil}>{perfil}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="filtroStatus">Status</Label>
-                  <Select value={filters.status} onValueChange={(value) => setFilters({ ...filters, status: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Todos" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="Todos">Todos</SelectItem>
-                      {statusOptions.map((status) => (
-                        <SelectItem key={status} value={status}>{status}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="mt-6 overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3">Nome</th>
-                      <th className="px-4 py-3">E-mail</th>
-                      <th className="px-4 py-3">Cargo</th>
-                      <th className="px-4 py-3">Perfil</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Último acesso</th>
-                      <th className="px-4 py-3">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredUsers.map((user) => (
-                      <tr key={user.id} className="border-t">
-                        <td className="px-4 py-3 font-medium">{user.nome}</td>
-                        <td className="px-4 py-3">{user.email}</td>
-                        <td className="px-4 py-3">{user.cargo}</td>
-                        <td className="px-4 py-3">{user.perfil}</td>
-                        <td className="px-4 py-3">{user.status}</td>
-                        <td className="px-4 py-3">{user.ultimoAcesso}</td>
-                        <td className="px-4 py-3 flex flex-wrap gap-2">
-                          <Button variant="outline" size="icon" title="Visualizar" onClick={() => openEditUserDialog(user)}>
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="icon" title="Editar" onClick={() => openEditUserDialog(user)}>
-                            <Edit3 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="icon" title="Bloquear / Desbloquear" onClick={() => handleToggleStatus(user)}>
-                            <ShieldOff className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="icon" title="Redefinir senha" onClick={() => handleResetPassword(user)}>
-                            <Key className="h-4 w-4" />
-                          </Button>
-                          <Button variant="destructive" size="icon" title="Excluir" onClick={() => handleDeleteUser(user.id)}>
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="perfis">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Perfis de Acesso</h2>
-                  <p className="mt-1 text-sm text-slate-600">Defina modelos de permissão e acompanhe quantos usuários estão vinculados.</p>
-                </div>
-                <Button className="bg-primary text-white">
-                  <Plus className="h-4 w-4" />
-                  Novo Perfil
-                </Button>
-              </div>
-
-              <div className="mt-6 overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3">Perfil</th>
-                      <th className="px-4 py-3">Descrição</th>
-                      <th className="px-4 py-3">Status</th>
-                      <th className="px-4 py-3">Usuários vinculados</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {perfisData.map((perfil) => (
-                      <tr key={perfil.nome} className="border-t">
-                        <td className="px-4 py-3 font-medium">{perfil.nome}</td>
-                        <td className="px-4 py-3">{perfil.descricao}</td>
-                        <td className="px-4 py-3">{perfil.status}</td>
-                        <td className="px-4 py-3">{perfil.usuarios}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="permissoes">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Permissões por Módulo</h2>
-                  <p className="mt-1 text-sm text-slate-600">Configure a matriz de ações por módulo do sistema.</p>
-                </div>
-                <Button className="bg-primary text-white">Salvar matriz</Button>
-              </div>
-
-              <div className="mt-6 overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3">Módulo</th>
-                      {permissions.map((permission) => (
-                        <th key={permission} className="px-4 py-3">{permission}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {modules.map((module) => (
-                      <tr key={module.name} className="border-t">
-                        <td className="px-4 py-3 font-medium">{module.name}</td>
-                        {permissions.map((permission) => (
-                          <td key={permission} className="px-4 py-3">
-                            <Checkbox checked={false} />
-                          </td>
-                        ))}
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="historico">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Histórico de Acessos</h2>
-                  <p className="mt-1 text-sm text-slate-600">Veja registros de login e tentativas de acesso por usuário.</p>
-                </div>
-                <Button variant="outline">Exportar CSV</Button>
-              </div>
-
-              <div className="mt-6 overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3">Usuário</th>
-                      <th className="px-4 py-3">Data/hora</th>
-                      <th className="px-4 py-3">IP</th>
-                      <th className="px-4 py-3">Dispositivo</th>
-                      <th className="px-4 py-3">Navegador</th>
-                      <th className="px-4 py-3">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {accessLogs.map((log) => (
-                      <tr key={log.id} className="border-t">
-                        <td className="px-4 py-3">{log.usuario}</td>
-                        <td className="px-4 py-3">{log.data}</td>
-                        <td className="px-4 py-3">{log.ip}</td>
-                        <td className="px-4 py-3">{log.dispositivo}</td>
-                        <td className="px-4 py-3">{log.navegador}</td>
-                        <td className="px-4 py-3">{log.status}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="logs">
-              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div>
-                  <h2 className="text-xl font-semibold">Logs de Atividades</h2>
-                  <p className="mt-1 text-sm text-slate-600">Auditoria de ações realizadas no painel de configurações.</p>
-                </div>
-                <Button variant="outline">Exportar CSV</Button>
-              </div>
-
-              <div className="mt-6 overflow-x-auto">
-                <table className="min-w-full text-sm text-left">
-                  <thead className="bg-slate-50 text-slate-600">
-                    <tr>
-                      <th className="px-4 py-3">Usuário</th>
-                      <th className="px-4 py-3">Ação</th>
-                      <th className="px-4 py-3">Módulo</th>
-                      <th className="px-4 py-3">Registro alterado</th>
-                      <th className="px-4 py-3">Data/hora</th>
-                      <th className="px-4 py-3">IP</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {activityLogs.map((log) => (
-                      <tr key={log.id} className="border-t">
-                        <td className="px-4 py-3">{log.usuario}</td>
-                        <td className="px-4 py-3">{log.acao}</td>
-                        <td className="px-4 py-3">{log.modulo}</td>
-                        <td className="px-4 py-3">{log.registro}</td>
-                        <td className="px-4 py-3">{log.data}</td>
-                        <td className="px-4 py-3">{log.ip}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </TabsContent>
+      <ConfigCardSection>
+        {/* BARRA DE BUSCA E FILTROS */}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
+          <div className="relative w-full md:max-w-md">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+            <Input 
+              placeholder="Buscar por nome ou e-mail..." 
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+            />
           </div>
-        </Tabs>
-      </div>
+          <Button variant="outline" className="w-full md:w-auto">
+            <Filter className="h-4 w-4 mr-2" />
+            Busca avançada
+          </Button>
+        </div>
 
-      <Dialog open={showUserDialog} onOpenChange={setShowUserDialog}>
-        <DialogContent>
+        {/* TABELA DE USUÁRIOS */}
+        <div className="border rounded-lg overflow-hidden">
+          <ConfigDataTable>
+            <ConfigDataTableHeader>
+              <ConfigDataTableRow>
+                <ConfigDataTableHead>Nome</ConfigDataTableHead>
+                <ConfigDataTableHead>Grupo</ConfigDataTableHead>
+                <ConfigDataTableHead>E-mail</ConfigDataTableHead>
+                <ConfigDataTableHead>Situação</ConfigDataTableHead>
+                <ConfigDataTableHead className="text-right">Ações</ConfigDataTableHead>
+              </ConfigDataTableRow>
+            </ConfigDataTableHeader>
+            <ConfigDataTableBody>
+              {isLoading ? (
+                <ConfigDataTableRow>
+                  <ConfigDataTableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Carregando usuários...
+                  </ConfigDataTableCell>
+                </ConfigDataTableRow>
+              ) : filteredUsuarios.length === 0 ? (
+                <ConfigDataTableRow>
+                  <ConfigDataTableCell colSpan={5} className="text-center py-8 text-muted-foreground">
+                    Nenhum usuário encontrado.
+                  </ConfigDataTableCell>
+                </ConfigDataTableRow>
+              ) : (
+                filteredUsuarios.map((user: any) => (
+                  <ConfigDataTableRow key={user.id} className="hover:bg-slate-50/50">
+                    <ConfigDataTableCell className="font-medium">
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-slate-200 flex items-center justify-center text-xs font-semibold text-slate-600">
+                          {user.nome ? user.nome.charAt(0).toUpperCase() : "U"}
+                        </div>
+                        {user.nome}
+                        {isUserOnlyAdmin(user.id) && <ShieldAlert className="h-4 w-4 text-amber-500 ml-1" title="Único administrador" />}
+                      </div>
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell>{getGrupoNome(user.grupo_id)}</ConfigDataTableCell>
+                    <ConfigDataTableCell>{user.email}</ConfigDataTableCell>
+                    <ConfigDataTableCell>
+                      <ConfigStatusBadge 
+                        status={!user.permitir_acesso ? "SEM ACESSO" : user.status || "ATIVO"} 
+                        variant={
+                          !user.permitir_acesso ? "neutral" :
+                          user.status === "ATIVO" ? "success" : 
+                          user.status === "BLOQUEADO" ? "danger" : 
+                          "neutral"
+                        } 
+                      />
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell className="text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => toggleBlockStatus(user)} title={user.status === "BLOQUEADO" ? "Desbloquear" : "Bloquear"}>
+                          {user.status === "BLOQUEADO" ? (
+                            <Unlock className="h-4 w-4 text-emerald-600" />
+                          ) : (
+                            <Lock className="h-4 w-4 text-slate-400" />
+                          )}
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => openEditUser(user)} title="Editar">
+                          <Edit3 className="h-4 w-4 text-amber-600" />
+                        </Button>
+                        <Button variant="ghost" size="icon" onClick={() => handleDelete(user)} title="Excluir">
+                          <Trash2 className="h-4 w-4 text-rose-600" />
+                        </Button>
+                      </div>
+                    </ConfigDataTableCell>
+                  </ConfigDataTableRow>
+                ))
+              )}
+            </ConfigDataTableBody>
+          </ConfigDataTable>
+        </div>
+      </ConfigCardSection>
+
+      {/* DIALOG DE CADASTRO/EDIÇÃO */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{selectedUser ? "Editar usuário" : "Novo usuário"}</DialogTitle>
-            <DialogDescription>
-              {selectedUser ? "Atualize os dados do usuário e salve para aplicar as alterações." : "Cadastre um usuário novo com perfil e status."}
-            </DialogDescription>
+            <DialogTitle>{editingId ? "Editar Usuário" : "Novo Usuário"}</DialogTitle>
           </DialogHeader>
-          <div className="grid gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="nomeUsuario">Nome</Label>
-              <Input id="nomeUsuario" value={userForm.nome} onChange={(e) => handleUserFormChange("nome", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="emailUsuario">E-mail</Label>
-              <Input id="emailUsuario" type="email" value={userForm.email} onChange={(e) => handleUserFormChange("email", e.target.value)} />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="cargoUsuario">Cargo</Label>
-              <Input id="cargoUsuario" value={userForm.cargo} onChange={(e) => handleUserFormChange("cargo", e.target.value)} />
-            </div>
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="perfilUsuario">Perfil de Acesso</Label>
-                <Select id="perfilUsuario" value={userForm.perfil} onValueChange={(value) => handleUserFormChange("perfil", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {accessProfiles.map((perfil) => (
-                      <SelectItem key={perfil} value={perfil}>{perfil}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="statusUsuario">Status</Label>
-                <Select id="statusUsuario" value={userForm.status} onValueChange={(value) => handleUserFormChange("status", value)}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {statusOptions.map((status) => (
-                      <SelectItem key={status} value={status}>{status}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowUserDialog(false)}>Cancelar</Button>
-            <Button onClick={handleSaveUser}>{selectedUser ? "Salvar alterações" : "Criar usuário"}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
+            <ConfigInputField 
+              label="Nome Completo *" 
+              id="user_nome"
+              value={form.nome}
+              onChange={e => handleUpdateField("nome", e.target.value)}
+            />
+            <ConfigInputField 
+              label="E-mail de Acesso *" 
+              id="user_email"
+              type="email"
+              value={form.email}
+              onChange={e => handleUpdateField("email", e.target.value)}
+            />
+            <ConfigInputField 
+              label="Telefone / Celular" 
+              id="user_tel"
+              value={form.telefone}
+              onChange={e => handleUpdateField("telefone", e.target.value)}
+            />
+            <ConfigInputField 
+              label="Cargo / Função" 
+              id="user_cargo"
+              value={form.cargo}
+              onChange={e => handleUpdateField("cargo", e.target.value)}
+            />
+            
+            <ConfigSelectField 
+              label="Grupo de Permissão" 
+              value={form.grupo_id}
+              onValueChange={v => handleUpdateField("grupo_id", v)}
+              options={groupOptions}
+            />
 
-      <Dialog open={showPasswordDialog} onOpenChange={setShowPasswordDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Redefinir senha</DialogTitle>
-            <DialogDescription>
-              Informe a nova senha para {selectedUser?.nome ?? "o usuário"}.
-            </DialogDescription>
-          </DialogHeader>
+            <ConfigSelectField 
+              label="Status do Cadastro" 
+              value={form.status}
+              onValueChange={v => handleUpdateField("status", v)}
+              options={[
+                { label: "Ativo", value: "ATIVO" },
+                { label: "Inativo", value: "INATIVO" },
+                { label: "Bloqueado", value: "BLOQUEADO" },
+              ]}
+            />
+            
+            <div className="col-span-1 md:col-span-2 mt-4">
+              <ConfigSwitchField 
+                label="Permitir acesso ao sistema"
+                description={form.permitir_acesso ? "Usuário pode fazer login e acessar o sistema" : "Usuário existe apenas para registro interno (ex: vendedor externo sem painel)"}
+                checked={form.permitir_acesso}
+                onCheckedChange={v => handleUpdateField("permitir_acesso", v)}
+              />
+            </div>
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="novaSenha">Nova senha</Label>
-              <Input id="novaSenha" type="password" value={passwordValue} onChange={(e) => setPasswordValue(e.target.value)} placeholder="Digite a nova senha" />
+            <div className="col-span-1 md:col-span-2">
+              <ConfigTextareaField 
+                label="Observações Internas"
+                id="user_obs"
+                placeholder="Ex: Turno da manhã, restrição de uso..."
+                value={form.observacoes}
+                onChange={e => handleUpdateField("observacoes", e.target.value)}
+              />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowPasswordDialog(false)}>Cancelar</Button>
-            <Button onClick={savePassword}>Salvar senha</Button>
+            <Button variant="ghost" onClick={() => setIsModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSave} disabled={isSaving}>
+              {isSaving ? "Salvando..." : editingId ? "Atualizar Usuário" : "Criar Usuário"}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
     </div>
-  )
-}
-
-export default function ConfiguracoesUsuariosPage() {
-  return (
-    <Suspense fallback={<div className="p-6 text-center text-sm text-slate-500">Carregando usuários...</div>}>
-      <ConfiguracoesUsuariosPageContent />
-    </Suspense>
   )
 }

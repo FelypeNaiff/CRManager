@@ -1,11 +1,136 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // AVISO: REGRAS DE ACESSO TOTALMENTE LIBERADAS
-    // Isso remove todos os bloqueios e permite que qualquer pessoa
-    // leia e escreva no banco de dados. Ideal para não ter nenhum tipo de erro.
+    
+    // =========================================================================
+    // FUNÇÕES DE VALIDAÇÃO E AUTENTICAÇÃO
+    // =========================================================================
+    
+    // 1. Autenticação obrigatória
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // 2. Verifica se é um dos administradores de sistema (retrocompatibilidade para telas atuais)
+    // Esses e-mails são os únicos permitidos na tela de login atual.
+    function isSystemAdmin() {
+      return isAuthenticated() && 
+             request.auth.token.email in ['felypenaiff01@gmail.com', 'trupekidsmcp@gmail.com'];
+    }
+
+    // 3. Isolamento por usuário/empresa (Tenant)
+    // Valida se o documento pertence à empresa do usuário logado.
+    function isTenantResource(docData) {
+      // Se a regra for chamada num doc que já tem empresaId, valida o acesso
+      return docData.keys().hasAll(['empresaId']) && docData.empresaId == request.auth.uid;
+    }
+
+    function checkTenantAccess(docData) {
+      // Como as telas atuais ainda não enviam empresaId, permitimos que os admins do sistema acessem tudo.
+      return isSystemAdmin() || isTenantResource(docData);
+    }
+
+    // 4. Permissões por perfil (Role-Based Access Control)
+    // Assumindo que no futuro os perfis (admin, gerente, vendedor, caixa) virão no custom claim (request.auth.token.role)
+    function hasRole(allowedRoles) {
+      return isSystemAdmin() || (request.auth.token.role in allowedRoles);
+    }
+
+    // =========================================================================
+    // REGRAS DE COLEÇÕES
+    // =========================================================================
+
+    // Bloqueio de acesso público por padrão em toda a base
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
+    }
+
+    // 5. Logs para alterações críticas (Trilha de Auditoria)
+    // Permite criar logs, mas nunca alterá-los ou apagá-los (imutabilidade)
+    match /logs_auditoria/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if hasRole(['admin', 'gerente']);
+      allow update, delete: if false; 
+    }
+
+    match /logs_atividades/{logId} {
+      allow create: if isAuthenticated();
+      allow read: if checkTenantAccess(resource.data) && hasRole(['admin', 'gerente']);
+      allow update, delete: if false; 
+    }
+
+    // =========================================================================
+    // COLEÇÕES DE CONFIGURAÇÕES DO SISTEMA (SPRINT CONFIG)
+    // =========================================================================
+    // Todas as configurações são restritas para administradores, exceto leitura para regras da interface.
+    
+    match /configuracoes_empresa/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+    
+    match /configuracoes_gerais/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /configuracoes_pdv/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /configuracoes_fiscal/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /configuracoes_smtp/{docId} {
+      allow read, write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /configuracoes_dominio/{docId} {
+      allow read, write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /certificados_digitais/{docId} {
+      allow read, write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /grupos_usuarios/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    match /permissoes_grupo/{docId} {
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      allow write: if isAuthenticated() && hasRole(['admin', 'gerente']) && checkTenantAccess(request.resource.data);
+    }
+
+    // Regra Coringa (Fallback) para as coleções atuais (clientes, produtos, etc)
+    // Permite o funcionamento do sistema atual sem alterar as telas, enquanto 
+    // prepara a estrutura de isolamento e perfil para o restante do app.
+    match /{collection}/{documentId} {
+      
+      // Leitura permitida para quem é da empresa ou system admin
+      allow read: if isAuthenticated() && checkTenantAccess(resource.data);
+      
+      // Escrita permitida para quem é da empresa (enviando empresaId) ou system admin
+      allow create: if isAuthenticated() && checkTenantAccess(request.resource.data);
+      
+      // Atualização permitida desde que o usuário pertença à empresa no doc antigo e no novo
+      allow update: if isAuthenticated() && 
+                    checkTenantAccess(resource.data) && 
+                    checkTenantAccess(request.resource.data);
+      
+      // Exclusão restrita apenas para perfis de gestão
+      allow delete: if isAuthenticated() && 
+                    checkTenantAccess(resource.data) && 
+                    hasRole(['admin', 'gerente']);
+                    
+      // Subcoleções (ex: clientes/{id}/filhos)
+      match /{subcollection}/{subdocId} {
+        allow read, write: if isAuthenticated() && isSystemAdmin();
+      }
     }
   }
 }
