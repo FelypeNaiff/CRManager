@@ -12,6 +12,7 @@ import { Label } from "@/components/ui/label"
 import { toast } from "@/hooks/use-toast"
 import Link from "next/link"
 import { usuarioSchema } from "@/types/configuracoes"
+import { PermissionGate } from "@/components/permissions/permission-gate"
 
 import {
   ConfigPageHeader,
@@ -365,9 +366,11 @@ export default function UsuariosConfigPage() {
                         <Button variant="ghost" size="icon" onClick={() => openEditUser(user)} title="Editar">
                           <Edit3 className="h-4 w-4 text-amber-600" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(user)} title="Excluir">
-                          <Trash2 className="h-4 w-4 text-rose-600" />
-                        </Button>
+                        <PermissionGate modulo="Configurações" acao="deletar">
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(user)} title="Excluir">
+                            <Trash2 className="h-4 w-4 text-rose-600" />
+                          </Button>
+                        </PermissionGate>
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>

@@ -61,6 +61,8 @@ import {
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 
+import { usePermissions } from "@/hooks/use-permissions"
+
 const navItems = [
   {
     title: "Dashboard",
@@ -189,6 +191,24 @@ export function AppSidebar() {
   const smallLogoUrl = empresaConfig?.logo_reduzida || empresaConfig?.logo_url
   const companyName = empresaConfig?.nome_fantasia || "CRManager"
 
+  const { canAccessRoute, isLoading } = usePermissions()
+
+  const filteredNavItems = React.useMemo(() => {
+    if (isLoading) return navItems // Evita layout shift ou sumiço temporário
+
+    return navItems.filter(item => {
+      // Para itens com submenus, checa se tem acesso ao modulo principal
+      // No caso de Financeiro, Configuracoes, CRM, etc, usamos a URL padrao ou titulo para checar
+      let basePath = item.url
+      if (!basePath && item.items && item.items.length > 0) {
+        // Pega a URL do primeiro submenu para testar
+        const firstUrl = item.items[0].url || ""
+        basePath = firstUrl.split("?")[0]
+      }
+      return canAccessRoute(basePath || "/")
+    })
+  }, [canAccessRoute, isLoading])
+
   return (
     <Sidebar variant="sidebar" collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border py-6 bg-white flex flex-col items-center justify-center">
@@ -216,7 +236,7 @@ export function AppSidebar() {
       <SidebarContent>
         <SidebarGroup>
           <SidebarMenu>
-            {navItems.map((item) => (
+            {filteredNavItems.map((item) => (
               item.items ? (
                 <Collapsible
                   key={item.title}

@@ -100,19 +100,22 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const canAccessRoute = (pathname: string) => {
     if (isAdminRoot) return true
     
+    // Mapeamento de Rotas Livres
+    if (pathname === "/" || pathname.startsWith("/dashboard")) return true
+    if (pathname.startsWith("/inbox") || pathname.startsWith("/agenda")) return true
+
     // Mapeamento de Rotas para Módulos
     if (pathname.startsWith("/configuracoes")) return hasPermission("Configurações", "acessar")
     if (pathname.startsWith("/financeiro")) return hasPermission("Financeiro", "acessar")
-    if (pathname.startsWith("/produtos") || pathname.startsWith("/grupos-produtos")) return hasPermission("Produtos", "acessar")
+    if (pathname.startsWith("/produtos") || pathname.startsWith("/grupos-produtos") || pathname.startsWith("/movimentacoes") || pathname.startsWith("/etiquetas")) return hasPermission("Estoque", "acessar") || hasPermission("Produtos", "acessar")
     if (pathname.startsWith("/clientes") || pathname.startsWith("/fornecedores")) return hasPermission("Cadastros", "acessar")
-    if (pathname.startsWith("/pdv")) return hasPermission("Vendas", "acessar") // PDV é Vendas de balcão
+    if (pathname.startsWith("/pdv") || pathname.startsWith("/vendas") || pathname.startsWith("/trocas") || pathname.startsWith("/vendedores") || pathname.startsWith("/metas")) return hasPermission("Vendas", "acessar")
     if (pathname.startsWith("/orcamentos")) return hasPermission("Orçamentos", "acessar")
-    if (pathname.startsWith("/atendimentos")) return hasPermission("CRM", "acessar")
+    if (pathname.startsWith("/atendimentos") || pathname.startsWith("/filhos")) return hasPermission("CRM", "acessar")
     if (pathname.startsWith("/relatorios")) return hasPermission("Relatórios", "acessar")
+    if (pathname.startsWith("/campanhas") || pathname.startsWith("/templates")) return hasPermission("Marketing", "acessar")
 
-    // Rota raiz (Dashboard) todos acessam, mas o que veem depende dos widgets
-    if (pathname === "/") return true
-
+    // Por segurança, se não caiu em nada e não é livre, oculta
     return false
   }
 

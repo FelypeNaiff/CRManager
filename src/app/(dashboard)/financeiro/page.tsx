@@ -11,6 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   PieChart, Pie, Cell
 } from "recharts"
+import { PermissionGate } from "@/components/permissions/permission-gate"
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#a855f7', '#ec4899', '#f43f5e']
 
@@ -196,17 +197,31 @@ export default function FinanceiroDashboardPage() {
 
       {/* Linha 1: Cartões Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="bg-primary text-primary-foreground">
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex justify-between items-center text-primary-foreground/80">
-              Saldo Atual em Contas <Wallet className="h-4 w-4" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-3xl font-bold">{formatCurrency(metrics.saldoAtual)}</div>
-            <p className="text-xs text-primary-foreground/70 mt-1">Soma de todas as contas ativas</p>
-          </CardContent>
-        </Card>
+        <PermissionGate modulo="Financeiro" acao="ver_saldos_bancarios" fallback={
+          <Card className="bg-primary text-primary-foreground">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex justify-between items-center text-primary-foreground/80">
+                Saldo Atual em Contas <Wallet className="h-4 w-4" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">R$ ••••••</div>
+              <p className="text-xs text-primary-foreground/70 mt-1">Acesso restrito</p>
+            </CardContent>
+          </Card>
+        }>
+          <Card className="bg-primary text-primary-foreground">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex justify-between items-center text-primary-foreground/80">
+                Saldo Atual em Contas <Wallet className="h-4 w-4" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-3xl font-bold">{formatCurrency(metrics.saldoAtual)}</div>
+              <p className="text-xs text-primary-foreground/70 mt-1">Soma de todas as contas ativas</p>
+            </CardContent>
+          </Card>
+        </PermissionGate>
 
         <Card>
           <CardHeader className="pb-2">
@@ -232,19 +247,33 @@ export default function FinanceiroDashboardPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium flex justify-between items-center text-muted-foreground">
-              Resultado do Mês <DollarSign className="h-4 w-4" />
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className={`text-2xl font-bold ${metrics.resultadoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
-              {formatCurrency(metrics.resultadoMes)}
-            </div>
-            <p className="text-xs text-muted-foreground mt-1">Receitas - Despesas</p>
-          </CardContent>
-        </Card>
+        <PermissionGate modulo="Financeiro" acao="ver_lucro" fallback={
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex justify-between items-center text-muted-foreground">
+                Resultado do Mês <DollarSign className="h-4 w-4" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold text-muted-foreground">R$ ••••••</div>
+              <p className="text-xs text-muted-foreground mt-1">Acesso restrito</p>
+            </CardContent>
+          </Card>
+        }>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex justify-between items-center text-muted-foreground">
+                Resultado do Mês <DollarSign className="h-4 w-4" />
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className={`text-2xl font-bold ${metrics.resultadoMes >= 0 ? 'text-emerald-600' : 'text-destructive'}`}>
+                {formatCurrency(metrics.resultadoMes)}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">Receitas - Despesas</p>
+            </CardContent>
+          </Card>
+        </PermissionGate>
       </div>
 
       {/* Linha 2: Avisos e Previsão */}
