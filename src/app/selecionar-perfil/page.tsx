@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { PREDEFINED_PROFILES, useProfile, Profile } from "@/lib/contexts/profile-context"
-import { useUser, useAuth } from "@/firebase"
+import { useProfile, Profile } from "@/lib/contexts/profile-context"
+import { useUser, useAuth, useFirestore } from "@/firebase"
 import { signOut } from "firebase/auth"
+import { collection, query, where, getDocs } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,8 +17,11 @@ export default function SelecionarPerfilPage() {
   const { user, isUserLoading } = useUser()
   const { loginProfile, activeProfile } = useProfile()
   const auth = useAuth()
+  const db = useFirestore()
   const router = useRouter()
   
+  const [companyUsers, setCompanyUsers] = useState<Profile[]>([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true)
   const [selectedProfile, setSelectedProfile] = useState<Profile | null>(null)
   const [pin, setPin] = useState("")
   const [isAuthenticating, setIsAuthenticating] = useState(false)
@@ -36,7 +40,41 @@ export default function SelecionarPerfilPage() {
     }
   }, [activeProfile, user, router])
 
-  if (isUserLoading || !user || activeProfile) {
+  // Fetch users for this company
+  useEffect(() => {
+    async function loadCompanyUsers() {
+      if (!user || !db) return
+      setIsLoadingUsers(true)
+      try {
+        // Find current user doc
+        const q = query(collection(db, "usuarios"), where("email", "==", user.email))
+        const querySnapshot = await getDocs(q)
+        if (!querySnapshot.empty) {
+          const loggedUserDoc = querySnapshot.docs[0].data()
+          const empresaId = loggedUserDoc.empresa_id
+
+          if (empresaId) {
+            const usersQuery = query(collection(db, "usuarios"), where("empresa_id", "==", empresaId), where("status", "==", "ATIVO"))
+            const usersSnap = await getDocs(usersQuery)
+            const loadedUsers = usersSnap.docs.map(d => ({ 
+              id: d.id, 
+              ...d.data(),
+              nome: d.data().nome || "Usuário",
+              empresaId
+            })) as Profile[]
+            setCompanyUsers(loadedUsers)
+          }
+        }
+      } catch (e) {
+        console.error("Erro ao carregar usuarios:", e)
+      } finally {
+        setIsLoadingUsers(false)
+      }
+    }
+    loadCompanyUsers()
+  }, [user, db])
+
+  if (isUserLoading || !user || activeProfile || isLoadingUsers) {
     return (
       <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-background">
         <Loader2 className="h-10 w-10 animate-spin text-primary" />
@@ -56,21 +94,21 @@ export default function SelecionarPerfilPage() {
 
     setIsAuthenticating(true)
 
-    // Simulate network delay for UX
     setTimeout(() => {
-      const success = loginProfile(selectedProfile.id, pin)
+      // Validate PIN
+      const profilePin = selectedProfile.pin_acesso || "1234"
       
-      if (success) {
+      if (pin === profilePin) {
+        loginProfile(selectedProfile)
         toast({
           title: `Bem-vindo, ${selectedProfile.nome}`,
-          description: `Acesso nível: ${selectedProfile.role.toUpperCase()}`,
         })
         router.push("/dashboard")
       } else {
         toast({
           variant: "destructive",
-          title: "Senha incorreta",
-          description: "A senha digitada para este perfil está incorreta.",
+          title: "PIN incorreto",
+          description: "O PIN digitado está incorreto. Tente novamente.",
         })
       }
       
@@ -101,23 +139,29 @@ export default function SelecionarPerfilPage() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
-            {PREDEFINED_PROFILES.map((profile) => (
-              <Card 
-                key={profile.id} 
-                className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
-                onClick={() => handleProfileSelect(profile)}
-              >
-                <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
-                  <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
-                    <UserCircle2 className="h-14 w-14" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-lg">{profile.nome}</h3>
-                    <p className="text-sm text-muted-foreground capitalize">{profile.role}</p>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {companyUsers.length === 0 ? (
+              <div className="col-span-full text-center p-8 text-muted-foreground">
+                Nenhum usuário cadastrado para esta empresa.
+              </div>
+            ) : (
+              companyUsers.filter(u => u.permitir_acesso !== false).map((profile) => (
+                <Card 
+                  key={profile.id} 
+                  className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
+                  onClick={() => handleProfileSelect(profile)}
+                >
+                  <CardContent className="p-6 flex flex-col items-center text-center space-y-4">
+                    <div className="h-24 w-24 rounded-full bg-primary/10 flex items-center justify-center group-hover:bg-primary group-hover:text-primary-foreground transition-colors">
+                      <UserCircle2 className="h-14 w-14" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-lg">{profile.nome}</h3>
+                      <p className="text-sm text-muted-foreground capitalize">{profile.cargo || "Operador"}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))
+            )}
           </div>
         </div>
       ) : (

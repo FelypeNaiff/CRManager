@@ -38,6 +38,7 @@ const emptyForm = {
   grupo_id: "",
   status: "ATIVO" as "ATIVO" | "INATIVO" | "BLOQUEADO",
   permitir_acesso: true,
+  pin_acesso: "1234",
   observacoes: ""
 }
 
@@ -99,6 +100,7 @@ export default function UsuariosConfigPage() {
       grupo_id: user.grupo_id || "",
       status: user.status || "ATIVO",
       permitir_acesso: user.permitir_acesso !== false,
+      pin_acesso: user.pin_acesso || "1234",
       observacoes: user.observacoes || ""
     })
     setIsModalOpen(true)
@@ -413,6 +415,14 @@ export default function UsuariosConfigPage() {
               id="user_cargo"
               value={form.cargo}
               onChange={e => handleUpdateField("cargo", e.target.value)}
+            />
+            
+            <ConfigInputField 
+              label="PIN de Acesso (4 dígitos) *" 
+              id="user_pin"
+              maxLength={4}
+              value={form.pin_acesso}
+              onChange={e => handleUpdateField("pin_acesso", e.target.value.replace(/\D/g, '').slice(0, 4))}
             />
             
             <ConfigSelectField 

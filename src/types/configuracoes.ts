@@ -253,6 +253,7 @@ export const usuarioSchema = baseConfigSchema.extend({
   status: z.enum(["ATIVO", "INATIVO", "BLOQUEADO"]).default("ATIVO"),
   grupo_id: z.string().optional(),
   permitir_acesso: z.boolean().default(true),
+  pin_acesso: z.string().length(4, "PIN deve ter 4 dígitos").optional().default("1234"),
   observacoes: z.string().optional(),
   ultimo_acesso: z.string().optional(), // Pode ser Timestamp
 });

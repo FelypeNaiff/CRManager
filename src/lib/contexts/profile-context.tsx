@@ -2,28 +2,17 @@
 
 import React, { createContext, useContext, useState, useEffect } from 'react'
 
-export type Role = 'admin' | 'gerente' | 'caixa' | 'vendedor' | 'auxiliar'
-
 export interface Profile {
   id: string
   nome: string
-  role: Role
-  senhaHash: string // Em produção seria um hash, aqui deixaremos a senha pra validar localmente
+  empresaId?: string
+  [key: string]: any
 }
-
-export const PREDEFINED_PROFILES: Profile[] = [
-  { id: 'felype', nome: 'FELYPE', role: 'admin', senhaHash: '1553' },
-  { id: 'milena', nome: 'MILENA', role: 'admin', senhaHash: '1553' },
-  { id: 'thais', nome: 'THAIS', role: 'gerente', senhaHash: '1234' },
-  { id: 'caixa', nome: 'CAIXA', role: 'caixa', senhaHash: '1234' },
-  { id: 'vendedor', nome: 'VENDEDOR', role: 'vendedor', senhaHash: '1234' },
-  { id: 'auxiliar', nome: 'AUXILIAR', role: 'auxiliar', senhaHash: '1234' },
-]
 
 interface ProfileContextType {
   activeProfile: Profile | null
   isLoadingProfile: boolean
-  loginProfile: (profileId: string, pin: string) => boolean
+  loginProfile: (profile: Profile) => void
   logoutProfile: () => void
 }
 
@@ -34,15 +23,12 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   useEffect(() => {
-    // Carregar do localStorage ao inicializar
     const stored = localStorage.getItem('@crmanager:activeProfile')
     if (stored) {
       try {
         const parsed = JSON.parse(stored)
-        // Validar se o perfil existe
-        const validProfile = PREDEFINED_PROFILES.find(p => p.id === parsed.id)
-        if (validProfile) {
-          setActiveProfile(validProfile)
+        if (parsed && parsed.id) {
+          setActiveProfile(parsed)
         } else {
           localStorage.removeItem('@crmanager:activeProfile')
         }
@@ -53,14 +39,9 @@ export function ProfileProvider({ children }: { children: React.ReactNode }) {
     setIsLoadingProfile(false)
   }, [])
 
-  const loginProfile = (profileId: string, pin: string) => {
-    const profile = PREDEFINED_PROFILES.find(p => p.id === profileId)
-    if (profile && profile.senhaHash === pin) {
-      setActiveProfile(profile)
-      localStorage.setItem('@crmanager:activeProfile', JSON.stringify(profile))
-      return true
-    }
-    return false
+  const loginProfile = (profile: Profile) => {
+    setActiveProfile(profile)
+    localStorage.setItem('@crmanager:activeProfile', JSON.stringify(profile))
   }
 
   const logoutProfile = () => {

@@ -90,6 +90,14 @@ export default function ContasAPagarPage() {
   const [isReverseOpen, setIsReverseOpen] = useState(false)
   const [actionReason, setActionReason] = useState("")
 
+  // Inline Create States
+  const [isNewCategoryOpen, setIsNewCategoryOpen] = useState(false)
+  const [newCategoryName, setNewCategoryName] = useState("")
+  const [newCategoryCode, setNewCategoryCode] = useState("")
+
+  const [isNewCostCenterOpen, setIsNewCostCenterOpen] = useState(false)
+  const [newCostCenterName, setNewCostCenterName] = useState("")
+
   const db = useFirestore()
   const { activeProfile } = useProfile()
 
@@ -169,6 +177,46 @@ export default function ContasAPagarPage() {
   const handlePrevMonth = () => setCurrentDate(subMonths(currentDate, 1))
   const handleNextMonth = () => setCurrentDate(addMonths(currentDate, 1))
   const handleCurrentMonth = () => setCurrentDate(new Date())
+
+  const handleSaveCategory = async () => {
+    if (!newCategoryName.trim() || !newCategoryCode.trim()) return toast({ variant: "destructive", title: "Código e Nome são obrigatórios" })
+    try {
+      const docRef = await addDoc(collection(db!, "chart_of_accounts"), {
+        code: newCategoryCode,
+        name: newCategoryName,
+        type: "EXPENSE",
+        parentId: null,
+        isSystem: false,
+        status: "ACTIVE",
+        createdAt: serverTimestamp(),
+      })
+      toast({ title: "Categoria cadastrada!" })
+      setForm({...form, chartOfAccountId: docRef.id})
+      setIsNewCategoryOpen(false)
+      setNewCategoryName("")
+      setNewCategoryCode("")
+    } catch (e) {
+      toast({ variant: "destructive", title: "Erro ao salvar categoria" })
+    }
+  }
+
+  const handleSaveCostCenter = async () => {
+    if (!newCostCenterName.trim()) return toast({ variant: "destructive", title: "Nome obrigatório" })
+    try {
+      const docRef = await addDoc(collection(db!, "cost_centers"), {
+        name: newCostCenterName,
+        description: "",
+        status: "ACTIVE",
+        createdAt: serverTimestamp(),
+      })
+      toast({ title: "Centro de Custo cadastrado!" })
+      setForm({...form, costCenterId: docRef.id})
+      setIsNewCostCenterOpen(false)
+      setNewCostCenterName("")
+    } catch (e) {
+      toast({ variant: "destructive", title: "Erro ao salvar centro de custo" })
+    }
+  }
 
   const openNewDialog = () => {
     setEditingItem(null)
@@ -650,26 +698,44 @@ export default function ContasAPagarPage() {
 
             <div className="space-y-2">
               <Label>Categoria (Plano de Contas)</Label>
-              <Select value={form.chartOfAccountId} onValueChange={(v) => setForm({...form, chartOfAccountId: v === "null" ? "" : v})}>
+              <Select value={form.chartOfAccountId} onValueChange={(v) => {
+                if (v === "NEW_CATEGORY") {
+                  setIsNewCategoryOpen(true)
+                  return
+                }
+                setForm({...form, chartOfAccountId: v === "null" ? "" : v})
+              }}>
                 <SelectTrigger><SelectValue placeholder="Selecione a categoria" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="null">Nenhuma</SelectItem>
                   {expenseAccounts.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
                   ))}
+                  <SelectItem value="NEW_CATEGORY" className="text-emerald-600 font-medium justify-center border-t mt-1">
+                    <div className="flex items-center"><Plus className="h-4 w-4 mr-1"/> Adicionar novo</div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
 
             <div className="space-y-2">
               <Label>Centro de Custo</Label>
-              <Select value={form.costCenterId} onValueChange={(v) => setForm({...form, costCenterId: v === "null" ? "" : v})}>
+              <Select value={form.costCenterId} onValueChange={(v) => {
+                if (v === "NEW_COST_CENTER") {
+                  setIsNewCostCenterOpen(true)
+                  return
+                }
+                setForm({...form, costCenterId: v === "null" ? "" : v})
+              }}>
                 <SelectTrigger><SelectValue placeholder="Selecione o centro de custo" /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="null">Nenhum</SelectItem>
                   {activeCostCenters.map((c: any) => (
                     <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
                   ))}
+                  <SelectItem value="NEW_COST_CENTER" className="text-emerald-600 font-medium justify-center border-t mt-1">
+                    <div className="flex items-center"><Plus className="h-4 w-4 mr-1"/> Adicionar novo</div>
+                  </SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -729,6 +795,48 @@ export default function ContasAPagarPage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Cancelar</Button>
             <Button onClick={handleSave} disabled={isSaving}>{isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin"/>} Salvar</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mini-modal para Nova Categoria */}
+      <Dialog open={isNewCategoryOpen} onOpenChange={setIsNewCategoryOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Nova Categoria</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Código * (Ex: 2.1.5)</Label>
+              <Input value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewCategoryOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveCategory}>Criar Categoria</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Mini-modal para Novo Centro de Custo */}
+      <Dialog open={isNewCostCenterOpen} onOpenChange={setIsNewCostCenterOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Novo Centro de Custo</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Nome *</Label>
+              <Input value={newCostCenterName} onChange={(e) => setNewCostCenterName(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsNewCostCenterOpen(false)}>Cancelar</Button>
+            <Button onClick={handleSaveCostCenter}>Criar Centro</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
