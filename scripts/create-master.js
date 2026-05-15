@@ -25,7 +25,8 @@ for (let i = 0; i < rawArgs.length; i++) {
 }
 
 const keyPath = argv.key || process.env.GOOGLE_APPLICATION_CREDENTIALS
-const empresaId = argv.empresa
+// Default to single-tenant 'trupe-kids' as requested
+const empresaId = argv.empresa || 'trupe-kids'
 const userId = argv.id || 'felype'
 const userEmail = argv.email || 'felypenaiff01@gmail.com'
 const userNome = argv.nome || 'FELYPE NAIFF'
