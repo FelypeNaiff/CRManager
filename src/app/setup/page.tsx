@@ -133,7 +133,7 @@ export default function SetupPage() {
                 <CheckCircle className="h-4 w-4" />
                 Processo finalizado.
               </div>
-              <Button size="sm" onClick={() => router.push("/selecionar-perfil")}>
+              <Button size="sm" onClick={() => router.push("/dashboard")}> 
                 Prosseguir
               </Button>
             </div>

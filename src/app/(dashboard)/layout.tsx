@@ -23,13 +23,33 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { signOut } from "firebase/auth"
 
+const MASTER_EMAIL = 'felypenaiff01@gmail.com'
+const MASTER_NAME = 'FELYPE NAIFF'
+const MASTER_ID = 'felype'
+const DEFAULT_EMPRESA_ID = 'trupe-kids'
+
+const createFallbackProfile = (email: string | null, displayName: string | null, uid: string) => {
+  const isMaster = email?.toLowerCase() === MASTER_EMAIL
+  return {
+    id: isMaster ? MASTER_ID : uid,
+    nome: isMaster ? MASTER_NAME : (displayName || 'Administrador'),
+    email: email || '',
+    empresaId: DEFAULT_EMPRESA_ID,
+    role: 'admin',
+    status: 'ATIVO',
+    permitir_acesso: true,
+    pin_acesso: '1234',
+    grupo_id: '',
+  }
+}
+
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   const { user, isUserLoading } = useUser()
-  const { activeProfile, isLoadingProfile, logoutProfile } = useProfile()
+  const { activeProfile, isLoadingProfile, logoutProfile, loginProfile } = useProfile()
   const auth = useAuth()
   const router = useRouter()
 
@@ -37,9 +57,9 @@ export default function DashboardLayout({
     if (!isUserLoading && !user) {
       router.push("/login")
     } else if (!isUserLoading && user && !isLoadingProfile && !activeProfile) {
-      router.push("/selecionar-perfil")
+      loginProfile(createFallbackProfile(user.email, user.displayName, user.uid))
     }
-  }, [user, isUserLoading, activeProfile, isLoadingProfile, router])
+  }, [user, isUserLoading, activeProfile, isLoadingProfile, router, loginProfile])
 
   if (isUserLoading || isLoadingProfile) {
     return (
@@ -54,7 +74,7 @@ export default function DashboardLayout({
 
   const handleLogoutProfile = () => {
     logoutProfile()
-    router.push("/selecionar-perfil")
+    router.push("/login")
   }
 
   const handleLogoutMaster = async () => {

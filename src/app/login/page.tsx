@@ -10,6 +10,27 @@ import { Store, Loader2, LogIn } from "lucide-react"
 import { useAuth } from "@/firebase"
 import { signInWithEmailAndPassword, signOut } from "firebase/auth"
 import { toast } from "@/hooks/use-toast"
+import { useProfile } from "@/lib/contexts/profile-context"
+
+const MASTER_EMAIL = 'felypenaiff01@gmail.com'
+const MASTER_NAME = 'FELYPE NAIFF'
+const MASTER_ID = 'felype'
+const DEFAULT_EMPRESA_ID = 'trupe-kids'
+
+const createFallbackProfile = (email: string | null, displayName: string | null, uid: string) => {
+  const isMaster = email?.toLowerCase() === MASTER_EMAIL
+  return {
+    id: isMaster ? MASTER_ID : uid,
+    nome: isMaster ? MASTER_NAME : (displayName || 'Administrador'),
+    email: email || '',
+    empresaId: DEFAULT_EMPRESA_ID,
+    role: 'admin',
+    status: 'ATIVO',
+    permitir_acesso: true,
+    pin_acesso: '1234',
+    grupo_id: '',
+  }
+}
 
 const ALLOWED_EMAILS = [
   'felypenaiff01@gmail.com',
@@ -22,6 +43,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const auth = useAuth()
   const router = useRouter()
+  const { loginProfile } = useProfile()
 
   const handleLogin = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
@@ -31,26 +53,29 @@ export default function LoginPage() {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       const user = userCredential.user
 
-      if (user.email && ALLOWED_EMAILS.includes(user.email)) {
-        toast({
-          title: "Bem-vindo!",
-          description: "Acesso administrativo autorizado.",
-        })
-        router.push("/selecionar-perfil")
-      } else {
-        await signOut(auth)
-        toast({
-          variant: "destructive",
-          title: "Acesso Negado",
-          description: "Este e-mail não tem permissão de administrador.",
-        })
+      if (!user.email) {
+        throw new Error('E-mail não disponível no usuário autenticado.')
       }
+
+      if (!ALLOWED_EMAILS.includes(user.email)) {
+        await signOut(auth)
+        throw new Error('Este e-mail não tem permissão de administrador.')
+      }
+
+      toast({
+        title: "Bem-vindo!",
+        description: "Acesso administrativo autorizado.",
+      })
+
+      loginProfile(createFallbackProfile(user.email, user.displayName, user.uid))
+      router.push("/dashboard")
     } catch (error: any) {
       console.error(error)
+      await signOut(auth)
       toast({
         variant: "destructive",
         title: "Erro no acesso",
-        description: "Credenciais inválidas. Verifique seu e-mail e senha.",
+        description: "Credenciais inválidas ou acesso não autorizado.",
       })
     } finally {
       setIsLoading(false)
