@@ -52,8 +52,20 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
           grupoId = userSnap.data().grupo_id
         }
 
-        // Hack para ambiente de desenvolvimento: Se o activeProfile for 'felype', consideramos ele ROOT
-        if (activeProfile.role === "admin" || activeProfile.id === "felype") {
+        // Hack / proteção: Se o activeProfile for admin ou corresponder ao usuário master, consideramos ele ROOT
+        // Usuário master identificado por id histórico 'felype', e-mail ou nome completo.
+        const masterEmails = ['felypenaiff01@gmail.com']
+        const masterNames = ['FELYPE NAIFF']
+
+        const isMasterUser = () => {
+          if (!activeProfile) return false
+          if (activeProfile.id === 'felype') return true
+          if (activeProfile.email && masterEmails.includes(activeProfile.email.toLowerCase())) return true
+          if (activeProfile.nome && masterNames.includes(activeProfile.nome.toUpperCase())) return true
+          return false
+        }
+
+        if (activeProfile.role === "admin" || isMasterUser()) {
           setIsAdminRoot(true)
           setIsLoading(false)
           return

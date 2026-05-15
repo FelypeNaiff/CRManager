@@ -42,6 +42,17 @@ const emptyForm = {
   observacoes: ""
 }
 
+const MASTER_EMAIL = 'felypenaiff01@gmail.com'
+const MASTER_NAME = 'FELYPE NAIFF'
+
+const isMasterUserObj = (user: any) => {
+  if (!user) return false
+  if (user.id === 'felype') return true
+  if (user.email && user.email.toLowerCase() === MASTER_EMAIL) return true
+  if (user.nome && user.nome.toUpperCase() === MASTER_NAME) return true
+  return false
+}
+
 export default function UsuariosConfigPage() {
   const [searchTerm, setSearchTerm] = useState("")
   
@@ -149,6 +160,18 @@ export default function UsuariosConfigPage() {
       return toast({ variant: "destructive", title: "Erro", description: validation.error.errors[0].message })
     }
 
+    // Proteção do usuário master: não permitir desativar, remover acesso ou alterar para grupo não-admin
+    if (editingId) {
+      const isEditingMaster = (form.email && form.email.toLowerCase() === MASTER_EMAIL) || (form.nome && form.nome.toUpperCase() === MASTER_NAME) || editingId === 'felype'
+      if (isEditingMaster) {
+        const selectedGroup = grupos.find((g: any) => g.id === form.grupo_id)
+        const isGroupAdmin = selectedGroup ? !!selectedGroup.is_admin : false
+        if (form.status !== 'ATIVO' || !form.permitir_acesso || !isGroupAdmin) {
+          return toast({ variant: 'destructive', title: 'Ação não permitida', description: 'Usuário master não pode ser desativado, perder acesso ou ser removido do grupo admin.' })
+        }
+      }
+    }
+
     // Regra de segurança: não remover admin power de si próprio se for o único
     if (editingId && isUserOnlyAdmin(editingId)) {
       const adminGroupsIds = grupos.filter((g: any) => g.is_admin === true).map((g: any) => g.id)
@@ -196,6 +219,11 @@ export default function UsuariosConfigPage() {
 
   const toggleBlockStatus = async (user: any) => {
     if (!db || !activeProfile) return
+    // Proteção do usuário master
+    if (isMasterUserObj(user)) {
+      return toast({ variant: "destructive", title: "Ação bloqueada", description: "Usuário master não pode ser bloqueado." })
+    }
+
     const novoStatus = user.status === "BLOQUEADO" ? "ATIVO" : "BLOQUEADO"
     
     if (novoStatus === "BLOQUEADO" && isUserOnlyAdmin(user.id)) {
@@ -234,6 +262,11 @@ export default function UsuariosConfigPage() {
 
   const handleDelete = async (user: any) => {
     if (!db || !activeProfile) return
+
+    // Proteção do usuário master
+    if (isMasterUserObj(user)) {
+      return toast({ variant: "destructive", title: "Ação bloqueada", description: "Usuário master não pode ser excluído." })
+    }
 
     if (isUserOnlyAdmin(user.id)) {
       return toast({ variant: "destructive", title: "Ação bloqueada", description: "Não é possível excluir o único administrador do sistema." })
@@ -332,7 +365,9 @@ export default function UsuariosConfigPage() {
                   </ConfigDataTableCell>
                 </ConfigDataTableRow>
               ) : (
-                filteredUsuarios.map((user: any) => (
+                filteredUsuarios.map((user: any) => {
+                  const isMaster = isMasterUserObj(user)
+                  return (
                   <ConfigDataTableRow key={user.id} className="hover:bg-slate-50/50">
                     <ConfigDataTableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -358,7 +393,7 @@ export default function UsuariosConfigPage() {
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        <Button variant="ghost" size="icon" onClick={() => toggleBlockStatus(user)} title={user.status === "BLOQUEADO" ? "Desbloquear" : "Bloquear"}>
+                        <Button variant="ghost" size="icon" onClick={() => !isMaster && toggleBlockStatus(user)} title={isMaster ? "Usuário master protegido" : (user.status === "BLOQUEADO" ? "Desbloquear" : "Bloquear")} disabled={isMaster}>
                           {user.status === "BLOQUEADO" ? (
                             <Unlock className="h-4 w-4 text-emerald-600" />
                           ) : (
@@ -369,14 +404,14 @@ export default function UsuariosConfigPage() {
                           <Edit3 className="h-4 w-4 text-amber-600" />
                         </Button>
                         <PermissionGate modulo="Configurações" acao="deletar">
-                          <Button variant="ghost" size="icon" onClick={() => handleDelete(user)} title="Excluir">
+                          <Button variant="ghost" size="icon" onClick={() => !isMaster && handleDelete(user)} title={isMaster ? "Usuário master protegido" : "Excluir"} disabled={isMaster}>
                             <Trash2 className="h-4 w-4 text-rose-600" />
                           </Button>
                         </PermissionGate>
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>
-                ))
+                )})
               )}
             </ConfigDataTableBody>
           </ConfigDataTable>

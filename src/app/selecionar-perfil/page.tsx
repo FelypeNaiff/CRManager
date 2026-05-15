@@ -54,14 +54,28 @@ export default function SelecionarPerfilPage() {
           const empresaId = loggedUserDoc.empresa_id
 
           if (empresaId) {
-            const usersQuery = query(collection(db, "usuarios"), where("empresa_id", "==", empresaId), where("status", "==", "ATIVO"))
+            // Busca todos os usuários da empresa e, em seguida, filtra localmente
+            // garantindo que o usuário master seja incluído mesmo que não esteja ATIVO.
+            const usersQuery = query(collection(db, "usuarios"), where("empresa_id", "==", empresaId))
             const usersSnap = await getDocs(usersQuery)
-            const loadedUsers = usersSnap.docs.map(d => ({ 
+            const loadedAll = usersSnap.docs.map(d => ({ 
               id: d.id, 
               ...d.data(),
               nome: d.data().nome || "Usuário",
               empresaId
             })) as Profile[]
+
+            const MASTER_EMAIL = 'felypenaiff01@gmail.com'
+            const MASTER_NAME = 'FELYPE NAIFF'
+            const isMasterUserObj = (u: any) => {
+              if (!u) return false
+              if (u.id === 'felype') return true
+              if (u.email && u.email.toLowerCase() === MASTER_EMAIL) return true
+              if (u.nome && u.nome.toUpperCase() === MASTER_NAME) return true
+              return false
+            }
+
+            const loadedUsers = loadedAll.filter(u => (u.status === 'ATIVO') || isMasterUserObj(u))
             setCompanyUsers(loadedUsers)
           }
         }
