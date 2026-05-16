@@ -1,6 +1,6 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from "react"
+import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { useFirestore, useDoc, useMemoFirebase } from "@/firebase"
 import { doc, getDoc } from "firebase/firestore"
@@ -88,13 +88,13 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     fetchPermissions()
   }, [db, activeProfile])
 
-  const hasPermission = (modulo: string, acao: string) => {
+  const hasPermission = useCallback((modulo: string, acao: string) => {
     if (isAdminRoot) return true
     if (!matriz[modulo]) return false
     return !!matriz[modulo][acao]
-  }
+  }, [isAdminRoot, matriz])
 
-  const canAccessRoute = (pathname: string) => {
+  const canAccessRoute = useCallback((pathname: string) => {
     if (isAdminRoot) return true
     
     // Mapeamento de Rotas Livres
@@ -139,10 +139,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
     // Por segurança, se não caiu em nada e não é livre, oculta
     return false
-  }
+  }, [isAdminRoot, hasPermission])
+
+  const contextValue = useMemo(() => ({
+    matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute
+  }), [matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute])
 
   return (
-    <PermissionsContext.Provider value={{ matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute }}>
+    <PermissionsContext.Provider value={contextValue}>
       {children}
     </PermissionsContext.Provider>
   )
