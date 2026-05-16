@@ -36,7 +36,7 @@ const emptyForm = {
   cpf: "",
   telefone: "",
   cargo: "",
-  grupo_id: "",
+  grupo_id: "none",
   status: "ATIVO" as "ATIVO" | "INATIVO" | "BLOQUEADO",
   permitir_acesso: true,
   pin_acesso: "1234",
@@ -110,7 +110,7 @@ export default function UsuariosConfigPage() {
       cpf: user.cpf || "",
       telefone: user.telefone || "",
       cargo: user.cargo || "",
-      grupo_id: user.grupo_id || "",
+      grupo_id: user.grupo_id || "none",
       status: user.status || "ATIVO",
       permitir_acesso: user.permitir_acesso !== false,
       pin_acesso: user.pin_acesso || "1234",
@@ -153,6 +153,7 @@ export default function UsuariosConfigPage() {
 
     const payloadToValidate = {
       ...form,
+      grupo_id: form.grupo_id === "none" ? "" : form.grupo_id,
       empresa_id: activeProfile.empresaId,
       atualizado_por: activeProfile.id
     }
@@ -297,7 +298,7 @@ export default function UsuariosConfigPage() {
 
   // Prepara as opções de grupos para o Select
   const groupOptions = [
-    { label: "Nenhum grupo", value: "" },
+    { label: "Nenhum grupo", value: "none" },
     ...grupos.map((g: any) => ({ label: g.nome, value: g.id }))
   ]
 

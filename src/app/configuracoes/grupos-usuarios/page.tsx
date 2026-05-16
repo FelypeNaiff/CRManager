@@ -59,8 +59,11 @@ export default function GruposUsuariosConfigPage() {
     return query(collection(db, "usuarios"), where("empresa_id", "==", activeProfile.empresaId))
   }, [db, activeProfile?.empresaId])
 
-  const { data: grupos = [], isLoading } = useCollection(gruposQuery)
-  const { data: usuarios = [] } = useCollection(usuariosQuery)
+  const { data: gruposData, isLoading } = useCollection(gruposQuery)
+  const { data: usuariosData } = useCollection(usuariosQuery)
+
+  const grupos = gruposData ?? []
+  const usuarios = usuariosData ?? []
 
   const filteredGrupos = grupos.filter((g: any) => {
     const term = searchTerm.toLowerCase()
