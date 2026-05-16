@@ -42,19 +42,30 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
       try {
         setIsLoading(true)
         
-        // Validação de Perfis Hardcoded Conforme Regra de Negócio
-        const isSystemAdmin = activeProfile.nome === 'MILENA' || activeProfile.nome === 'THAIS' || activeProfile.grupo_id === 'ADMINISTRADOR'
+        // Bypass de segurança: Felype e Milena sempre têm acesso total (ROOT)
+        const nomeUpper = activeProfile.nome?.toUpperCase() || ""
+        const emailLower = activeProfile.email?.toLowerCase() || ""
         
-        if (isSystemAdmin) {
+        if (nomeUpper.includes("FELYPE") || nomeUpper.includes("MILENA") || emailLower === "felypenaiff01@gmail.com") {
           setIsAdminRoot(true)
           setIsLoading(false)
           return
         }
+        
+        // 1. Busca o grupo do usuário para validar se é Root Admin (is_admin)
+        if (activeProfile.grupo_id && activeProfile.grupo_id !== "none") {
+          const groupSnap = await getDoc(doc(db, "grupos_usuarios", activeProfile.grupo_id))
+          if (groupSnap.exists() && groupSnap.data().is_admin) {
+            setIsAdminRoot(true)
+            setIsLoading(false)
+            return
+          }
+        }
 
         setIsAdminRoot(false)
 
-        // Fallback para matrizes Firestore se existir, senão retorna vazio (usará regras hardcoded de rotas).
-        if (!activeProfile.grupo_id || activeProfile.grupo_id === "ACESSO LIMITADO") {
+        // 2. Se não tem grupo ou não for root, carrega a matriz de permissões
+        if (!activeProfile.grupo_id || activeProfile.grupo_id === "none") {
           setMatriz({})
           setIsLoading(false)
           return
@@ -89,36 +100,42 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     // Mapeamento de Rotas Livres
     if (pathname === "/" || pathname.startsWith("/dashboard")) return true
     if (pathname.startsWith("/inbox") || pathname.startsWith("/agenda")) return true
+    if (pathname.startsWith("/selecionar-perfil")) return true
 
-    // Regras de Perfil Hardcoded
-    if (activeProfile?.nome === 'VENDEDOR') {
-      // Pode acessar clientes, filhos, consulta de produtos, vendas/balcão e histórico
-      if (pathname.startsWith("/clientes") || pathname.startsWith("/filhos") || 
-          pathname.startsWith("/produtos") || pathname.startsWith("/vendas")) {
-        return true
-      }
-      return false
-    }
-
-    if (activeProfile?.nome === 'CAIXA') {
-      // Acesso ao PDV, recebimentos (financeiro básico), trocas
-      if (pathname.startsWith("/pdv") || pathname.startsWith("/financeiro") || 
-          pathname.startsWith("/vendas") || pathname.startsWith("/trocas")) {
-        return true
-      }
-      return false
-    }
-
-    // Mapeamento de Rotas para Módulos
-    if (pathname.startsWith("/configuracoes")) return hasPermission("Configurações", "acessar")
+    // Mapeamento de Rotas para Módulos Oficiais
+    if (pathname.startsWith("/configuracoes/usuarios")) return hasPermission("Usuários", "visualizar")
+    if (pathname.startsWith("/configuracoes/grupos-usuarios")) return hasPermission("Grupos usuários", "visualizar")
+    if (pathname.startsWith("/configuracoes/permissoes")) return hasPermission("Permissões", "visualizar")
+    if (pathname.startsWith("/configuracoes/gerais")) return hasPermission("Configurações gerais", "visualizar")
+    if (pathname.startsWith("/configuracoes/pdv")) return hasPermission("Configurações PDV", "visualizar")
+    if (pathname.startsWith("/configuracoes/logs")) return hasPermission("Logs", "visualizar")
+    
+    // Rota Base Configurações (Fallback)
+    if (pathname.startsWith("/configuracoes")) return hasPermission("Configurações gerais", "visualizar") || hasPermission("Sistema", "visualizar")
+    
+    if (pathname.startsWith("/contas-a-pagar")) return hasPermission("Contas a pagar", "visualizar")
+    if (pathname.startsWith("/contas-a-receber")) return hasPermission("Contas a receber", "visualizar")
     if (pathname.startsWith("/financeiro")) return hasPermission("Financeiro", "acessar")
-    if (pathname.startsWith("/produtos") || pathname.startsWith("/grupos-produtos") || pathname.startsWith("/movimentacoes") || pathname.startsWith("/etiquetas")) return hasPermission("Estoque", "acessar") || hasPermission("Produtos", "acessar")
-    if (pathname.startsWith("/clientes") || pathname.startsWith("/fornecedores")) return hasPermission("Cadastros", "acessar")
-    if (pathname.startsWith("/pdv") || pathname.startsWith("/vendas") || pathname.startsWith("/trocas") || pathname.startsWith("/vendedores") || pathname.startsWith("/metas")) return hasPermission("Vendas", "acessar")
-    if (pathname.startsWith("/orcamentos")) return hasPermission("Orçamentos", "acessar")
-    if (pathname.startsWith("/atendimentos") || pathname.startsWith("/filhos")) return hasPermission("CRM", "acessar")
-    if (pathname.startsWith("/relatorios")) return hasPermission("Relatórios", "acessar")
-    if (pathname.startsWith("/campanhas") || pathname.startsWith("/templates")) return hasPermission("Marketing", "acessar")
+    
+    if (pathname.startsWith("/categorias")) return hasPermission("Categorias", "visualizar")
+    if (pathname.startsWith("/marcas")) return hasPermission("Marcas", "visualizar")
+    if (pathname.startsWith("/produtos")) return hasPermission("Produtos", "visualizar")
+    if (pathname.startsWith("/estoque")) return hasPermission("Estoque", "visualizar")
+    if (pathname.startsWith("/compras")) return hasPermission("Compras", "visualizar")
+    
+    if (pathname.startsWith("/fornecedores")) return hasPermission("Fornecedores", "visualizar")
+    if (pathname.startsWith("/clientes")) return hasPermission("Clientes", "visualizar")
+    if (pathname.startsWith("/filhos")) return hasPermission("Filhos", "visualizar")
+    
+    if (pathname.startsWith("/pdv")) return hasPermission("PDV", "visualizar")
+    if (pathname.startsWith("/caixa")) return hasPermission("Caixa", "visualizar")
+    if (pathname.startsWith("/vendas")) return hasPermission("Vendas", "visualizar")
+    if (pathname.startsWith("/orcamentos")) return hasPermission("Orçamentos", "visualizar")
+    if (pathname.startsWith("/trocas")) return hasPermission("Trocas", "visualizar")
+    if (pathname.startsWith("/devolucoes")) return hasPermission("Devoluções", "visualizar")
+    
+    if (pathname.startsWith("/relatorios")) return hasPermission("Relatórios", "visualizar")
+    if (pathname.startsWith("/crm")) return hasPermission("CRM", "visualizar")
 
     // Por segurança, se não caiu em nada e não é livre, oculta
     return false

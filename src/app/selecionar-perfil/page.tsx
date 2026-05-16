@@ -2,22 +2,17 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useUser, useFirestore } from "@/firebase"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
+import { collection, addDoc, serverTimestamp, query, where } from "firebase/firestore"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, UserCircle2, ShieldCheck, LogOut } from "lucide-react"
+import { Loader2, UserCircle2, ShieldCheck, LogOut, LockKeyhole } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { signOut } from "firebase/auth"
 import { useAuth } from "@/firebase"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { toast } from "@/hooks/use-toast"
-
-const AVAILABLE_PROFILES = [
-  { id: "milena", nome: "MILENA", role: "ADMINISTRADOR", description: "Acesso administrativo total" },
-  { id: "thais", nome: "THAIS", role: "ADMINISTRADOR", description: "Acesso administrativo total" },
-  { id: "vendedor", nome: "VENDEDOR", role: "ACESSO LIMITADO", description: "Rotinas comerciais e vendas" },
-  { id: "caixa", nome: "CAIXA", role: "ACESSO LIMITADO", description: "PDV e recebimentos" },
-]
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
 
 export default function SelecionarPerfilPage() {
   const { user, isUserLoading } = useUser()
@@ -26,6 +21,18 @@ export default function SelecionarPerfilPage() {
   const auth = useAuth()
   const { loginProfile } = useProfile()
   const [isSelecting, setIsSelecting] = useState<string | null>(null)
+  const [selectedUserForPin, setSelectedUserForPin] = useState<any>(null)
+  const [pin, setPin] = useState("")
+  const [pinError, setPinError] = useState("")
+
+  // Busca de usuários dinamicamente do banco de dados (Apenas ativos e com acesso permitido)
+  const usuariosQuery = useMemoFirebase(() => {
+    if (!db) return null
+    return query(collection(db, "usuarios"), where("empresa_id", "==", "trupe-kids"), where("status", "==", "ATIVO"))
+  }, [db])
+
+  const { data: usuariosData, isLoading: isLoadingUsers } = useCollection(usuariosQuery)
+  const availableProfiles = usuariosData?.filter(u => u.permitir_acesso) || []
 
   useEffect(() => {
     if (!isUserLoading) {
@@ -35,35 +42,49 @@ export default function SelecionarPerfilPage() {
     }
   }, [user, isUserLoading, router])
 
-  const handleSelectProfile = async (profileDef: typeof AVAILABLE_PROFILES[0]) => {
+  const handleProfileClick = (profileDef: any) => {
+    setSelectedUserForPin(profileDef)
+    setPin("")
+    setPinError("")
+  }
+
+  const handlePinSubmit = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault()
     if (!user || !db) return
-    setIsSelecting(profileDef.id)
+    if (!selectedUserForPin) return
+
+    if (pin !== selectedUserForPin.pin_acesso) {
+      setPinError("Senha incorreta para este perfil.")
+      return
+    }
+
+    setIsSelecting(selectedUserForPin.id)
+    setSelectedUserForPin(null) // Fecha o modal
 
     try {
-      // Registra a sessão no Firestore
       const sessionRef = await addDoc(collection(db, "login_sessions"), {
         google_email: user.email,
         google_name: user.displayName,
-        selected_profile: profileDef.nome,
-        profile_role: profileDef.role,
+        selected_profile: selectedUserForPin.nome,
+        profile_id: selectedUserForPin.id,
+        profile_role: selectedUserForPin.cargo || "",
+        grupo_id: selectedUserForPin.grupo_id,
         login_at: serverTimestamp(),
         logout_at: null,
-        // Informações adicionais podem ser capturadas aqui (ex: user agent)
         device_info: navigator.userAgent
       })
 
-      // Cria o perfil local para o sistema (compatível com os tipos existentes)
       const activeProfileData = {
-        id: profileDef.id,
-        nome: profileDef.nome,
+        id: selectedUserForPin.id,
+        nome: selectedUserForPin.nome,
         email: user.email || "",
-        empresaId: "trupe-kids", // Empresa padrão do sistema
-        role: profileDef.role === "ADMINISTRADOR" ? "admin" : "operador",
+        empresaId: selectedUserForPin.empresa_id || "trupe-kids",
+        role: selectedUserForPin.cargo || "operador",
         status: "ATIVO" as "ATIVO",
-        permitir_acesso: true,
-        pin_acesso: "",
-        grupo_id: profileDef.role,
-        sessionId: sessionRef.id // Guardamos a ID da sessão para o logout
+        permitir_acesso: selectedUserForPin.permitir_acesso,
+        pin_acesso: selectedUserForPin.pin_acesso,
+        grupo_id: selectedUserForPin.grupo_id,
+        sessionId: sessionRef.id
       }
 
       loginProfile(activeProfileData)
@@ -97,29 +118,38 @@ export default function SelecionarPerfilPage() {
           <p className="text-slate-500">Logado como <strong className="text-slate-700">{user.email}</strong></p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {AVAILABLE_PROFILES.map((profile) => (
-            <Card 
-              key={profile.id} 
-              className={`cursor-pointer transition-all hover:border-primary hover:shadow-md ${isSelecting === profile.id ? 'border-primary ring-2 ring-primary/20' : ''}`}
-              onClick={() => !isSelecting && handleSelectProfile(profile)}
-            >
-              <CardContent className="p-6 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className={`h-12 w-12 rounded-full flex items-center justify-center ${profile.role === 'ADMINISTRADOR' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-500'}`}>
-                    {profile.role === 'ADMINISTRADOR' ? <ShieldCheck className="h-6 w-6" /> : <UserCircle2 className="h-6 w-6" />}
+        {isLoadingUsers ? (
+          <div className="flex justify-center p-8">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          </div>
+        ) : availableProfiles.length === 0 ? (
+          <div className="text-center p-8 bg-white/50 backdrop-blur-sm rounded-lg border border-slate-200 text-slate-500 shadow-sm">
+            Nenhum perfil ativo com acesso ao sistema foi encontrado.
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {availableProfiles.map((profile: any) => (
+              <Card 
+                key={profile.id} 
+                className={`cursor-pointer transition-all hover:border-primary hover:shadow-md ${isSelecting === profile.id ? 'border-primary ring-2 ring-primary/20 bg-primary/5' : 'bg-white/80 backdrop-blur-sm'}`}
+                onClick={() => !isSelecting && handleProfileClick(profile)}
+              >
+                <CardContent className="p-6 flex items-center justify-between">
+                  <div className="flex items-center gap-4">
+                    <div className="h-12 w-12 rounded-full flex items-center justify-center bg-slate-100 text-slate-500">
+                      <UserCircle2 className="h-6 w-6" />
+                    </div>
+                    <div>
+                      <h3 className="font-bold text-lg text-slate-800">{profile.nome}</h3>
+                      <p className="text-sm font-medium text-slate-500">{profile.cargo || "Sem cargo definido"}</p>
+                    </div>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-lg text-slate-800">{profile.nome}</h3>
-                    <p className="text-sm font-medium text-slate-500">{profile.role}</p>
-                    <p className="text-xs text-slate-400 mt-1">{profile.description}</p>
-                  </div>
-                </div>
-                {isSelecting === profile.id && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+                  {isSelecting === profile.id ? <Loader2 className="h-5 w-5 animate-spin text-primary" /> : <LockKeyhole className="h-4 w-4 text-slate-300" />}
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
 
         <div className="flex justify-center mt-8">
           <Button variant="ghost" className="text-slate-500 hover:text-slate-700 gap-2" onClick={handleCancel}>
@@ -128,6 +158,40 @@ export default function SelecionarPerfilPage() {
           </Button>
         </div>
       </div>
+
+      {/* MODAL DE VALIDAÇÃO DE PIN */}
+      <Dialog open={!!selectedUserForPin} onOpenChange={(open) => !open && handleProfileClick(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="text-center text-xl">Acesso Restrito</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center justify-center space-y-4 py-6">
+            <div className="h-16 w-16 rounded-full bg-slate-100 flex items-center justify-center text-slate-500 mb-2">
+              <UserCircle2 className="h-8 w-8" />
+            </div>
+            <p className="text-center text-slate-600 font-medium">
+              Digite o PIN de acesso para <br/>
+              <strong className="text-slate-900 text-lg uppercase">{selectedUserForPin?.nome}</strong>
+            </p>
+            <form onSubmit={handlePinSubmit} className="w-full flex flex-col items-center gap-4">
+              <Input
+                type="password"
+                inputMode="numeric"
+                pattern="[0-9]*"
+                maxLength={4}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ''))}
+                className="text-center text-3xl tracking-[0.5em] w-40 h-14"
+                autoFocus
+              />
+              {pinError && <p className="text-rose-500 text-sm font-medium">{pinError}</p>}
+              <Button type="submit" className="w-full mt-2" disabled={pin.length < 4}>
+                Confirmar Acesso
+              </Button>
+            </form>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
