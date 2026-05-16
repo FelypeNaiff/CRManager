@@ -247,11 +247,17 @@ export default function GruposUsuariosConfigPage() {
             </ConfigDataTableHeader>
             <ConfigDataTableBody>
               {isLoading ? (
-                <ConfigDataTableRow>
-                  <ConfigDataTableCell colSpan={4} className="text-center py-8 text-muted-foreground">
-                    Carregando grupos...
-                  </ConfigDataTableCell>
-                </ConfigDataTableRow>
+                Array.from({ length: 4 }).map((_, i) => (
+                  <ConfigDataTableRow key={i}>
+                    <ConfigDataTableCell>
+                      <div className="h-5 w-40 bg-slate-200 animate-pulse rounded mb-2"></div>
+                      <div className="h-3 w-64 bg-slate-200 animate-pulse rounded"></div>
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-6 w-8 bg-slate-200 animate-pulse rounded-full mx-auto"></div></ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-6 w-16 bg-slate-200 animate-pulse rounded-full"></div></ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-8 w-24 bg-slate-200 animate-pulse rounded ml-auto"></div></ConfigDataTableCell>
+                  </ConfigDataTableRow>
+                ))
               ) : filteredGrupos.length === 0 ? (
                 <ConfigDataTableRow>
                   <ConfigDataTableCell colSpan={4} className="text-center py-8 text-muted-foreground">

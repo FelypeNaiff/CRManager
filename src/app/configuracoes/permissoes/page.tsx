@@ -173,7 +173,24 @@ export default function PermissoesConfigPage() {
       {selectedGroup ? (
         <div className="space-y-8">
           {isLoadingMatriz ? (
-             <div className="p-12 text-center text-muted-foreground border rounded-xl bg-white">Carregando permissões...</div>
+             <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+               {Array.from({ length: 6 }).map((_, i) => (
+                 <div key={i} className="border rounded-lg bg-white p-4 space-y-4 shadow-sm">
+                   <div className="flex justify-between border-b pb-3 mb-3">
+                     <div className="h-5 w-1/2 bg-slate-200 animate-pulse rounded"></div>
+                     <div className="h-4 w-16 bg-slate-200 animate-pulse rounded"></div>
+                   </div>
+                   <div className="grid grid-cols-2 gap-3">
+                     {Array.from({ length: 6 }).map((_, j) => (
+                       <div key={j} className="flex items-center gap-2">
+                         <div className="h-4 w-4 bg-slate-200 animate-pulse rounded"></div>
+                         <div className="h-4 w-full bg-slate-200 animate-pulse rounded"></div>
+                       </div>
+                     ))}
+                   </div>
+                 </div>
+               ))}
+             </div>
           ) : filteredModules.map((category, idx) => (
             <div key={idx} className="space-y-4">
               <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">

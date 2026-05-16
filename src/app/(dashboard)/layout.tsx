@@ -8,7 +8,7 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import { Bell, Search, User, Loader2, LogOut, Store } from "lucide-react"
+import { Bell, Search, User, LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useUser, useAuth, useFirestore } from "@/firebase"
@@ -46,9 +46,42 @@ export default function DashboardLayout({
 
   if (isUserLoading || isLoadingProfile) {
     return (
-      <div className="h-screen w-full flex flex-col items-center justify-center gap-4 bg-background">
-        <Loader2 className="h-10 w-10 animate-spin text-primary" />
-        <p className="text-muted-foreground font-medium">Validando acesso...</p>
+      <div className="flex min-h-screen w-full bg-background">
+        <div className="w-[var(--sidebar-width,16rem)] border-r bg-slate-900 hidden md:flex flex-col shrink-0">
+           <div className="h-14 border-b border-slate-800 flex items-center px-4 shrink-0">
+             <div className="h-6 w-32 bg-slate-800 animate-pulse rounded"></div>
+           </div>
+           <div className="p-4 space-y-4 flex-1">
+             {Array.from({ length: 8 }).map((_, i) => (
+               <div key={i} className="flex items-center gap-3">
+                 <div className="h-8 w-8 bg-slate-800 animate-pulse rounded-md"></div>
+                 <div className="h-4 w-24 bg-slate-800 animate-pulse rounded"></div>
+               </div>
+             ))}
+           </div>
+        </div>
+        
+        <div className="flex flex-1 flex-col h-screen overflow-hidden bg-background">
+          <header className="h-14 border-b bg-[#1e2229] flex items-center justify-between px-4 shrink-0">
+             <div className="h-6 w-48 bg-slate-800 animate-pulse rounded"></div>
+             <div className="h-8 w-8 rounded-full bg-slate-800 animate-pulse"></div>
+          </header>
+          
+          <main className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
+             <div className="space-y-6 max-w-7xl w-full">
+               <div className="flex flex-col gap-3 mb-8">
+                 <div className="h-8 w-64 bg-slate-200 animate-pulse rounded"></div>
+                 <div className="h-4 w-96 bg-slate-200 animate-pulse rounded"></div>
+               </div>
+               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
+                 {Array.from({ length: 4 }).map((_, i) => (
+                   <div key={i} className="h-32 bg-white border shadow-sm animate-pulse rounded-xl"></div>
+                 ))}
+               </div>
+               <div className="h-96 bg-white border shadow-sm animate-pulse rounded-xl mt-6"></div>
+             </div>
+          </main>
+        </div>
       </div>
     )
   }

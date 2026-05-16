@@ -356,11 +356,20 @@ export default function UsuariosConfigPage() {
             </ConfigDataTableHeader>
             <ConfigDataTableBody>
               {isLoading ? (
-                <ConfigDataTableRow>
-                  <ConfigDataTableCell colSpan={5} className="text-center py-8 text-muted-foreground">
-                    Carregando usuários...
-                  </ConfigDataTableCell>
-                </ConfigDataTableRow>
+                Array.from({ length: 5 }).map((_, i) => (
+                  <ConfigDataTableRow key={i}>
+                    <ConfigDataTableCell>
+                      <div className="flex items-center gap-2">
+                        <div className="h-8 w-8 rounded-full bg-slate-200 animate-pulse"></div>
+                        <div className="h-5 w-32 bg-slate-200 animate-pulse rounded"></div>
+                      </div>
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-5 w-24 bg-slate-200 animate-pulse rounded"></div></ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-5 w-48 bg-slate-200 animate-pulse rounded"></div></ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-6 w-16 bg-slate-200 animate-pulse rounded-full"></div></ConfigDataTableCell>
+                    <ConfigDataTableCell><div className="h-8 w-24 bg-slate-200 animate-pulse rounded ml-auto"></div></ConfigDataTableCell>
+                  </ConfigDataTableRow>
+                ))
               ) : filteredUsuarios.length === 0 ? (
                 <ConfigDataTableRow>
                   <ConfigDataTableCell colSpan={5} className="text-center py-8 text-muted-foreground">
