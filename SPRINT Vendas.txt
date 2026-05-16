@@ -1,0 +1,797 @@
+Vendas
+├── Produtos
+├── Balcão / PDV
+├── Trocas e Devoluções
+└── Configurações
+    ├── Vendedoras
+    └── Meta de Vendas / Vendedoras
+________________________________________
+SPRINT VENDAS 0 — Planejamento integrado
+
+Analise o projeto atual e planeje o módulo Vendas integrado.
+
+Objetivo:
+Criar Vendas integrado com:
+- Cadastro de produtos
+- Estoque
+- Clientes
+- Financeiro / Contas a receber
+- Caixa / PDV
+- Crédito de cliente
+- Vendedoras
+- Metas de vendas
+
+Não escrever código ainda.
+
+Resultado esperado:
+- Rotas
+- Collections Firestore
+- Campos necessários
+- Regras de integração
+- Arquivos que serão criados/alterados
+- Riscos de implementação
+
+Use Firebase/Firestore e padrões já existentes.
+________________________________________
+SPRINT VENDAS 1 — Rotas, menu e estrutura base
+
+Criar estrutura do menu:
+
+Vendas
+├── Produtos
+├── Balcão / PDV
+├── Trocas e Devoluções
+└── Configurações
+    ├── Vendedoras
+    └── Meta de Vendas / Vendedoras
+
+Rotas:
+- /vendas/produtos
+- /vendas/produtos/adicionar
+- /vendas/balcao
+- /vendas/balcao/pdv
+- /vendas/trocas-devolucoes
+- /vendas/trocas-devolucoes/adicionar
+- /vendas/configuracoes
+- /vendas/configuracoes/vendedoras
+- /vendas/configuracoes/metas
+
+Criar páginas vazias com título e breadcrumb.
+
+Não implementar regras ainda.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 2 — Collections, Types e Schemas
+
+Criar modelagem Firestore integrada.
+
+Collections:
+- vendas_produtos
+- vendas_produtos_itens
+- vendas_pagamentos
+- vendas_balcao
+- vendas_balcao_itens
+- vendas_trocas_devolucoes
+- vendas_trocas_itens_devolvidos
+- vendas_trocas_itens_novos
+- clientes_creditos
+- clientes_creditos_movimentacoes
+- vendas_vendedoras
+- vendas_metas
+- vendas_comissoes
+- configuracoes_vendas
+
+Relacionamentos:
+- venda.cliente_id → clientes
+- venda.vendedor_id → vendas_vendedoras ou usuarios
+- item.produto_id → produtos
+- pagamento.forma_pagamento_id → financeiro_formas_pagamento
+- pagamento.conta_bancaria_id → financeiro_contas_bancarias
+- pagamento.plano_contas_id → financeiro_plano_contas
+- venda.centro_custo_id → financeiro_centros_custos
+
+Campos principais da venda:
+- id
+- numero
+- empresa_id
+- cliente_id
+- cliente_nome
+- vendedor_id
+- vendedor_nome
+- data
+- canal_venda: produtos, balcao_pdv
+- situacao: em_aberto, aguardando, concretizada, cancelada, devolvida, parcialmente_devolvida
+- subtotal
+- desconto_valor
+- desconto_percentual
+- frete_valor
+- valor_total
+- valor_pago
+- valor_credito_usado
+- saldo_a_receber
+- criado_em
+- atualizado_em
+- criado por
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 3 — Componentes reutilizáveis
+
+Criar componentes:
+
+- SalesDataTable
+- SalesStatusBadge
+- SalesProductSearch
+- SalesCustomerSearch
+- SalesSellerSelect
+- SalesItemsTable
+- SalesPaymentTable
+- SalesTotalsCard
+- SalesDiscountInput
+- CustomerCreditBadge
+- SaleFinalizeModal
+- SellerGoalCard
+- SellerCommissionBadge
+
+Não conectar ao Firestore ainda.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+CONFIGURAÇÕES
+SPRINT VENDAS 4 — Configurações de vendas
+
+Implementar /vendas/configuracoes.
+
+Campos:
+- Próximo número da venda
+- Exigir cliente na venda
+- Permitir consumidor final
+- Exigir vendedor
+- Permitir venda sem estoque
+- Baixar estoque automaticamente
+- Gerar contas a receber automaticamente
+- Exigir caixa aberto no PDV
+- Permitir venda aguardando
+- Permitir múltiplas formas de pagamento
+- Permitir uso de crédito do cliente
+- Permitir desconto geral
+- Permitir desconto por item
+- Limite máximo de desconto
+- Prazo máximo para troca
+- Prazo máximo para devolução
+- Devolução gera crédito automaticamente
+- Permitir devolução em dinheiro
+- Política de troca
+- Texto final do comprovante
+
+Salvar em:
+- configuracoes_vendas
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 5 — Vendedoras
+
+Implementar /vendas/configuracoes/vendedoras.
+
+Campos:
+- Nome
+- Usuário vinculado
+- Telefone
+- E-mail
+- Status
+- Participa de comissão: sim/não
+- Percentual de comissão padrão
+- Meta mensal padrão
+- Observações
+
+Tabela:
+- Nome
+- Usuário vinculado
+- Comissão
+- Meta mensal
+- Status
+- Ações
+
+Regras:
+- Vendedora pode ser vinculada a um usuário do sistema.
+- Vendedora inativa não aparece nas vendas.
+- Gerar log ao alterar.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 6 — Metas de vendas por vendedora
+
+Implementar /vendas/configuracoes/metas.
+
+Campos:
+- Mês/ano
+- Vendedora
+- Meta de faturamento
+- Meta de quantidade de vendas
+- Meta de ticket médio
+- Comissão %
+- Bônus por meta batida
+- Status
+
+Indicadores:
+- Meta
+- Realizado
+- Diferença
+- Percentual atingido
+- Comissão prevista
+
+Regras:
+- Buscar vendas concretizadas da vendedora.
+- Calcular realizado automaticamente.
+- Cancelamentos e devoluções reduzem o realizado.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+VENDAS DE PRODUTOS
+SPRINT VENDAS 7 — Vendas de produtos: listagem
+
+Implementar /vendas/produtos.
+
+Tabela:
+- Nº
+- Cliente
+- Vendedora
+- Data
+- Situação
+- Valor
+- Ações
+
+Filtros:
+- Mês/ano
+- Cliente
+- Vendedora
+- Situação
+- Forma de pagamento
+
+Ações:
+- Visualizar
+- Editar
+- Cancelar
+- Excluir
+- Imprimir
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 8 — Venda de produtos: formulário integrado
+
+Implementar /vendas/produtos/adicionar.
+
+Dados gerais:
+- Número automático
+- Cliente
+- Vendedora/responsável
+- Situação
+- Data
+- Canal de venda
+- Centro de custo
+
+Produtos:
+- Buscar produto do cadastro de produtos
+- Trazer automaticamente:
+  - nome
+  - código
+  - preço de venda
+  - estoque atual
+  - imagem
+  - variações, se houver
+- Quantidade
+- Desconto R$ ou %
+- Subtotal
+
+Pagamento:
+- À vista ou parcelado
+- Forma de pagamento
+- Conta bancária/caixa
+- Plano de contas
+- Vencimento
+- Valor
+- Observação
+- Usar crédito do cliente, se houver
+
+Total:
+- Subtotal produtos
+- Desconto
+- Frete
+- Crédito utilizado
+- Valor total
+- Valor a receber
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 9 — Salvar venda de produtos integrada
+
+Ao salvar/concretizar venda:
+
+1. Salvar venda em vendas_produtos.
+2. Salvar itens em vendas_produtos_itens.
+3. Baixar estoque dos produtos.
+4. Criar movimentação de estoque:
+   - tipo: saida_por_venda
+5. Criar contas a receber no financeiro.
+6. Criar transação financeira se pagamento for recebido na hora.
+7. Atualizar saldo da conta bancária/caixa, se recebido.
+8. Usar crédito do cliente, se informado.
+9. Registrar comissão da vendedora.
+10. Atualizar realizado da meta.
+11. Gerar logs.
+
+Regras:
+- Se não houver estoque e configuração bloquear, impedir venda.
+- Se venda ficar em aberto, não baixar estoque nem gerar financeiro.
+- Se concretizada, processar tudo.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+________________________________________
+BALCÃO / PDV
+SPRINT VENDAS 10 — Balcão: listagem
+
+Implementar /vendas/balcao.
+
+Tabela:
+- Nº
+- Cliente
+- Vendedora
+- Data
+- Situação
+- Valor
+- Ações
+
+Botões:
+- Vender
+- Mais ações
+- Busca avançada
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+
+_______________________________________
+SPRINT VENDAS 11 — PDV: tela principal integrada
+
+Implementar /vendas/balcao/pdv.
+
+Busca de produto:
+- Por nome
+- Código
+- Código de barras
+
+Ao selecionar produto, puxar do cadastro:
+- Código
+- Nome
+- Preço de venda
+- Estoque atual
+- Imagem
+- Variação
+- Unidade
+
+Campos:
+- Quantidade
+- Valor unitário
+- Desconto R$ ou %
+- Valor total
+
+Painel direito:
+- Cliente
+- Vendedora
+- Itens do pedido
+- Total do pedido
+
+Botões:
+- Adicionar produto
+- Aguardar
+- Cancelar
+- Finalizar venda
+
+Regras:
+- Validar estoque conforme configuração.
+- Exibir alerta de estoque insuficiente.
+- Cliente consumidor final permitido conforme configuração.
+- Vendedora obrigatória conforme configuração.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+SPRINT VENDAS 12 — Autorização de desconto acima do limite
+
+Implementar autorização administrativa quando vendedor/caixa aplicar desconto acima do limite permitido.
+
+Regras:
+- O limite de desconto deve vir de configuracoes_vendas.
+- Pode existir limite geral e limite por vendedora/usuário.
+- Se o desconto aplicado for menor ou igual ao limite, permitir normalmente.
+- Se o desconto aplicado for maior que o limite, abrir modal de autorização.
+- Modal deve solicitar código de administrador de 4 dígitos.
+- Apenas administradores/gerentes autorizados podem ter código.
+- Validar o código antes de permitir continuar.
+- Não exibir o código em tela.
+- Não salvar código em texto puro.
+- Registrar log da autorização.
+
+Campos necessários:
+- desconto_limite_percentual
+- desconto_limite_valor
+- exige_autorizacao_desconto: sim/não
+- codigo_autorizacao_admin_hash
+- autorizado_por
+- autorizado_em
+- motivo_autorizacao
+- desconto_solicitado
+- desconto_limite
+- desconto_aprovado
+
+Modal:
+- Título: Autorização necessária
+- Mensagem: O desconto informado está acima do limite permitido.
+- Campo: Código do administrador
+- Campo: Motivo do desconto
+- Botões:
+  - Autorizar
+  - Cancelar
+
+Logs:
+- Usuário que solicitou
+- Administrador que autorizou
+- Valor original
+- Desconto aplicado
+- Limite permitido
+- Data/hora
+- Venda vinculada
+- IP/dispositivo, se disponível
+
+Aplicar em:
+- Venda de produtos
+- PDV balcão
+- Trocas/devoluções, se houver diferença com desconto
+
+Importante:
+- Implementar SOMENTE esta sprint.
+- Não avançar para finalização da venda.
+- Não refatorar outras áreas.
+- Usar Firebase/Firestore.
+- Usar os padrões existentes do projeto.
+________________________________________
+SPRINT VENDAS 13 — PDV: carrinho, atalhos e operações
+
+Implementar:
+- Carrinho local
+- Editar item
+- Remover item
+- Alterar quantidade
+- Desconto por item
+- Atalhos:
+  - F1 ajuda
+  - F2 nova busca
+  - F3 quantidade
+  - F4 adicionar produto
+  - F6 finalizar
+  - Shift+C cliente
+  - Shift+V vendedora
+
+Operações:
+- Sangria
+- Reforço
+- Troca/Devolução
+- Fechamento
+
+Integrar com caixa:
+- Sangria gera saída do caixa.
+- Reforço gera entrada no caixa.
+- Fechamento valida saldo.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 14 — PDV: finalizar venda integrada
+
+Finalização:
+- Forma de pagamento
+- Múltiplas formas de pagamento
+- Desconto R$
+- Desconto %
+- Crédito do cliente
+- Troco
+- Total a pagar
+
+Ao finalizar:
+1. Salvar em vendas_balcao.
+2. Salvar itens em vendas_balcao_itens.
+3. Baixar estoque.
+4. Criar movimentação de estoque.
+5. Criar contas a receber se parcelado.
+6. Criar transação financeira se recebido na hora.
+7. Atualizar caixa/conta bancária.
+8. Abater crédito do cliente, se usado.
+9. Registrar comissão da vendedora.
+10. Atualizar meta da vendedora.
+11. Gerar comprovante.
+12. Gerar logs.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+
+SPRINT VENDAS 15 — Venda aguardando e retomada
+
+Implementar:
+- Aguardar venda
+- Retomar venda
+- Cancelar venda aguardando
+
+Regras:
+- Venda aguardando não baixa estoque.
+- Venda aguardando não gera financeiro.
+- Venda aguardando não conta para meta.
+- Ao finalizar, processa estoque, financeiro, comissão e meta.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+TROCAS E DEVOLUÇÕES
+SPRINT VENDAS 16 — Trocas e devoluções: listagem
+
+Implementar /vendas/trocas-devolucoes.
+
+Tabela:
+- Código
+- Pedido
+- Cliente
+- Situação
+- Valor
+- Devolvido em
+- Ações
+
+Filtros:
+- Mês/ano
+- Cliente
+- Pedido
+- Situação
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 17 — Localizar venda para troca/devolução
+
+Implementar /vendas/trocas-devolucoes/adicionar.
+
+Campos:
+- Buscar pedido por número da venda
+- Buscar por cliente
+- Tipo:
+  - Troca
+  - Devolução
+
+Ao localizar:
+- Nº pedido
+- Data/hora
+- Cliente
+- Vendedora
+- Valor total
+- Centro de custo
+- Produtos vendidos
+
+Regras:
+- Buscar em vendas_produtos e vendas_balcao.
+- Não permitir troca de venda cancelada.
+- Considerar devoluções anteriores.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 18 — Produtos devolvidos
+
+Implementar tabela de produtos devolvidos:
+
+- Código
+- Produto
+- Qtd vendida
+- Qtd já devolvida
+- Qtd a devolver
+- Desconto
+- Valor
+- Motivo
+- Destino:
+  - Voltar ao estoque
+  - Defeito
+  - Descarte
+  - Análise
+
+Regras:
+- Não permitir devolver mais do que vendido.
+- Se voltar ao estoque, gerar entrada no estoque.
+- Se defeito/descarte, gerar movimentação separada.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 19 — Produtos novos da troca
+
+Implementar produtos novos da troca:
+
+- Produto
+- Quantidade
+- Valor
+- Desconto
+- Subtotal
+
+Regras:
+- Produto novo vem do cadastro de produtos.
+- Validar estoque.
+- Baixar estoque ao concluir troca.
+- Se valor novo maior que devolvido, gerar diferença a receber.
+- Se valor novo menor, gerar crédito ao cliente.
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 20 — Crédito do cliente
+
+Implementar crédito de cliente.
+
+Quando devolução gerar crédito:
+- Criar saldo em clientes_creditos.
+- Criar movimentação em clientes_creditos_movimentacoes.
+- Exibir no cadastro do cliente:
+  - Saldo disponível
+  - Histórico
+  - Venda origem
+  - Data
+  - Valor gerado
+  - Valor usado
+  - Saldo restante
+
+Regras:
+- Crédito só pode ser usado pelo mesmo cliente.
+- Uso do crédito deve reduzir saldo.
+- Cancelamento da devolução estorna crédito. Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+SPRINT VENDAS 21 — Concluir troca/devolução integrada
+
+Ao concluir:
+1. Salvar troca/devolução.
+2. Salvar itens devolvidos.
+3. Salvar itens novos, se houver.
+4. Atualizar estoque.
+5. Gerar crédito do cliente, se houver.
+6. Gerar contas a receber, se houver diferença.
+7. Atualizar venda original:
+   - devolvida
+   - parcialmente_devolvida
+8. Recalcular comissão da vendedora, se necessário.
+9. Atualizar metas.
+10. Gerar logs. Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+________________________________________
+RELATÓRIOS E PERMISSÕES
+SPRINT VENDAS 22 — Relatórios integrados
+
+Criar relatórios:
+- Vendas por período
+- Vendas por vendedora
+- Vendas por cliente
+- Vendas por produto
+- Produtos mais vendidos
+- Ticket médio
+- Metas por vendedora
+- Comissão por vendedora
+- Trocas e devoluções
+- Créditos de clientes
+- Formas de pagamento
+
+Exportar:
+- PDF
+- Excel
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.
+
+SPRINT VENDAS 22 — Permissões e logs
+
+Aplicar permissões:
+- Visualizar vendas
+- Criar venda
+- Editar venda
+- Cancelar venda
+- Acessar PDV
+- Aplicar desconto
+- Finalizar venda
+- Realizar troca
+- Realizar devolução
+- Gerar crédito
+- Usar crédito
+- Alterar vendedoras
+- Alterar metas
+- Ver comissão
+- Exportar relatórios
+
+Registrar logs em:
+- Venda criada
+- Venda cancelada
+- PDV finalizado
+- Desconto aplicado
+- Troca concluída
+- Crédito gerado
+- Crédito utilizado
+- Meta alterada
+
+Implemente SOMENTE esta sprint.
+Não avance para as próximas.
+Use Firebase/Firestore.
+Use os hooks e padrões existentes.
+Todas as funcionalidades devem ser integradas com Produtos, Estoque, Clientes, Financeiro e Caixa quando aplicável.

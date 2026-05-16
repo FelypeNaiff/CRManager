@@ -3,6 +3,7 @@ import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 import { FirebaseClientProvider } from '@/firebase/client-provider';
 import { ProfileProvider } from '@/lib/contexts/profile-context';
+import { PermissionsProvider } from '@/hooks/use-permissions';
 
 export const metadata: Metadata = {
   title: 'CRManager - Gestão de Varejo',
@@ -24,8 +25,10 @@ export default function RootLayout({
       <body className="font-body antialiased selection:bg-primary/20">
         <FirebaseClientProvider>
           <ProfileProvider>
-            {children}
-            <Toaster />
+            <PermissionsProvider>
+              {children}
+              <Toaster />
+            </PermissionsProvider>
           </ProfileProvider>
         </FirebaseClientProvider>
       </body>

@@ -32,7 +32,7 @@ export default function ConfiguracoesOperacionaisPage() {
   })
 
   return (
-    <div classn="space-y-6 max-w-6xl mx-auto py-10">
+    <div className="space-y-6 max-w-6xl mx-auto py-10">
       <div className="rounded-2xl border bg-white p-6 shadow-sm flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-3xl font-bold">Configurações Operacionais</h1>

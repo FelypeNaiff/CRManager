@@ -41,13 +41,15 @@ export default function LogsAtividadesPage() {
     )
   }, [db, activeProfile?.empresaId])
 
-  const { data: logs = [], isLoading } = useCollection(logsQuery)
+  const { data: rawLogs, isLoading } = useCollection(logsQuery)
+  const logs = rawLogs ?? []
 
   // Módulos únicos para o filtro
   const modulosUnicos = useMemo(() => {
     const mods = new Set<string>()
     logs.forEach((log: any) => {
-      if (log.modulo) mods.add(log.modulo)
+      const modulo = String(log.modulo || "").trim()
+      if (modulo) mods.add(modulo)
     })
     return Array.from(mods).sort()
   }, [logs])
@@ -94,12 +96,12 @@ export default function LogsAtividadesPage() {
 
   const formatAcaoBadge = (acao: string) => {
     switch (acao) {
-      case "CREATE": return <ConfigStatusBadge status="CRIAR" variant="success" />
-      case "UPDATE": return <ConfigStatusBadge status="EDITAR" variant="neutral" />
-      case "DELETE": return <ConfigStatusBadge status="EXCLUIR" variant="danger" />
-      case "LOGIN": return <ConfigStatusBadge status="LOGIN" variant="success" />
-      case "LOGOUT": return <ConfigStatusBadge status="LOGOUT" variant="neutral" />
-      default: return <ConfigStatusBadge status={acao || "AÇÃO"} variant="neutral" />
+      case "CREATE": return <ConfigStatusBadge status="CRIAR" />
+      case "UPDATE": return <ConfigStatusBadge status="EDITAR" />
+      case "DELETE": return <ConfigStatusBadge status="EXCLUIR" />
+      case "LOGIN": return <ConfigStatusBadge status="LOGIN" />
+      case "LOGOUT": return <ConfigStatusBadge status="LOGOUT" />
+      default: return <ConfigStatusBadge status={acao || "AÇÃO"} />
     }
   }
 
@@ -119,7 +121,7 @@ export default function LogsAtividadesPage() {
         </div>
       </div>
 
-      <ConfigCardSection>
+      <ConfigCardSection title="Filtro de logs">
         {/* BARRA DE BUSCA E FILTROS */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
           <div className="relative">

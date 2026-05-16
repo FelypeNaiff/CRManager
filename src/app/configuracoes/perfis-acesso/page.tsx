@@ -15,7 +15,13 @@ const defaultProfiles = [
 ]
 
 export default function ConfiguracoesPerfisAcessoPage() {
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    nome: string
+    descricao: string
+    status: string
+    permissoes: string[]
+    usuariosVinculados: string
+  }>({
     nome: "",
     descricao: "",
     status: "Ativo",

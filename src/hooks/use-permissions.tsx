@@ -41,52 +41,26 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
 
       try {
         setIsLoading(true)
-        // 1. Busca o usuário atual no DB para descobrir o grupo
-        // Como o Profile mockado não tem o ID real do Firestore para alguns casos, vamos tentar buscar.
-        // Se usar o Profile ID como document ID na collection usuarios:
-        const userSnap = await getDoc(doc(db, "usuarios", activeProfile.id))
         
-        let grupoId = null
-
-        if (userSnap.exists()) {
-          grupoId = userSnap.data().grupo_id
-        }
-
-        // Hack / proteção: Se o activeProfile for admin ou corresponder ao usuário master, consideramos ele ROOT
-        // Usuário master identificado por id histórico 'felype', e-mail ou nome completo.
-        const masterEmails = ['felypenaiff01@gmail.com']
-        const masterNames = ['FELYPE NAIFF']
-
-        const isMasterUser = () => {
-          if (!activeProfile) return false
-          if (activeProfile.id === 'felype') return true
-          if (activeProfile.email && masterEmails.includes(activeProfile.email.toLowerCase())) return true
-          if (activeProfile.nome && masterNames.includes(activeProfile.nome.toUpperCase())) return true
-          return false
-        }
-
-        if (activeProfile.role === "admin" || isMasterUser()) {
+        // Validação de Perfis Hardcoded Conforme Regra de Negócio
+        const isSystemAdmin = activeProfile.nome === 'MILENA' || activeProfile.nome === 'THAIS' || activeProfile.grupo_id === 'ADMINISTRADOR'
+        
+        if (isSystemAdmin) {
           setIsAdminRoot(true)
           setIsLoading(false)
           return
         }
 
-        if (!grupoId) {
+        setIsAdminRoot(false)
+
+        // Fallback para matrizes Firestore se existir, senão retorna vazio (usará regras hardcoded de rotas).
+        if (!activeProfile.grupo_id || activeProfile.grupo_id === "ACESSO LIMITADO") {
           setMatriz({})
           setIsLoading(false)
           return
         }
 
-        // 2. Busca o Grupo para ver se é ROOT
-        const groupSnap = await getDoc(doc(db, "grupos_usuarios", grupoId))
-        if (groupSnap.exists() && groupSnap.data().is_admin) {
-          setIsAdminRoot(true)
-          setIsLoading(false)
-          return
-        }
-
-        // 3. Busca a matriz de permissões
-        const permSnap = await getDoc(doc(db, "permissoes_grupo", grupoId))
+        const permSnap = await getDoc(doc(db, "permissoes_grupo", activeProfile.grupo_id))
         if (permSnap.exists() && permSnap.data().matriz) {
           setMatriz(permSnap.data().matriz)
         } else {
@@ -115,6 +89,25 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     // Mapeamento de Rotas Livres
     if (pathname === "/" || pathname.startsWith("/dashboard")) return true
     if (pathname.startsWith("/inbox") || pathname.startsWith("/agenda")) return true
+
+    // Regras de Perfil Hardcoded
+    if (activeProfile?.nome === 'VENDEDOR') {
+      // Pode acessar clientes, filhos, consulta de produtos, vendas/balcão e histórico
+      if (pathname.startsWith("/clientes") || pathname.startsWith("/filhos") || 
+          pathname.startsWith("/produtos") || pathname.startsWith("/vendas")) {
+        return true
+      }
+      return false
+    }
+
+    if (activeProfile?.nome === 'CAIXA') {
+      // Acesso ao PDV, recebimentos (financeiro básico), trocas
+      if (pathname.startsWith("/pdv") || pathname.startsWith("/financeiro") || 
+          pathname.startsWith("/vendas") || pathname.startsWith("/trocas")) {
+        return true
+      }
+      return false
+    }
 
     // Mapeamento de Rotas para Módulos
     if (pathname.startsWith("/configuracoes")) return hasPermission("Configurações", "acessar")

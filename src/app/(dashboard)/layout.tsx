@@ -11,7 +11,7 @@ import {
 import { Bell, Search, User, Loader2, LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useUser, useAuth } from "@/firebase"
+import { useUser, useAuth, useFirestore } from "@/firebase"
 import { useProfile } from "@/lib/contexts/profile-context"
 import {
   DropdownMenu,
@@ -22,26 +22,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
 import { signOut } from "firebase/auth"
-
-const MASTER_EMAIL = 'felypenaiff01@gmail.com'
-const MASTER_NAME = 'FELYPE NAIFF'
-const MASTER_ID = 'felype'
-const DEFAULT_EMPRESA_ID = 'trupe-kids'
-
-const createFallbackProfile = (email: string | null, displayName: string | null, uid: string) => {
-  const isMaster = email?.toLowerCase() === MASTER_EMAIL
-  return {
-    id: isMaster ? MASTER_ID : uid,
-    nome: isMaster ? MASTER_NAME : (displayName || 'Administrador'),
-    email: email || '',
-    empresaId: DEFAULT_EMPRESA_ID,
-    role: 'admin',
-    status: 'ATIVO',
-    permitir_acesso: true,
-    pin_acesso: '1234',
-    grupo_id: '',
-  }
-}
+import { doc, updateDoc, serverTimestamp } from "firebase/firestore"
 
 export default function DashboardLayout({
   children,
@@ -52,14 +33,16 @@ export default function DashboardLayout({
   const { activeProfile, isLoadingProfile, logoutProfile, loginProfile } = useProfile()
   const auth = useAuth()
   const router = useRouter()
+  const db = useFirestore()
 
   useEffect(() => {
     if (!isUserLoading && !user) {
       router.push("/login")
-    } else if (!isUserLoading && user && !isLoadingProfile && !activeProfile) {
-      loginProfile(createFallbackProfile(user.email, user.displayName, user.uid))
+    } else if (!isUserLoading && user && !isLoadingProfile && !activeProfile && window.location.pathname !== '/selecionar-perfil') {
+      // Se tem usuário Google mas não tem perfil logado, força a seleção
+      router.push("/selecionar-perfil")
     }
-  }, [user, isUserLoading, activeProfile, isLoadingProfile, router, loginProfile])
+  }, [user, isUserLoading, activeProfile, isLoadingProfile, router])
 
   if (isUserLoading || isLoadingProfile) {
     return (
@@ -74,10 +57,21 @@ export default function DashboardLayout({
 
   const handleLogoutProfile = () => {
     logoutProfile()
-    router.push("/login")
+    router.push("/selecionar-perfil")
   }
 
   const handleLogoutMaster = async () => {
+    // Gravar horário de logout na sessão
+    if (db && (activeProfile as any)?.sessionId) {
+      try {
+        await updateDoc(doc(db, "login_sessions", (activeProfile as any).sessionId), {
+          logout_at: serverTimestamp()
+        })
+      } catch (e) {
+        console.error("Erro ao registrar logout:", e)
+      }
+    }
+
     logoutProfile()
     await signOut(auth)
     router.push("/login")
@@ -111,10 +105,10 @@ export default function DashboardLayout({
                     </div>
                     <div className="hidden sm:flex flex-col items-start text-left">
                       <span className="text-sm font-medium leading-none">
-                        {activeProfile.nome}
+                        {activeProfile.nome} ({user.email})
                       </span>
                       <span className="text-xs text-white/70 capitalize mt-1">
-                        {activeProfile.role}
+                        {activeProfile.grupo_id || activeProfile.role}
                       </span>
                     </div>
                   </Button>

@@ -1,0 +1,696 @@
+PROMPT 01 — Estrutura Base do CRM TRUPE
+Implemente a estrutura base do módulo CRM TRUPE.
+
+Regra principal do projeto:
+Todas as funcionalidades criadas neste sistema devem ser integradas entre si. Nenhum módulo deve funcionar isoladamente.
+
+Criar a base do CRM com:
+- layout principal;
+- sidebar expansiva;
+- menu CRM;
+- estrutura de páginas;
+- estrutura de banco de dados;
+- autenticação;
+- controle de usuário;
+- logs;
+- auditoria;
+- tenant_id para uso futuro multiempresa.
+
+Criar o menu:
+
+CRM
+├── Dashboard
+├── Clientes
+├── Filhos
+├── Tags
+├── Histórico
+├── Carteira / Saldos
+├── Trocas e Devoluções
+└── Configurações
+
+Todas as tabelas principais devem conter:
+- id;
+- tenant_id;
+- created_at;
+- updated_at;
+- deleted_at;
+- created_by;
+- updated_by;
+- status.
+
+Criar estrutura inicial das tabelas:
+- clientes;
+- filhos;
+- carteiras_clientes;
+- movimentacoes_saldo;
+- trocas_devolucoes;
+- tags;
+- clientes_tags;
+- historico_cliente.
+
+Criar dashboard inicial com cards vazios/preparados para:
+- total de clientes;
+- total de filhos;
+- clientes ativos;
+- clientes com saldo;
+- aniversariantes;
+- clientes inativos.
+
+Critérios de aceite:
+- sistema deve abrir sem erros;
+- menu CRM deve estar visível;
+- páginas principais devem existir;
+- banco deve conter tabelas iniciais;
+- estrutura deve estar pronta para os próximos lotes.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+PROMPT 02 — Cadastro de Clientes / Responsáveis
+Implemente o cadastro completo de clientes/responsáveis no CRM TRUPE.
+
+Regra obrigatória:
+O cliente/responsável é o comprador. Os filhos são o público real da venda. Todas as informações devem ficar integradas ao CRM, PDV, carteira de saldo, histórico, WhatsApp e dashboard.
+
+Criar tela de clientes com:
+- lista de clientes;
+- busca por WhatsApp;
+- busca por nome;
+- busca por CPF;
+- cadastro rápido;
+- cadastro completo;
+- edição;
+- inativação;
+- visualização detalhada do cliente.
+
+Campos do cliente:
+- id interno automático;
+- nome completo;
+- CPF;
+- WhatsApp principal obrigatório;
+- WhatsApp secundário;
+- Instagram;
+- e-mail;
+- data de nascimento;
+- endereço;
+- número;
+- complemento;
+- bairro;
+- cidade;
+- estado;
+- CEP;
+- origem do cliente;
+- cliente VIP;
+- aceita marketing WhatsApp;
+- observações internas;
+- status.
+
+Regra técnica:
+O WhatsApp principal será o principal campo de busca, mas não será o ID interno do banco.
+O ID deve ser automático.
+O campo whatsapp_principal deve ser UNIQUE.
+Não permitir dois clientes com o mesmo WhatsApp principal.
+
+Salvar WhatsApp sem máscara.
+Exibir WhatsApp com máscara.
+
+Ao abrir um cliente, exibir abas:
+- Dados;
+- Filhos;
+- Histórico;
+- Carteira / Saldo;
+- Trocas e Devoluções;
+- Tags;
+- Observações.
+
+Integrações obrigatórias:
+- atualizar dashboard;
+- gerar histórico ao criar cliente;
+- preparar cliente para uso no PDV;
+- preparar cliente para campanhas WhatsApp;
+- permitir vínculo com filhos;
+- permitir vínculo com carteira de saldo.
+
+Critérios de aceite:
+- cliente cadastra corretamente;
+- WhatsApp duplicado é bloqueado;
+- busca por WhatsApp funciona;
+- cliente aparece no dashboard;
+- histórico é criado automaticamente;
+- tela do cliente mostra abas integradas.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+
+PROMPT 03 — Cadastro dos Filhos
+Implemente o cadastro de filhos vinculado aos clientes no CRM TRUPE.
+
+Regra obrigatória:
+Cada cliente/responsável pode ter um ou vários filhos. Os filhos são o cliente real da Trupe Kids, pois as vendas, campanhas e sugestões devem considerar idade, tamanho e preferências da criança.
+
+Criar cadastro de filhos dentro da tela do cliente.
+
+Campos do filho:
+- id interno automático;
+- cliente_id;
+- nome;
+- data de nascimento;
+- idade automática;
+- sexo;
+- tamanho de roupa;
+- tamanho de calçado;
+- preferência de estilo;
+- cores preferidas;
+- personagens preferidos;
+- observações;
+- foto opcional;
+- data da última atualização do tamanho;
+- status.
+
+Funcionalidades:
+- adicionar filho;
+- editar filho;
+- inativar filho;
+- calcular idade automática;
+- exibir filhos no perfil do cliente;
+- registrar histórico de alteração de tamanho;
+- permitir múltiplos filhos por cliente.
+
+Criar opção de atualização rápida de tamanho:
+- tamanho anterior;
+- novo tamanho;
+- data da atualização;
+- observação.
+
+Integrações obrigatórias:
+- filho deve aparecer no cadastro do cliente;
+- filho deve poder ser selecionado futuramente no PDV;
+- filho deve alimentar segmentações do CRM;
+- filho deve alimentar campanhas de WhatsApp por idade, tamanho e aniversário;
+- filho deve atualizar dashboard;
+- alteração de tamanho deve gerar histórico.
+
+Critérios de aceite:
+- cliente pode ter vários filhos;
+- idade é calculada automaticamente;
+- tamanho pode ser atualizado;
+- histórico registra alterações;
+- dashboard mostra total de filhos;
+- perfil do cliente exibe filhos corretamente.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+PROMPT 04 — Carteira de Saldo / Crédito do Cliente
+Implemente a carteira de saldo/crédito do cliente no CRM TRUPE.
+
+Regra obrigatória:
+Todo cliente pode possuir saldo/crédito gerado por trocas, devoluções, ajustes comerciais ou campanhas. Nenhum saldo pode ser alterado sem gerar registro no extrato.
+
+Criar tabela carteira_clientes com:
+- id;
+- cliente_id;
+- saldo_atual;
+- total_creditos_gerados;
+- total_creditos_utilizados;
+- total_creditos_expirados;
+- ultima_movimentacao;
+- status;
+- tenant_id;
+- created_at;
+- updated_at.
+
+Criar tabela movimentacoes_saldo com:
+- id;
+- cliente_id;
+- carteira_id;
+- tipo_movimentacao;
+- origem;
+- valor;
+- saldo_anterior;
+- saldo_posterior;
+- venda_id opcional;
+- troca_devolucao_id opcional;
+- usuario_responsavel;
+- observacao;
+- created_at.
+
+Tipos de movimentação:
+- ENTRADA;
+- SAIDA;
+- AJUSTE_MANUAL;
+- ESTORNO;
+- EXPIRACAO.
+
+Origens:
+- TROCA;
+- DEVOLUCAO;
+- VENDA;
+- CAMPANHA;
+- AJUSTE_MANUAL.
+
+Criar tela Carteira / Saldo dentro do cadastro do cliente com:
+- saldo atual;
+- total gerado;
+- total utilizado;
+- extrato completo;
+- botão para ajuste manual autorizado;
+- histórico de movimentações.
+
+Regras:
+- não permitir saldo negativo, exceto se configuração futura autorizar;
+- todo ajuste manual deve exigir observação;
+- toda movimentação deve registrar usuário;
+- saldo atual deve ser calculado pelo extrato;
+- o saldo deve aparecer no perfil do cliente.
+
+Integrações obrigatórias:
+- saldo deve aparecer no cadastro do cliente;
+- saldo deve aparecer futuramente no PDV;
+- saldo deve ser atualizado por trocas/devoluções;
+- saldo deve alimentar o dashboard;
+- clientes com saldo devem alimentar segmentação para WhatsApp.
+
+Critérios de aceite:
+- carteira é criada para o cliente;
+- saldo atual aparece no perfil;
+- extrato registra movimentações;
+- ajuste manual gera histórico;
+- dashboard mostra clientes com saldo;
+- nenhum saldo é alterado sem extrato.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+
+PROMPT 05 — Trocas e Devoluções Integradas
+Implemente o módulo de Trocas e Devoluções integrado ao CRM TRUPE.
+
+Regra obrigatória:
+Toda troca ou devolução deve estar vinculada a cliente, venda original, produto, estoque, carteira de saldo, histórico e dashboard.
+
+Criar menu:
+
+VENDAS
+├── Trocas e Devoluções
+│   ├── Nova Troca/Devolução
+│   ├── Em Aberto
+│   ├── Finalizadas
+│   ├── Créditos Gerados
+│   └── Histórico
+
+Criar tabela trocas_devolucoes com:
+- id;
+- cliente_id;
+- venda_id;
+- produto_id;
+- quantidade;
+- valor_unitario;
+- valor_total;
+- motivo;
+- tipo;
+- destino_produto;
+- gera_credito;
+- valor_credito;
+- status;
+- usuario_responsavel;
+- observacao;
+- created_at;
+- updated_at.
+
+Tipos:
+- TROCA;
+- DEVOLUCAO;
+- CREDITO_LOJA.
+
+Motivos:
+- tamanho;
+- defeito;
+- arrependimento;
+- presente repetido;
+- cor/modelo;
+- outro.
+
+Destino do produto:
+- retorna_estoque;
+- avaria;
+- descarte;
+- analise.
+
+Fluxo:
+1. selecionar cliente;
+2. selecionar venda original;
+3. selecionar produto devolvido;
+4. informar motivo;
+5. definir destino do produto;
+6. definir se gera crédito;
+7. atualizar carteira do cliente;
+8. criar movimentação no extrato;
+9. atualizar estoque;
+10. registrar histórico no cliente;
+11. atualizar dashboard.
+
+Integrações obrigatórias:
+- se gerar crédito, atualizar carteira;
+- se retornar ao estoque, atualizar estoque;
+- se for avaria, enviar para estoque de avaria;
+- registrar no histórico do cliente;
+- exibir no perfil do cliente;
+- atualizar indicadores do dashboard.
+
+Critérios de aceite:
+- troca pode ser criada;
+- devolução pode ser criada;
+- crédito é gerado corretamente;
+- carteira é atualizada;
+- extrato registra movimentação;
+- histórico do cliente é atualizado;
+- estoque é atualizado conforme destino.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integrado
+
+
+
+
+PROMPT 06 — Integração com PDV
+Implemente a integração do CRM TRUPE com o PDV/Balcão.
+
+Regra obrigatória:
+O PDV deve estar integrado com clientes, filhos, estoque, carteira de saldo, vendas, financeiro, histórico e CRM.
+
+No PDV, criar campo principal:
+- Buscar cliente por WhatsApp.
+
+Ao informar WhatsApp:
+- localizar cliente;
+- exibir nome;
+- exibir filhos;
+- exibir saldo disponível;
+- exibir última compra;
+- exibir observações importantes;
+- permitir cadastro rápido se cliente não existir.
+
+No fluxo de venda:
+- selecionar cliente;
+- selecionar filho da compra, quando aplicável;
+- adicionar produtos;
+- validar estoque;
+- aplicar desconto, se autorizado;
+- permitir uso de saldo/crédito;
+- calcular valor final;
+- finalizar venda;
+- baixar estoque;
+- registrar financeiro;
+- atualizar histórico do cliente;
+- atualizar carteira, se usou crédito;
+- atualizar dashboard;
+- atualizar indicadores do CRM.
+
+Regras para uso de saldo:
+- saldo pode ser usado total ou parcialmente;
+- valor usado deve gerar movimentação SAIDA no extrato;
+- venda deve guardar valor pago com saldo;
+- saldo restante deve ser exibido ao finalizar.
+
+Exemplo:
+Total da venda: R$ 230,00
+Saldo disponível: R$ 85,00
+Saldo utilizado: R$ 85,00
+Valor a pagar: R$ 145,00
+
+Integrações obrigatórias:
+- PDV baixa estoque;
+- PDV atualiza financeiro;
+- PDV atualiza CRM;
+- PDV atualiza histórico;
+- PDV atualiza saldo;
+- PDV atualiza dashboard;
+- PDV alimenta segmentações futuras de WhatsApp.
+
+Critérios de aceite:
+- PDV busca cliente por telefone;
+- PDV mostra filhos;
+- PDV mostra saldo;
+- PDV permite usar saldo;
+- venda atualiza histórico;
+- venda atualiza estoque;
+- venda atualiza carteira;
+- venda aparece no perfil do cliente.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+
+PROMPT 07 — Tags, Segmentações e WhatsApp Marketing
+Implemente tags, segmentações e preparação para campanhas WhatsApp no CRM TRUPE.
+
+Regra obrigatória:
+Toda campanha deve respeitar o campo aceita_marketing_whatsapp. Nenhum cliente sem autorização deve ser incluído em campanhas.
+
+Criar módulo:
+
+CRM
+├── Tags
+├── Segmentações
+├── Campanhas WhatsApp
+├── Clientes Inativos
+├── Aniversariantes
+└── Clientes com Saldo
+
+Criar tags manuais e automáticas.
+
+Tags sugeridas:
+- VIP;
+- MÃE_DE_MENINA;
+- MÃE_DE_MENINO;
+- CLIENTE_COM_SALDO;
+- COMPRA_BAZAR;
+- ALTO_TICKET;
+- SEM_COMPRAR_30_DIAS;
+- SEM_COMPRAR_60_DIAS;
+- SEM_COMPRAR_90_DIAS;
+- ANIVERSÁRIO_CLIENTE;
+- ANIVERSÁRIO_FILHO;
+- TAMANHO_ATUALIZADO;
+- TAMANHO_DESATUALIZADO.
+
+Criar segmentações por:
+- cliente com saldo disponível;
+- aniversário do cliente;
+- aniversário dos filhos;
+- idade dos filhos;
+- tamanho de roupa;
+- tamanho de calçado;
+- sexo do filho;
+- cliente VIP;
+- cliente inativo;
+- ticket médio;
+- total comprado;
+- última compra;
+- tags.
+
+Criar tela de Campanha WhatsApp com:
+- nome da campanha;
+- público selecionado;
+- quantidade de clientes;
+- mensagem;
+- status;
+- data de criação;
+- usuário responsável;
+- exportação de contatos;
+- histórico da campanha.
+
+Preparar integração futura com:
+- WhatsApp Cloud API;
+- Z-API;
+- Evolution API;
+- Chatwoot;
+- N8N.
+
+Regras:
+- somente clientes com WhatsApp válido;
+- somente clientes com aceite de marketing;
+- evitar duplicidade de contato;
+- registrar histórico da campanha no cliente.
+
+Integrações obrigatórias:
+- usar dados de clientes;
+- usar dados de filhos;
+- usar dados de saldo;
+- usar dados de vendas;
+- usar tags;
+- atualizar histórico;
+- atualizar dashboard.
+
+Critérios de aceite:
+- tags funcionam;
+- segmentações funcionam;
+- clientes sem aceite são excluídos;
+- campanha registra histórico;
+- contatos podem ser exportados;
+- clientes com saldo são segmentados.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integ
+
+
+
+
+PROMPT 08 — Dashboard Gerencial Integrado
+Implemente o Dashboard Gerencial Integrado do CRM TRUPE.
+
+Regra obrigatória:
+O dashboard deve usar dados reais dos módulos integrados. Não usar dados fixos/mockados após a integração.
+
+Criar dashboard com seções:
+
+1. CRM
+- total de clientes;
+- clientes ativos;
+- clientes inativos;
+- clientes VIP;
+- novos clientes no mês;
+- clientes com saldo disponível.
+
+2. Filhos
+- total de filhos cadastrados;
+- aniversariantes do mês;
+- filhos por faixa etária;
+- filhos por tamanho de roupa;
+- filhos por tamanho de calçado.
+
+3. Carteira / Saldos
+- valor total de créditos em aberto;
+- créditos gerados no mês;
+- créditos utilizados no mês;
+- clientes com maior saldo;
+- créditos expirados.
+
+4. Trocas e Devoluções
+- total de trocas no mês;
+- total de devoluções no mês;
+- motivos mais comuns;
+- produtos mais devolvidos;
+- valor gerado em crédito.
+
+5. Vendas / PDV
+- vendas vinculadas a clientes;
+- ticket médio;
+- total comprado por cliente;
+- clientes que mais compram;
+- últimas vendas.
+
+6. WhatsApp / CRM
+- clientes autorizados para marketing;
+- clientes sem autorização;
+- campanhas criadas;
+- clientes inativos;
+- oportunidades de campanha.
+
+Criar filtros:
+- período;
+- status do cliente;
+- vendedora;
+- canal de venda;
+- cliente VIP;
+- clientes com saldo;
+- tamanho do filho;
+- idade do filho.
+
+Integrações obrigatórias:
+- dashboard deve atualizar com cadastro de cliente;
+- dashboard deve atualizar com cadastro de filhos;
+- dashboard deve atualizar com vendas;
+- dashboard deve atualizar com trocas;
+- dashboard deve atualizar com movimentações de saldo;
+- dashboard deve atualizar com campanhas.
+
+Critérios de aceite:
+- dashboard carrega dados reais;
+- filtros funcionam;
+- indicadores batem com os módulos;
+- dados são atualizados automaticamente;
+- nenhuma informação aparece isolada ou sem origem.
+Nenhum módulo pode funcionar isolado.
+Todas as funcionalidades criadas devem obrigatoriamente ser integradas.
+
+
+
+PROMPT 09 — Regra Global de Integração do Projeto
+Aplique esta regra global em todo o projeto CRM TRUPE.
+
+Todas as funcionalidades criadas devem obrigatoriamente ser integradas.
+
+Nenhum módulo pode funcionar isolado.
+
+Fluxo principal obrigatório:
+Cliente/Responsável
+→ Filhos
+→ Vendas/PDV
+→ Estoque
+→ Trocas/Devoluções
+→ Carteira/Saldos
+→ Financeiro
+→ CRM
+→ WhatsApp
+→ Dashboard
+→ Histórico
+
+Toda ação relevante deve:
+- atualizar histórico;
+- atualizar dashboard;
+- respeitar tenant_id;
+- registrar usuário responsável;
+- registrar data e hora;
+- gerar log;
+- manter integridade dos dados;
+- não duplicar registros;
+- preservar relacionamento com cliente.
+
+Exemplos obrigatórios:
+
+Ao cadastrar cliente:
+- criar histórico;
+- preparar carteira;
+- atualizar dashboard;
+- permitir vínculo com filhos;
+- preparar para WhatsApp.
+
+Ao cadastrar filho:
+- vincular ao cliente;
+- atualizar dashboard;
+- alimentar segmentação;
+- registrar histórico.
+
+Ao finalizar venda:
+- vincular cliente;
+- vincular filho, se informado;
+- baixar estoque;
+- atualizar financeiro;
+- atualizar histórico;
+- atualizar CRM;
+- atualizar dashboard.
+
+Ao gerar troca/devolução:
+- vincular cliente;
+- vincular venda original;
+- atualizar estoque;
+- atualizar carteira;
+- gerar extrato;
+- atualizar histórico;
+- atualizar dashboard.
+
+Ao usar saldo no PDV:
+- baixar saldo;
+- gerar movimentação no extrato;
+- vincular à venda;
+- atualizar histórico;
+- atualizar dashboard.
+
+Ao criar campanha WhatsApp:
+- respeitar aceite de marketing;
+- usar segmentação;
+- registrar histórico;
+- evitar contatos duplicados.
+
+Revise o projeto e garanta que todos os módulos criados sigam essa regra global.

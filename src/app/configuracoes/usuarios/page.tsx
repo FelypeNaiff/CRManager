@@ -33,6 +33,7 @@ import {
 const emptyForm = {
   nome: "",
   email: "",
+  cpf: "",
   telefone: "",
   cargo: "",
   grupo_id: "",
@@ -106,6 +107,7 @@ export default function UsuariosConfigPage() {
     setForm({
       nome: user.nome || "",
       email: user.email || "",
+      cpf: user.cpf || "",
       telefone: user.telefone || "",
       cargo: user.cargo || "",
       grupo_id: user.grupo_id || "",
@@ -321,7 +323,7 @@ export default function UsuariosConfigPage() {
         </div>
       </div>
 
-      <ConfigCardSection>
+      <ConfigCardSection title="Busca de usuários">
         {/* BARRA DE BUSCA E FILTROS */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
           <div className="relative w-full md:max-w-md">
@@ -375,21 +377,18 @@ export default function UsuariosConfigPage() {
                           {user.nome ? user.nome.charAt(0).toUpperCase() : "U"}
                         </div>
                         {user.nome}
-                        {isUserOnlyAdmin(user.id) && <ShieldAlert className="h-4 w-4 text-amber-500 ml-1" title="Único administrador" />}
+                        {isUserOnlyAdmin(user.id) && (
+                          <span className="inline-flex items-center gap-1" title="Único administrador">
+                            <ShieldAlert className="h-4 w-4 text-amber-500 ml-1" aria-hidden="true" />
+                            <span className="sr-only">Único administrador</span>
+                          </span>
+                        )}
                       </div>
                     </ConfigDataTableCell>
                     <ConfigDataTableCell>{getGrupoNome(user.grupo_id)}</ConfigDataTableCell>
                     <ConfigDataTableCell>{user.email}</ConfigDataTableCell>
                     <ConfigDataTableCell>
-                      <ConfigStatusBadge 
-                        status={!user.permitir_acesso ? "SEM ACESSO" : user.status || "ATIVO"} 
-                        variant={
-                          !user.permitir_acesso ? "neutral" :
-                          user.status === "ATIVO" ? "success" : 
-                          user.status === "BLOQUEADO" ? "danger" : 
-                          "neutral"
-                        } 
-                      />
+                      <ConfigStatusBadge status={!user.permitir_acesso ? "SEM ACESSO" : user.status || "ATIVO"} />
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -438,6 +437,12 @@ export default function UsuariosConfigPage() {
               type="email"
               value={form.email}
               onChange={e => handleUpdateField("email", e.target.value)}
+            />
+            <ConfigInputField 
+              label="CPF" 
+              id="user_cpf"
+              value={form.cpf}
+              onChange={e => handleUpdateField("cpf", e.target.value)}
             />
             <ConfigInputField 
               label="Telefone / Celular" 

@@ -30,6 +30,7 @@ import {
 const emptyForm = {
   nome: "",
   descricao: "",
+  cor: "#4f46e5",
   status: "ATIVO" as "ATIVO" | "INATIVO",
   is_admin: false,
 }
@@ -81,6 +82,7 @@ export default function GruposUsuariosConfigPage() {
     setForm({
       nome: grupo.nome || "",
       descricao: grupo.descricao || "",
+      cor: grupo.cor || "#4f46e5",
       status: grupo.status || "ATIVO",
       is_admin: grupo.is_admin || false,
     })
@@ -215,7 +217,7 @@ export default function GruposUsuariosConfigPage() {
         </div>
       </div>
 
-      <ConfigCardSection>
+      <ConfigCardSection title="Pesquisa de grupos">
         {/* BARRA DE BUSCA */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 mb-6">
           <div className="relative w-full md:max-w-md">
@@ -258,6 +260,9 @@ export default function GruposUsuariosConfigPage() {
                   <ConfigDataTableRow key={grupo.id} className="hover:bg-slate-50/50">
                     <ConfigDataTableCell className="font-medium">
                       <div>
+                        {grupo.cor && (
+                          <span className="inline-block w-3 h-3 rounded-full mr-2" style={{ backgroundColor: grupo.cor }}></span>
+                        )}
                         {grupo.nome}
                         {grupo.is_admin && <span className="ml-2 text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">ROOT</span>}
                       </div>
@@ -271,10 +276,7 @@ export default function GruposUsuariosConfigPage() {
                       </div>
                     </ConfigDataTableCell>
                     <ConfigDataTableCell>
-                      <ConfigStatusBadge 
-                        status={grupo.status || "ATIVO"} 
-                        variant={grupo.status === "ATIVO" ? "success" : "neutral"} 
-                      />
+                      <ConfigStatusBadge status={grupo.status || "ATIVO"} />
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
@@ -315,6 +317,14 @@ export default function GruposUsuariosConfigPage() {
               id="grupo_nome"
               value={form.nome}
               onChange={e => handleUpdateField("nome", e.target.value)}
+            />
+
+            <ConfigInputField 
+              label="Cor de Identificação" 
+              id="grupo_cor"
+              type="color"
+              value={form.cor}
+              onChange={e => handleUpdateField("cor", e.target.value)}
             />
             
             <ConfigTextareaField 
