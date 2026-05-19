@@ -34,7 +34,10 @@ import {
   Boxes,
   MapPin,
   Link as LinkIcon,
-  ShieldCheck
+  ShieldCheck,
+  Filter,
+  UserX,
+  Gift
 } from "lucide-react"
 
 import {
@@ -73,9 +76,26 @@ const navItems = [
     title: "CRM",
     icon: Users,
     items: [
-      { title: "Clientes", url: "/clientes", icon: Users },
-      { title: "Filhos", url: "/filhos", icon: Baby },
-      { title: "Atendimentos", url: "/atendimentos", icon: Headset },
+      { title: "Dashboard", url: "/crm/dashboard", icon: LayoutDashboard },
+      { title: "Clientes", url: "/crm/clientes", icon: Users },
+      { title: "Filhos", url: "/crm/filhos", icon: Baby },
+      { title: "Aniversariantes", url: "/crm/clientes?tab=aniversariantes", icon: Gift },
+      { title: "Campanhas WhatsApp", url: "/crm/campanhas", icon: MessageSquare },
+      { title: "Carteira / Saldos", url: "/crm/carteira", icon: Wallet },
+      { title: "Trocas e Devoluções", url: "/crm/trocas", icon: Repeat },
+      { title: "Clientes com Saldo", url: "/crm/carteira?filter=com-saldo", icon: Wallet },
+      { title: "Configurações", url: "/crm/configuracoes", icon: Settings },
+      {
+        title: "Info Auxiliar",
+        icon: FileText,
+        items: [
+          { title: "Histórico", url: "/crm/historico" },
+          { title: "Carteira / Saldos", url: "/crm/carteira" },
+          { title: "Clientes Inativos", url: "/crm/clientes?status=inativo" },
+          { title: "Tags", url: "/crm/tags" },
+          { title: "Segmentações", url: "/crm/segmentacoes" }
+        ]
+      }
     ],
   },
   {
@@ -84,7 +104,17 @@ const navItems = [
     items: [
       { title: "PDV", url: "/pdv", icon: ShoppingCart },
       { title: "Vendas Realizadas", url: "/vendas", icon: History },
-      { title: "Trocas e Devoluções", url: "/trocas", icon: Repeat },
+      { 
+        title: "Trocas e Devoluções", 
+        icon: Repeat,
+        items: [
+          { title: "Nova Troca/Devolução", url: "/crm/trocas?tab=nova" },
+          { title: "Em Aberto", url: "/crm/trocas?tab=aberto" },
+          { title: "Finalizadas", url: "/crm/trocas?tab=finalizadas" },
+          { title: "Créditos Gerados", url: "/crm/trocas?tab=creditos" },
+          { title: "Histórico", url: "/crm/trocas?tab=historico" },
+        ]
+      },
       { title: "Vendedores", url: "/vendedores", icon: Briefcase },
       { title: "Metas", url: "/metas", icon: PieChart },
     ],
@@ -259,18 +289,18 @@ export function AppSidebar() {
                             <Collapsible key={subItem.title} asChild defaultOpen={subItem.items.some((ss: any) => pathname === ss.url)} className="group/sub-collapsible">
                               <SidebarMenuSubItem>
                                 <CollapsibleTrigger asChild>
-                                  <SidebarMenuSubButton className="flex w-full items-center justify-between hover:bg-transparent cursor-pointer font-medium text-sidebar-foreground">
-                                    <span className="group-data-[state=open]/sub-collapsible:text-primary">{subItem.title}</span>
-                                    <ChevronRight className="ml-auto h-3 w-3 transition-transform duration-200 group-data-[state=open]/sub-collapsible:rotate-90 text-sidebar-foreground/50" />
+                                  <SidebarMenuSubButton className="flex w-full items-center justify-between hover:bg-transparent cursor-pointer font-medium text-sidebar-foreground whitespace-nowrap">
+                                    <span className="group-data-[state=open]/sub-collapsible:text-primary whitespace-nowrap truncate">{subItem.title}</span>
+                                    <ChevronRight className="ml-auto h-3 w-3 shrink-0 transition-transform duration-200 group-data-[state=open]/sub-collapsible:rotate-90 text-sidebar-foreground/50" />
                                   </SidebarMenuSubButton>
                                 </CollapsibleTrigger>
                                 <CollapsibleContent>
                                   <SidebarMenuSub className="pl-2 border-l border-sidebar-border ml-2 mt-1 space-y-1">
                                     {subItem.items.map((nestedItem: any) => (
                                       <SidebarMenuSubItem key={nestedItem.title}>
-                                        <SidebarMenuSubButton asChild isActive={pathname === nestedItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors text-xs">
+                                        <SidebarMenuSubButton asChild isActive={pathname === nestedItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors text-xs whitespace-nowrap">
                                           <Link href={nestedItem.url}>
-                                            <span>{nestedItem.title}</span>
+                                            <span className="whitespace-nowrap truncate">{nestedItem.title}</span>
                                           </Link>
                                         </SidebarMenuSubButton>
                                       </SidebarMenuSubItem>
@@ -281,9 +311,9 @@ export function AppSidebar() {
                             </Collapsible>
                           ) : (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors">
+                              <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors whitespace-nowrap">
                                 <Link href={subItem.url || "#"}>
-                                  <span>{subItem.title}</span>
+                                  <span className="whitespace-nowrap truncate">{subItem.title}</span>
                                 </Link>
                               </SidebarMenuSubButton>
                             </SidebarMenuSubItem>
