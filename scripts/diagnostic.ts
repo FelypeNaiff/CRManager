@@ -1,0 +1,1 @@
+import { PrismaClient } from '@prisma/client'; const prisma = new PrismaClient(); async function run() { const user = await prisma.user.findFirst({ where: { username: 'felypenaiff' } }); console.log('User in Prisma:', user); } run();

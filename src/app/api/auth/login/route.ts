@@ -33,12 +33,12 @@ export async function POST(req: NextRequest) {
 
     if (!user) {
       console.log(`[LOGIN] Usuário não encontrado: ${username}`)
-      return NextResponse.json({ success: false, error: 'Credenciais inválidas.' }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 401 })
     }
 
     if (user.status !== 'ACTIVE' || user.permitirAcesso === false) {
       console.log(`[LOGIN] Usuário inativo: ${user.email}`)
-      return NextResponse.json({ success: false, error: 'Usuário inativo ou sem permissão de acesso.' }, { status: 403 })
+      return NextResponse.json({ success: false, error: 'Usuário inativo' }, { status: 403 })
     }
 
     console.log(`[LOGIN] Usuário encontrado. Autenticando com email: ${user.email}`)
@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
 
     if (authError || !authData.session) {
       console.error(`[LOGIN] Falha no Supabase Auth:`, authError?.message)
-      return NextResponse.json({ success: false, error: 'Credenciais inválidas no provedor.' }, { status: 401 })
+      return NextResponse.json({ success: false, error: `Falha Supabase Auth: ${authError?.message || 'Sessão nula'}` }, { status: 401 })
     }
 
     console.log(`[LOGIN] Sucesso no Supabase Auth. Criando cookie de sessão.`)
@@ -89,7 +89,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, redirectTo: '/dashboard' })
 
   } catch (error: any) {
-    console.error('[LOGIN] Erro interno:', error)
-    return NextResponse.json({ success: false, error: 'Ocorreu um erro interno ao processar o login.' }, { status: 500 })
+    console.error('[LOGIN] Erro interno capturado com stack:', error.stack || error)
+    return NextResponse.json({ success: false, error: `Erro interno: ${error.message || String(error)}` }, { status: 500 })
   }
 }

@@ -4,7 +4,7 @@ import { createClient } from '@supabase/supabase-js'
 // Using service role key for administrative tasks (like creating users bypassing email confirmation)
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!
+  process.env.SUPABASE_SECRET_KEY!
 )
 const prisma = new PrismaClient()
 
