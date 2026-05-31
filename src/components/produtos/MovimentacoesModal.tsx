@@ -1,8 +1,6 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useFirestore } from "@/firebase"
-import { collection, query, where, getDocs, orderBy } from "firebase/firestore"
 import {
   Dialog,
   DialogContent,
@@ -10,6 +8,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Loader2, ArrowLeftRight } from "lucide-react"
+import { getProductInventoryMovements } from "@/lib/crm/products-actions"
 
 interface Movimentacao {
   id: string
@@ -31,35 +30,42 @@ interface MovimentacoesModalProps {
 }
 
 export function MovimentacoesModal({ produtoId, produtoNome, isOpen, onClose }: MovimentacoesModalProps) {
-  const db = useFirestore()
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
-    if (isOpen && produtoId && db) {
+    if (isOpen && produtoId) {
       loadMovimentacoes()
     }
-  }, [isOpen, produtoId, db])
+  }, [isOpen, produtoId])
 
   const loadMovimentacoes = async () => {
     setIsLoading(true)
     try {
-      const q = query(
-        collection(db!, "movimentacoes_estoque"),
-        where("produtoId", "==", produtoId),
-        // orderBy("dataHora", "desc") // Precisa de índice no Firestore, então ordenaremos no client se não houver índice
-      )
-      const snap = await getDocs(q)
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Movimentacao))
-      
-      // Ordenação no client-side para evitar erro de índice faltando no Firebase temporariamente
-      data.sort((a, b) => {
-        const timeA = a.dataHora?.seconds || 0
-        const timeB = b.dataHora?.seconds || 0
-        return timeB - timeA // desc
-      })
-
-      setMovimentacoes(data)
+      const res = await getProductInventoryMovements(produtoId)
+      if (res.success && res.data) {
+        const mapped = res.data.map((m: any) => {
+          const qty = Number(m.quantity)
+          const variantSale = Number(m.variant.salePrice || 0)
+          
+          return {
+            id: m.id,
+            dataHora: {
+              seconds: Math.floor(new Date(m.createdAt).getTime() / 1000)
+            },
+            entidade: m.user ? m.user.name : "Sistema (Ajuste/ETL)",
+            tipo: qty > 0 ? "Entrada" : "Saída" as "Entrada" | "Saída",
+            qntMovim: qty,
+            qntFinal: Number(m.variant.currentStock),
+            custoUnit: variantSale,
+            custoTotal: variantSale * Math.abs(qty),
+            descricao: m.reason || ""
+          }
+        })
+        setMovimentacoes(mapped)
+      } else {
+        setMovimentacoes([])
+      }
     } catch (error) {
       console.error("Erro ao carregar movimentações:", error)
     } finally {

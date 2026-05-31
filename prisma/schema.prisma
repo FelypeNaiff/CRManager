@@ -80,6 +80,7 @@ model User {
   companyId             String                 @map("company_id")
   roleId                String?                @map("role_id")
   name                  String
+  username              String?                @unique
   email                 String                 @unique
   pinAccessHash         String                 @map("pin_access_hash")
   status                String                 @default("ACTIVE")

@@ -99,11 +99,13 @@ const navItems = [
     ],
   },
   {
-    title: "Vendas",
+    title: "Comercial",
     icon: ShoppingCart,
     items: [
-      { title: "PDV", url: "/pdv", icon: ShoppingCart },
-      { title: "Vendas Realizadas", url: "/vendas", icon: History },
+      { title: "Vendas", url: "/comercial/vendas", icon: ShoppingCart },
+      { title: "Metas", url: "/comercial/metas", icon: PieChart },
+      { title: "Comissões", url: "/comercial/comissoes", icon: DollarSign },
+      { title: "PDV (Em Breve)", url: "#", icon: Store },
       { 
         title: "Trocas e Devoluções", 
         icon: Repeat,
@@ -116,7 +118,6 @@ const navItems = [
         ]
       },
       { title: "Vendedores", url: "/vendedores", icon: Briefcase },
-      { title: "Metas", url: "/metas", icon: PieChart },
     ],
   },
   {
@@ -172,6 +173,11 @@ const navItems = [
     title: "Agenda",
     url: "/agenda",
     icon: CalendarDays,
+  },
+  {
+    title: "Relatórios",
+    url: "/relatorios",
+    icon: FileText,
   },
   {
     title: "Configurações",

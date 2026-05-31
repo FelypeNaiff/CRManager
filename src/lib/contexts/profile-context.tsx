@@ -1,11 +1,13 @@
 "use client"
 
-import React, { createContext, useContext, useState, useEffect } from 'react'
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react'
 
 export interface Profile {
   id: string
   nome: string
   empresaId?: string
+  isAdmin?: boolean
+  permissions?: Record<string, boolean>
   [key: string]: any
 }
 
@@ -18,36 +20,42 @@ interface ProfileContextType {
 
 const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
 
+const PROFILE_STORAGE_KEY = '@crmanager:activeProfile'
+
 export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
+  // Hydrate from localStorage on mount
   useEffect(() => {
-    const stored = localStorage.getItem('@crmanager:activeProfile')
-    if (stored) {
-      try {
+    try {
+      const stored = localStorage.getItem(PROFILE_STORAGE_KEY)
+      if (stored) {
         const parsed = JSON.parse(stored)
-        if (parsed && parsed.id) {
+        if (parsed?.id) {
           setActiveProfile(parsed)
         } else {
-          localStorage.removeItem('@crmanager:activeProfile')
+          localStorage.removeItem(PROFILE_STORAGE_KEY)
         }
-      } catch (e) {
-        localStorage.removeItem('@crmanager:activeProfile')
       }
+    } catch {
+      localStorage.removeItem(PROFILE_STORAGE_KEY)
+    } finally {
+      setIsLoadingProfile(false)
     }
-    setIsLoadingProfile(false)
   }, [])
 
-  const loginProfile = (profile: Profile) => {
+  const loginProfile = useCallback((profile: Profile) => {
     setActiveProfile(profile)
-    localStorage.setItem('@crmanager:activeProfile', JSON.stringify(profile))
-  }
+    localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(profile))
+  }, [])
 
-  const logoutProfile = () => {
+  const logoutProfile = useCallback(() => {
     setActiveProfile(null)
-    localStorage.removeItem('@crmanager:activeProfile')
-  }
+    localStorage.removeItem(PROFILE_STORAGE_KEY)
+    // The HTTP-only session cookie is cleared by the Server Action
+    // logoutProfileSession() — called by the layout/header component
+  }, [])
 
   return (
     <ProfileContext.Provider value={{ activeProfile, isLoadingProfile, loginProfile, logoutProfile }}>
@@ -63,3 +71,4 @@ export function useProfile() {
   }
   return context
 }
+

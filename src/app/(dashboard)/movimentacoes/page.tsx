@@ -1,11 +1,10 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useFirestore } from "@/firebase"
-import { collection, query, orderBy, getDocs, limit } from "firebase/firestore"
 import { ArrowLeftRight, Loader2, Search, Filter } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { getInventoryMovements } from "@/lib/crm/products-actions"
 
 interface Movimentacao {
   id: string
@@ -22,41 +21,44 @@ interface Movimentacao {
 }
 
 export default function MovimentacoesPage() {
-  const db = useFirestore()
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
   useEffect(() => {
-    if (db) {
-      loadMovimentacoes()
-    }
-  }, [db])
+    loadMovimentacoes()
+  }, [])
 
   const loadMovimentacoes = async () => {
     setIsLoading(true)
     try {
-      // Pega as últimas 100 movimentações globais
-      const q = query(
-        collection(db!, "movimentacoes_estoque"),
-        // orderBy("dataHora", "desc"), // Pode falhar se não houver índice
-        limit(100)
-      )
-      const snap = await getDocs(q)
-      const data = snap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Movimentacao))
-      
-      // Busca nomes de produtos se não houver no doc (otimização)
-      // Idealmente, produtoNome já deve ser salvo no documento de movimentação na hora da criação.
-      // Se não, faríamos um join aqui. Assumimos que vamos salvar produtoNome.
-
-      // Ordenação client-side
-      data.sort((a, b) => {
-        const timeA = a.dataHora?.seconds || 0
-        const timeB = b.dataHora?.seconds || 0
-        return timeB - timeA
-      })
-
-      setMovimentacoes(data)
+      const res = await getInventoryMovements()
+      if (res.success && res.data) {
+        const mapped = res.data.map((m: any) => {
+          const qty = Number(m.quantity)
+          const variantCost = Number(m.variant.costPrice || 0)
+          const variantSale = Number(m.variant.salePrice || 0)
+          
+          return {
+            id: m.id,
+            produtoId: m.variant.product.name,
+            produtoNome: m.variant.product.name,
+            dataHora: {
+              seconds: Math.floor(new Date(m.createdAt).getTime() / 1000)
+            },
+            entidade: m.user ? m.user.name : "Sistema (Ajuste/ETL)",
+            tipo: qty > 0 ? "Entrada" : "Saída" as "Entrada" | "Saída",
+            qntMovim: qty,
+            qntFinal: Number(m.variant.currentStock),
+            custoUnit: variantSale,
+            custoTotal: variantSale * Math.abs(qty),
+            descricao: m.reason || ""
+          }
+        })
+        setMovimentacoes(mapped)
+      } else {
+        setMovimentacoes([])
+      }
     } catch (error) {
       console.error("Erro ao carregar movimentações:", error)
     } finally {

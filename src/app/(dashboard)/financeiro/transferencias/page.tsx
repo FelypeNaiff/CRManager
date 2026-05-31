@@ -97,8 +97,8 @@ export default function TransferenciasPage() {
       return toast({ variant: "destructive", title: "Informe um valor válido maior que zero" })
     }
 
-    const sourceAccount = bankAccounts.find((b: any) => b.id === form.sourceId)
-    const destAccount = bankAccounts.find((b: any) => b.id === form.destinationId)
+    const sourceAccount = (bankAccounts ?? []).find((b: any) => b.id === form.sourceId)
+    const destAccount = (bankAccounts ?? []).find((b: any) => b.id === form.destinationId)
 
     if (!sourceAccount || !destAccount) {
       return toast({ variant: "destructive", title: "Conta não encontrada" })
@@ -259,7 +259,7 @@ export default function TransferenciasPage() {
                   <SelectValue placeholder="Selecione a origem" />
                 </SelectTrigger>
                 <SelectContent>
-                  {activeBanks.map((b: any) => (
+                  {(activeBanks || []).map((b: any) => (
                     <SelectItem key={b.id} value={b.id}>
                       <div className="flex justify-between items-center w-full min-w-[200px]">
                         <span>{b.name}</span>

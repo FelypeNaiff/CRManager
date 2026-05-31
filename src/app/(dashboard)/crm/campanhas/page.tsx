@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useMemo, useEffect } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
 import { collection, addDoc, query, where, getDocs, Timestamp } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -31,6 +31,7 @@ export default function CampanhasPage() {
   const searchParams = useSearchParams()
   const db = useFirestore()
   const { activeProfile } = useProfile()
+  const router = useRouter()
   const tenantId = activeProfile?.empresaId || "default-tenant"
 
   const [activeTab, setActiveTab] = useState("nova")

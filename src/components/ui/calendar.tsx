@@ -54,13 +54,14 @@ function Calendar({
         ...classNames,
       }}
       components={{
-        IconLeft: ({ className, ...props }) => (
-          <ChevronLeft className={cn("h-4 w-4", className)} {...props} />
-        ),
-        IconRight: ({ className, ...props }) => (
-          <ChevronRight className={cn("h-4 w-4", className)} {...props} />
-        ),
-      }}
+        // Compatible with both react-day-picker v8 and v9
+        Chevron: ({ orientation, ...rest }: { orientation?: string; [key: string]: unknown }) => {
+          if (orientation === "left") {
+            return <ChevronLeft className="h-4 w-4" />;
+          }
+          return <ChevronRight className="h-4 w-4" />;
+        },
+      } as React.ComponentProps<typeof DayPicker>["components"]}
       {...props}
     />
   )

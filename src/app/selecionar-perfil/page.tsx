@@ -1,11 +1,10 @@
-﻿"use client"
+"use client"
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
-import { useUser, useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, addDoc, serverTimestamp, query, where } from "firebase/firestore"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, UserCircle2, ShieldCheck, LogOut, LockKeyhole } from "lucide-react"
+import { useUser } from "@/firebase"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2, UserCircle2, LogOut, LockKeyhole } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { signOut } from "firebase/auth"
 import { useAuth } from "@/firebase"
@@ -13,26 +12,42 @@ import { useProfile } from "@/lib/contexts/profile-context"
 import { toast } from "@/hooks/use-toast"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
+import { getAvailableProfiles, validateProfilePin } from "@/lib/auth/actions"
 
 export default function SelecionarPerfilPage() {
   const { user, isUserLoading } = useUser()
   const router = useRouter()
-  const db = useFirestore()
   const auth = useAuth()
   const { loginProfile } = useProfile()
   const [isSelecting, setIsSelecting] = useState<string | null>(null)
   const [selectedUserForPin, setSelectedUserForPin] = useState<any>(null)
   const [pin, setPin] = useState("")
   const [pinError, setPinError] = useState("")
+  const [availableProfiles, setAvailableProfiles] = useState<any[]>([])
+  const [isLoadingUsers, setIsLoadingUsers] = useState(true)
 
-  // Busca de usuários dinamicamente do banco de dados (Apenas ativos e com acesso permitido)
-  const usuariosQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "usuarios"), where("empresa_id", "==", "trupe-kids"), where("status", "==", "ATIVO"))
-  }, [db])
-
-  const { data: usuariosData, isLoading: isLoadingUsers } = useCollection(usuariosQuery)
-  const availableProfiles = usuariosData?.filter(u => u.permitir_acesso) || []
+  // Busca de usuários dinamicamente do banco relacional PostgreSQL via Prisma
+  useEffect(() => {
+    async function loadProfiles() {
+      try {
+        setIsLoadingUsers(true)
+        const res = await getAvailableProfiles()
+        if (res.success && res.profiles) {
+          setAvailableProfiles(res.profiles)
+        } else {
+          toast({ variant: "destructive", title: "Erro", description: res.error || "Não foi possível carregar os perfis." })
+        }
+      } catch (error) {
+        console.error("Erro ao carregar perfis do Prisma:", error)
+        toast({ variant: "destructive", title: "Erro", description: "Falha de conexão com o banco de dados." })
+      } finally {
+        setIsLoadingUsers(false)
+      }
+    }
+    if (user) {
+      loadProfiles()
+    }
+  }, [user])
 
   useEffect(() => {
     if (!isUserLoading) {
@@ -50,48 +65,36 @@ export default function SelecionarPerfilPage() {
 
   const handlePinSubmit = async (e?: React.FormEvent) => {
     if (e) e.preventDefault()
-    if (!user || !db) return
+    if (!user) return
     if (!selectedUserForPin) return
 
-    if (pin !== selectedUserForPin.pin_acesso) {
-      setPinError("Senha incorreta para este perfil.")
-      return
-    }
-
+    setPinError("")
     setIsSelecting(selectedUserForPin.id)
-    setSelectedUserForPin(null) // Fecha o modal
 
     try {
-      const sessionRef = await addDoc(collection(db, "login_sessions"), {
-        google_email: user.email,
-        google_name: user.displayName,
-        selected_profile: selectedUserForPin.nome,
-        profile_id: selectedUserForPin.id,
-        profile_role: selectedUserForPin.cargo || "",
-        grupo_id: selectedUserForPin.grupo_id,
-        login_at: serverTimestamp(),
-        logout_at: null,
-        device_info: navigator.userAgent
-      })
+      // Valida o PIN de forma segura exclusivamente no servidor (bcrypt)
+      const res = await validateProfilePin(selectedUserForPin.id, pin)
 
-      const activeProfileData = {
-        id: selectedUserForPin.id,
-        nome: selectedUserForPin.nome,
-        email: user.email || "",
-        empresaId: selectedUserForPin.empresa_id || "trupe-kids",
-        role: selectedUserForPin.cargo || "operador",
-        status: "ATIVO" as "ATIVO",
-        permitir_acesso: selectedUserForPin.permitir_acesso,
-        pin_acesso: selectedUserForPin.pin_acesso,
-        grupo_id: selectedUserForPin.grupo_id,
-        sessionId: sessionRef.id
+      if (!res.success || !res.profile) {
+        setPinError(res.error || "Senha incorreta.")
+        setIsSelecting(null)
+        return
       }
 
-      loginProfile(activeProfileData)
+      setSelectedUserForPin(null) // Fecha o modal
+      
+      // Salva o perfil com as permissões no contexto local (localStorage)
+      loginProfile(res.profile)
+      
+      toast({
+        title: "Acesso autorizado!",
+        description: `Operador ${res.profile.nome} conectado com sucesso.`,
+      })
+      
       router.push("/dashboard")
     } catch (error) {
-      console.error("Erro ao iniciar sessão:", error)
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível iniciar a sessão." })
+      console.error("Erro ao validar PIN no servidor:", error)
+      toast({ variant: "destructive", title: "Erro", description: "Não foi possível autenticar o perfil no servidor." })
       setIsSelecting(null)
     }
   }
@@ -100,6 +103,7 @@ export default function SelecionarPerfilPage() {
     await signOut(auth)
     router.push("/login")
   }
+
 
   if (isUserLoading || !user) {
     return (

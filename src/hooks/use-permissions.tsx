@@ -2,9 +2,6 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useDoc, useMemoFirebase } from "@/firebase"
-import { doc, getDoc } from "firebase/firestore"
-import { useRouter, usePathname } from "next/navigation"
 
 type PermissoesMatriz = Record<string, Record<string, boolean>>
 
@@ -14,6 +11,7 @@ interface PermissionsContextType {
   isLoading: boolean
   hasPermission: (modulo: string, acao: string) => boolean
   canAccessRoute: (pathname: string) => boolean
+  hasRole: (role: string) => boolean
 }
 
 const PermissionsContext = createContext<PermissionsContextType>({
@@ -22,71 +20,52 @@ const PermissionsContext = createContext<PermissionsContextType>({
   isLoading: true,
   hasPermission: () => false,
   canAccessRoute: () => false,
+  hasRole: () => false,
 })
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
-  const { activeProfile } = useProfile()
-  const db = useFirestore()
+  const { activeProfile, isLoadingProfile } = useProfile()
   
   const [matriz, setMatriz] = useState<PermissoesMatriz>({})
   const [isAdminRoot, setIsAdminRoot] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
-    async function fetchPermissions() {
-      if (!db || !activeProfile?.id) {
-        setIsLoading(false)
-        return
-      }
+    if (isLoadingProfile) return
 
-      try {
-        setIsLoading(true)
-        
-        // Bypass de segurança: Felype e Milena sempre têm acesso total (ROOT)
-        const nomeUpper = activeProfile.nome?.toUpperCase() || ""
-        const emailLower = activeProfile.email?.toLowerCase() || ""
-        
-        if (nomeUpper.includes("FELYPE") || nomeUpper.includes("MILENA") || emailLower === "felypenaiff01@gmail.com") {
-          setIsAdminRoot(true)
-          setIsLoading(false)
-          return
-        }
-        
-        // 1. Busca o grupo do usuário para validar se é Root Admin (is_admin)
-        if (activeProfile.grupo_id && activeProfile.grupo_id !== "none") {
-          const groupSnap = await getDoc(doc(db, "grupos_usuarios", activeProfile.grupo_id))
-          if (groupSnap.exists() && groupSnap.data().is_admin) {
-            setIsAdminRoot(true)
-            setIsLoading(false)
-            return
-          }
-        }
-
-        setIsAdminRoot(false)
-
-        // 2. Se não tem grupo ou não for root, carrega a matriz de permissões
-        if (!activeProfile.grupo_id || activeProfile.grupo_id === "none") {
-          setMatriz({})
-          setIsLoading(false)
-          return
-        }
-
-        const permSnap = await getDoc(doc(db, "permissoes_grupo", activeProfile.grupo_id))
-        if (permSnap.exists() && permSnap.data().matriz) {
-          setMatriz(permSnap.data().matriz)
-        } else {
-          setMatriz({})
-        }
-
-      } catch (e) {
-        console.error("Erro ao carregar permissões", e)
-      } finally {
-        setIsLoading(false)
-      }
+    if (!activeProfile) {
+      setMatriz({})
+      setIsAdminRoot(false)
+      setIsLoading(false)
+      return
     }
 
-    fetchPermissions()
-  }, [db, activeProfile])
+    setIsLoading(true)
+    
+    // Define se é Admin Root com base no banco de dados (Prisma)
+    const isAdmin = !!activeProfile.isAdmin
+    setIsAdminRoot(isAdmin)
+
+    // Reconstrói a matriz Record<Modulo, Record<Acao, Boolean>> a partir do dicionário de permissões
+    const newMatriz: PermissoesMatriz = {}
+    if (activeProfile && activeProfile.permissions) {
+      const perms = activeProfile.permissions as Record<string, boolean>
+      Object.keys(perms).forEach((key) => {
+        const [module, action] = key.split(':')
+        if (module && action) {
+          if (!newMatriz[module]) {
+            newMatriz[module] = {}
+          }
+          newMatriz[module][action] = !!perms[key]
+        }
+      })
+    }
+
+
+
+    setMatriz(newMatriz)
+    setIsLoading(false)
+  }, [activeProfile, isLoadingProfile])
 
   const hasPermission = useCallback((modulo: string, acao: string) => {
     if (isAdminRoot) return true
@@ -125,7 +104,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     
     if (pathname.startsWith("/fornecedores")) return hasPermission("Fornecedores", "visualizar")
     if (pathname.startsWith("/clientes")) return hasPermission("Clientes", "visualizar")
-    if (pathname.startsWith("/filhos")) return hasPermission("Filhos", "visualizar")
+    if (pathname.startsWith("/filhos")) return hasPermission("Filhos", "visualizar") || hasPermission("Clientes", "visualizar")
     
     if (pathname.startsWith("/pdv")) return hasPermission("PDV", "visualizar")
     if (pathname.startsWith("/caixa")) return hasPermission("Caixa", "visualizar")
@@ -141,9 +120,14 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     return false
   }, [isAdminRoot, hasPermission])
 
+  const hasRole = useCallback((role: string) => {
+    if (isAdminRoot) return role === "admin";
+    return false; // Roles are managed by isAdmin flag and permissions
+  }, [isAdminRoot])
+
   const contextValue = useMemo(() => ({
-    matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute
-  }), [matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute])
+    matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute, hasRole
+  }), [matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute, hasRole])
 
   return (
     <PermissionsContext.Provider value={contextValue}>

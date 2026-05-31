@@ -97,7 +97,7 @@ export default function FinanceiroDashboardPage() {
 
   // Gráfico: Receitas x Despesas (Últimos 6 meses)
   const chartEvolucao = useMemo(() => {
-    const data = []
+    const data: Array<{ name: string; Receitas: number; Despesas: number }> = []
     if (!payables || !receivables) return data
 
     for (let i = 5; i >= 0; i--) {

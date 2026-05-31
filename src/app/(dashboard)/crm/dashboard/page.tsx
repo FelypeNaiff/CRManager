@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -50,6 +50,8 @@ import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
 import { collection, query, where } from "firebase/firestore"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { format } from "date-fns"
+import { getCustomers } from "@/lib/crm/actions"
+
 
 const COLORS = ['#6366f1', '#ec4899', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6', '#ef4444'];
 
@@ -89,30 +91,69 @@ export default function CrmDashboardPage() {
   const [filtroTamanhoFilho, setFiltroTamanhoFilho] = useState("todos")
   const [filtroIdadeFilho, setFiltroIdadeFilho] = useState("todos") // todos, 0-2, 3-5, 6-8, 9-12
 
-  // 1. Fetch collections from Firestore
-  const clientesQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
-  }, [db, tenantId])
-  const { data: clientes, isLoading: loadingClientes } = useCollection(clientesQuery)
+  // 1. Fetch collections from Supabase (CRM) and Firestore (Hybrid Sales/Marketing)
+  const [clientes, setClientes] = useState<any[] | null>(null)
+  const [filhos, setFilhos] = useState<any[] | null>(null)
+  const [carteiras, setCarteiras] = useState<any[] | null>(null)
+  const [movimentacoes, setMovimentacoes] = useState<any[] | null>(null)
+  const [loadingClientes, setLoadingClientes] = useState(true)
 
-  const filhosQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "filhos"), where("tenant_id", "==", tenantId), where("status", "==", "ativo"))
-  }, [db, tenantId])
-  const { data: filhos } = useCollection(filhosQuery)
+  useEffect(() => {
+    async function loadCrmData() {
+      setLoadingClientes(true)
+      const res = await getCustomers()
+      if (res.success && res.data) {
+        // Map to Firestore-compatible structures
+        const mappedClients = res.data.map((c: any) => ({
+          id: c.id,
+          nome: c.name,
+          status: c.status,
+          vip: c.status === 'vip',
+          created_at: c.createdAt,
+          aceita_marketing: true
+        }))
 
-  const carteirasQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "carteiras_clientes"), where("tenant_id", "==", tenantId))
-  }, [db, tenantId])
-  const { data: carteiras } = useCollection(carteirasQuery)
+        const mappedFilhos = res.data.flatMap((c: any) => 
+          (c.children || []).map((k: any) => ({
+            id: k.id,
+            cliente_id: c.id,
+            nome: k.name,
+            data_nascimento: k.birthDate ? new Date(k.birthDate).toISOString().substring(0, 10) : "",
+            tamanho_roupa: k.clothingSize || "2",
+            tamanho_calcado: k.shoeSize || "",
+            status: "ativo",
+            created_at: k.createdAt
+          }))
+        )
 
-  const movimentacoesQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "movimentacoes_saldo"), where("tenant_id", "==", tenantId))
-  }, [db, tenantId])
-  const { data: movimentacoes } = useCollection(movimentacoesQuery)
+        const mappedWallets = res.data.map((c: any) => ({
+          id: c.wallet?.id || "",
+          cliente_id: c.id,
+          saldo_atual: c.wallet ? Number(c.wallet.balance) : 0
+        }))
+
+        const mappedMovements = res.data.flatMap((c: any) => 
+          (c.wallet?.movements || []).map((m: any) => ({
+            id: m.id,
+            cliente_id: c.id,
+            tipo_movimentacao: m.type === 'credit' ? 'ENTRADA' : 'SAIDA',
+            origem: m.reason?.includes('AJUSTE') ? 'AJUSTE_MANUAL' : 'SISTEMA',
+            valor: Number(m.amount),
+            created_at: m.createdAt
+          }))
+        )
+
+        setClientes(mappedClients)
+        setFilhos(mappedFilhos)
+        setCarteiras(mappedWallets)
+        setMovimentacoes(mappedMovements)
+      }
+      setLoadingClientes(false)
+    }
+
+    loadCrmData()
+  }, [])
+
 
   const trocasQuery = useMemoFirebase(() => {
     if (!db) return null

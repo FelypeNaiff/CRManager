@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
+import React, { useMemo, useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -22,18 +22,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Wallet, Search, Loader2, Plus, ArrowUpRight, ArrowDownLeft, AlertCircle, RefreshCw, Pencil, History } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { useProfile } from "@/lib/contexts/profile-context"
-import { CrmService } from "@/lib/crm-service"
+import { Wallet, Search, Loader2, Plus, ArrowUpRight, ArrowDownLeft, AlertCircle, Pencil, History } from "lucide-react"
+import { getWallets, adjustWalletBalance, getWalletHistory } from "@/lib/crm/actions"
 import { toast } from "@/hooks/use-toast"
 
 export default function CarteiraSaldosPage() {
-  const db = useFirestore()
-  const { activeProfile } = useProfile()
-  const tenantId = activeProfile?.empresaId || "default-tenant"
-
   const searchParams = useSearchParams()
   const filterParam = searchParams?.get("filter")
 
@@ -51,40 +44,51 @@ export default function CarteiraSaldosPage() {
   const [isHistoryOpen, setIsHistoryOpen] = useState(false)
   const [selectedMovements, setSelectedMovements] = useState<any[]>([])
 
-  // 1. Fetch Wallets
-  const walletsQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "carteiras_clientes"), where("tenant_id", "==", tenantId))
-  }, [db, tenantId])
+  // Supabase states
+  const [wallets, setWallets] = useState<any[] | null>(null)
+  const [isLoadingWallets, setIsLoadingWallets] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // 2. Fetch Customers to map names
-  const clientsQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
-  }, [db, tenantId])
+  const loadData = useCallback(async () => {
+    setIsLoadingWallets(true)
+    setError(null)
+    try {
+      const res = await getWallets()
+      if (res.success && res.data) {
+        // Map to compatible frontend structure
+        const mapped = res.data.map((w: any) => ({
+          id: w.id,
+          cliente_id: w.customerId,
+          saldo_atual: Number(w.balance),
+          total_creditos_gerados: w.movements
+            .filter((m: any) => m.type === 'credit')
+            .reduce((sum: number, m: any) => sum + Number(m.amount), 0),
+          total_creditos_utilizados: w.movements
+            .filter((m: any) => m.type === 'debit')
+            .reduce((sum: number, m: any) => sum + Number(m.amount), 0),
+          clientName: w.customer?.name || "Cliente Desconhecido",
+          clientPhone: w.customer?.phone || "",
+          clientCpf: w.customer?.cpf || ""
+        }))
+        setWallets(mapped)
+      } else {
+        setError(res.error || "Erro ao carregar carteiras.")
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError("Falha ao carregar carteiras do CRM.")
+    } finally {
+      setIsLoadingWallets(false)
+    }
+  }, [])
 
-  const { data: wallets, isLoading: isLoadingWallets, error } = useCollection(walletsQuery)
-  const { data: clients } = useCollection(clientsQuery)
-
-  const clientsMap = useMemo(() => {
-    if (!clients) return {}
-    return clients.reduce((acc: Record<string, any>, c: any) => {
-      acc[c.id] = c
-      return acc
-    }, {})
-  }, [clients])
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const filteredWallets = useMemo(() => {
     if (!wallets) return []
-    return wallets.map(w => {
-      const client = clientsMap[w.cliente_id]
-      return {
-        ...w,
-        clientName: client?.nome || "Cliente Inexistente/Arquivado",
-        clientPhone: client?.whatsapp_principal || "",
-        clientCpf: client?.cpf || ""
-      }
-    }).filter(w => {
+    return wallets.filter(w => {
       const matchSearch = 
         w.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
         w.clientPhone.includes(searchTerm) ||
@@ -94,7 +98,7 @@ export default function CarteiraSaldosPage() {
       
       return matchSearch && matchFilter
     })
-  }, [wallets, clientsMap, searchTerm, filterParam])
+  }, [wallets, searchTerm, filterParam])
 
   const openAdjustDialog = (wallet: any) => {
     setSelectedWallet(wallet)
@@ -107,16 +111,23 @@ export default function CarteiraSaldosPage() {
   const openHistoryDialog = async (wallet: any) => {
     setSelectedWallet(wallet)
     setIsHistoryOpen(true)
+    setSelectedMovements([])
     
-    // Load movements
+    // Load movements from Supabase
     try {
-      const snap = await getDocs(query(collection(db, "movimentacoes_saldo"), where("carteira_id", "==", wallet.id)))
-      const moves = snap.docs.map(d => ({ id: d.id, ...d.data() }) as any).sort((a: any, b: any) => {
-        const tA = a.created_at?.seconds || new Date(a.created_at).getTime()/1000 || 0
-        const tB = b.created_at?.seconds || new Date(b.created_at).getTime()/1000 || 0
-        return tB - tA
-      })
-      setSelectedMovements(moves)
+      const res = await getWalletHistory(wallet.id)
+      if (res.success && res.data) {
+        const mappedMoves = res.data.map((m: any) => ({
+          id: m.id,
+          tipo_movimentacao: m.type === 'credit' ? 'ENTRADA' : 'SAIDA',
+          origem: m.reason?.includes('AJUSTE') ? 'AJUSTE_MANUAL' : 'SISTEMA',
+          valor: Number(m.amount),
+          observacao: m.reason || "Sem descrição",
+          usuario_responsavel: "Operador",
+          created_at: { seconds: new Date(m.createdAt).getTime() / 1000 }
+        }))
+        setSelectedMovements(mappedMoves)
+      }
     } catch (e) {
       console.error(e)
     }
@@ -133,40 +144,21 @@ export default function CarteiraSaldosPage() {
 
     setIsSaving(true)
     try {
-      const valor = Number(adjustAmount)
-      const saldoAnterior = selectedWallet.saldo_atual || 0
-      const saldoPosterior = adjustType === "ENTRADA" ? saldoAnterior + valor : saldoAnterior - valor
+      const res = await adjustWalletBalance({
+        customerId: selectedWallet.cliente_id,
+        amount: Number(adjustAmount),
+        type: adjustType === "ENTRADA" ? "credit" : "debit",
+        reason: adjustReason
+      })
 
-      if (saldoPosterior < 0) {
-        setIsSaving(false)
-        return toast({ variant: "destructive", title: "Saldo negativo não permitido" })
+      if (res.success) {
+        toast({ title: "Crédito ajustado!", description: "A carteira foi atualizada com sucesso." })
+        await loadData()
+        setIsAdjustOpen(false)
+      } else {
+        toast({ variant: "destructive", title: "Erro ao ajustar saldo", description: res.error })
       }
-
-      // Create movement
-      await CrmService.createDocument(db, "movimentacoes_saldo", {
-        cliente_id: selectedWallet.cliente_id,
-        carteira_id: selectedWallet.id,
-        tipo_movimentacao: adjustType,
-        origem: "AJUSTE_MANUAL",
-        valor: valor,
-        saldo_anterior: saldoAnterior,
-        saldo_posterior: saldoPosterior,
-        usuario_responsavel: activeProfile?.nome || "System",
-        observacao: adjustReason
-      }, activeProfile as any)
-
-      // Update wallet balance
-      const updatedData = {
-        saldo_atual: saldoPosterior,
-        total_creditos_gerados: adjustType === "ENTRADA" ? (selectedWallet.total_creditos_gerados || 0) + valor : (selectedWallet.total_creditos_gerados || 0),
-        total_creditos_utilizados: adjustType === "SAIDA" ? (selectedWallet.total_creditos_utilizados || 0) + valor : (selectedWallet.total_creditos_utilizados || 0),
-        ultima_movimentacao: new Date()
-      }
-      await CrmService.updateDocument(db, "carteiras_clientes", selectedWallet.id, updatedData, activeProfile as any)
-
-      toast({ title: "Crédito ajustado!", description: "A carteira foi atualizada com sucesso." })
-      setIsAdjustOpen(false)
-    } catch (e) {
+    } catch (e: any) {
       toast({ variant: "destructive", title: "Erro ao atualizar" })
     } finally {
       setIsSaving(false)
@@ -177,7 +169,7 @@ export default function CarteiraSaldosPage() {
     if (!selectedMovements || selectedMovements.length === 0) return 0
     return selectedMovements.reduce((acc, move) => {
       const val = move.valor || 0
-      const isPositive = move.saldo_posterior > move.saldo_anterior || move.tipo_movimentacao === "ENTRADA" || move.tipo_movimentacao === "ESTORNO"
+      const isPositive = move.tipo_movimentacao === "ENTRADA"
       return isPositive ? acc + val : acc - val
     }, 0)
   }, [selectedMovements])
@@ -208,7 +200,7 @@ export default function CarteiraSaldosPage() {
       {error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
-          <p className="text-sm">{(error as any).message || "Erro ao consultar carteiras."}</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 

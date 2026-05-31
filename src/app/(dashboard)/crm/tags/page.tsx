@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useMemo } from "react"
+import React, { useState, useMemo, useEffect, useCallback } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -24,12 +24,9 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Tags, Plus, Pencil, Trash2, Loader2, Sparkles, AlertCircle, Info } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where } from "firebase/firestore"
+import { Tags, Plus, Pencil, Trash2, Loader2, Info, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { useProfile } from "@/lib/contexts/profile-context"
-import { CrmService } from "@/lib/crm-service"
+import { getTags, createTag, deleteTag, getCustomers } from "@/lib/crm/actions"
 
 const emptyForm = {
   nome: "",
@@ -38,49 +35,64 @@ const emptyForm = {
 }
 
 export default function TagsPage() {
-  const db = useFirestore()
-  const { activeProfile } = useProfile()
-  const tenantId = activeProfile?.empresaId || "default-tenant"
-
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [editingTag, setEditingTag] = useState<any>(null)
   const [deletingTag, setDeletingTag] = useState<any>(null)
   const [form, setForm] = useState(emptyForm)
+  
+  const [tags, setTags] = useState<any[] | null>(null)
+  const [customers, setCustomers] = useState<any[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  // Query Tags
-  const tagsQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "tags"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
-  }, [db, tenantId])
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [tagsRes, custRes] = await Promise.all([getTags(), getCustomers()])
+      
+      if (tagsRes.success && tagsRes.data) {
+        setTags(tagsRes.data)
+      } else {
+        setError(tagsRes.error || "Erro ao carregar tags.")
+      }
 
-  const { data: tags, isLoading, error } = useCollection(tagsQuery)
+      if (custRes.success && custRes.data) {
+        setCustomers(custRes.data)
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError("Erro ao carregar dados do CRM.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
 
-  // Query Clientes to calculate tags usage
-  const clientesQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
-  }, [db, tenantId])
-  const { data: clientes } = useCollection(clientesQuery)
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const tagCounts = useMemo(() => {
-    if (!clientes || !tags) return {}
+    if (!customers || !tags) return {}
     const counts: Record<string, number> = {}
     
     // Set 0 for all active tags
-    tags.forEach(t => { counts[t.nome] = 0 })
+    tags.forEach(t => { counts[t.name] = 0 })
     
     // Count usage
-    clientes.forEach((c: any) => {
-      if (c.tags && Array.isArray(c.tags)) {
-        c.tags.forEach((tagNome: string) => {
-          counts[tagNome] = (counts[tagNome] || 0) + 1
+    customers.forEach((c: any) => {
+      if (c.tagRelations && Array.isArray(c.tagRelations)) {
+        c.tagRelations.forEach((rel: any) => {
+          if (rel.tag) {
+            counts[rel.tag.name] = (counts[rel.tag.name] || 0) + 1
+          }
         })
       }
     })
     return counts
-  }, [clientes, tags])
+  }, [customers, tags])
 
   const openNewDialog = () => {
     setEditingTag(null)
@@ -91,9 +103,9 @@ export default function TagsPage() {
   const openEditDialog = (tag: any) => {
     setEditingTag(tag)
     setForm({
-      nome: tag.nome || "",
-      cor: tag.cor || "#4f46e5",
-      status: tag.status || "ativo"
+      nome: tag.name || "",
+      cor: tag.color || "#4f46e5",
+      status: "ativo"
     })
     setIsDialogOpen(true)
   }
@@ -110,20 +122,18 @@ export default function TagsPage() {
 
     setIsSaving(true)
     try {
-      const dataToSave = {
-        ...form,
-        nome: form.nome.toUpperCase().replace(/\s+/g, "_"),
-        tenant_id: tenantId
-      }
+      const name = form.nome.toUpperCase().replace(/\s+/g, "_")
+      const color = form.cor || "#4f46e5"
 
-      if (editingTag) {
-        await CrmService.updateDocument(db, "tags", editingTag.id, dataToSave, activeProfile as any)
-        toast({ title: "Tag atualizada!", description: "Informações gravadas com sucesso." })
+      const res = await createTag(name, color)
+
+      if (res.success) {
+        toast({ title: editingTag ? "Tag atualizada!" : "Tag criada!", description: "Dados persistidos no Supabase." })
+        await loadData()
+        setIsDialogOpen(false)
       } else {
-        await CrmService.createDocument(db, "tags", dataToSave, activeProfile as any)
-        toast({ title: "Tag criada!", description: "A tag foi adicionada à biblioteca de segmentação." })
+        toast({ variant: "destructive", title: "Erro ao salvar tag", description: res.error })
       }
-      setIsDialogOpen(false)
     } catch (e) {
       toast({ variant: "destructive", title: "Erro ao salvar tag" })
     } finally {
@@ -134,8 +144,13 @@ export default function TagsPage() {
   const handleDelete = async () => {
     if (!deletingTag) return
     try {
-      await CrmService.deleteDocument(db, "tags", deletingTag.id, activeProfile as any, false)
-      toast({ title: "Tag removida", description: "O registro foi arquivado." })
+      const res = await deleteTag(deletingTag.id)
+      if (res.success) {
+        toast({ title: "Tag removida", description: "O registro foi excluído do Supabase." })
+        await loadData()
+      } else {
+        toast({ variant: "destructive", title: "Erro ao remover tag", description: res.error })
+      }
     } catch {
       toast({ variant: "destructive", title: "Erro ao excluir" })
     } finally {
@@ -170,7 +185,7 @@ export default function TagsPage() {
       {error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
-          <p className="text-sm">{(error as any).message || "Erro ao consultar banco."}</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
@@ -187,10 +202,10 @@ export default function TagsPage() {
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {tags.map((tag) => (
             <Card key={tag.id} className="border border-slate-100 shadow-sm hover:shadow-md transition-all bg-white relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: tag.cor || "#4f46e5" }} />
+              <div className="absolute top-0 left-0 w-2 h-full" style={{ backgroundColor: tag.color || "#4f46e5" }} />
               <CardHeader className="p-4 pl-6 pb-2 flex flex-row items-center justify-between space-y-0">
-                <Badge style={{ backgroundColor: tag.cor || "#4f46e5" }} className="text-white text-xs border-0 py-0.5 px-2.5">
-                  {tag.nome}
+                <Badge style={{ backgroundColor: tag.color || "#4f46e5" }} className="text-white text-xs border-0 py-0.5 px-2.5">
+                  {tag.name}
                 </Badge>
                 
                 <div className="flex items-center gap-1">
@@ -205,7 +220,7 @@ export default function TagsPage() {
               <CardContent className="p-4 pl-6 pt-0 text-xs text-slate-500">
                 <div className="flex justify-between items-center mt-2">
                   <span>Clientes Vinculados:</span>
-                  <strong className="text-slate-800 text-sm">{tagCounts[tag.nome] || 0}</strong>
+                  <strong className="text-slate-800 text-sm">{tagCounts[tag.name] || 0}</strong>
                 </div>
               </CardContent>
             </Card>

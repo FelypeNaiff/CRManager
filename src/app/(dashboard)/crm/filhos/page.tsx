@@ -1,8 +1,6 @@
 "use client"
 
-export const dynamic = 'force-dynamic'
-
-import { Suspense, useMemo, useState } from "react"
+import { Suspense, useMemo, useState, useEffect, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -42,12 +40,9 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake, AlertCircle, Sparkles } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where } from "firebase/firestore"
+import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { useProfile } from "@/lib/contexts/profile-context"
-import { CrmService } from "@/lib/crm-service"
+import { getChildren, getCustomers, createChild, updateChild, deleteChild } from "@/lib/crm/actions"
 
 const emptyForm = {
   nome: "",
@@ -89,10 +84,6 @@ function FilhosPageContent() {
   const clienteId = searchParams.get("clienteId")
   const clienteNome = searchParams.get("nome") || "Cliente"
   
-  const db = useFirestore()
-  const { activeProfile } = useProfile()
-  const tenantId = activeProfile?.empresaId || "default-tenant"
-
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [editingFilho, setEditingFilho] = useState<any>(null)
@@ -106,37 +97,56 @@ function FilhosPageContent() {
   const [idadeMax, setIdadeMax] = useState("")
   const [tamanhoFilter, setTamanhoFilter] = useState("todos")
 
-  // Query Filhos
-  const filhosQuery = useMemoFirebase(() => {
-    if (!db) return null
-    if (clienteId) {
-      return query(
-        collection(db, "filhos"), 
-        where("tenant_id", "==", tenantId), 
-        where("cliente_id", "==", clienteId),
-        where("deleted_at", "==", null)
-      )
-    } else {
-      return query(
-        collection(db, "filhos"), 
-        where("tenant_id", "==", tenantId),
-        where("deleted_at", "==", null)
-      )
+  // Supabase states
+  const [filhos, setFilhos] = useState<any[] | null>(null)
+  const [clientes, setClientes] = useState<any[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [filhosRes, clientesRes] = await Promise.all([
+        getChildren(clienteId || undefined),
+        getCustomers()
+      ])
+
+      if (filhosRes.success && filhosRes.data) {
+        const mapped = filhosRes.data.map((f: any) => ({
+          id: f.id,
+          cliente_id: f.customerId,
+          nome: f.name,
+          data_nascimento: f.birthDate ? new Date(f.birthDate).toISOString().substring(0, 10) : "",
+          sexo: f.gender || "",
+          tamanho_roupa: f.clothingSize || "2",
+          tamanho_calcado: f.shoeSize || "",
+          observacoes: f.notes || "",
+          status: "ativo"
+        }))
+        setFilhos(mapped)
+      } else {
+        setError(filhosRes.error || "Erro ao carregar lista de filhos.")
+      }
+
+      if (clientesRes.success && clientesRes.data) {
+        setClientes(clientesRes.data)
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError("Falha ao carregar dados de filhos do CRM.")
+    } finally {
+      setIsLoading(false)
     }
-  }, [db, tenantId, clienteId])
+  }, [clienteId])
 
-  // Query Clientes (to display names when listing all children)
-  const clientesQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(collection(db, "clientes"), where("tenant_id", "==", tenantId))
-  }, [db, tenantId])
-
-  const { data: filhos, isLoading, error } = useCollection(filhosQuery)
-  const { data: clientes } = useCollection(clientesQuery)
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   const clientesMap = useMemo(() => {
     return (clientes || []).reduce((acc: Record<string, string>, c: any) => {
-      acc[c.id] = c.nome || "Cliente Desconhecido"
+      acc[c.id] = c.name || "Cliente Desconhecido"
       return acc
     }, {})
   }, [clientes])
@@ -147,7 +157,7 @@ function FilhosPageContent() {
       if (sexoFilter !== "todos" && f.sexo !== sexoFilter) return false
       if (tamanhoFilter !== "todos" && f.tamanho_roupa !== tamanhoFilter) return false
 
-      const dataNasc = f.data_nascimento || f.dataNascimento
+      const dataNasc = f.data_nascimento
       const idade = getIdadeEmAnos(dataNasc)
       
       if (idadeMin) {
@@ -165,7 +175,7 @@ function FilhosPageContent() {
   const filhosPorCliente = useMemo(() => {
     if (clienteId || !filteredFilhos) return {}
     return filteredFilhos.reduce((acc: Record<string, any[]>, f: any) => {
-      const cId = f.cliente_id || f.clientId || "sem-cliente"
+      const cId = f.cliente_id || "sem-cliente"
       acc[cId] = acc[cId] || []
       acc[cId].push(f)
       return acc
@@ -182,15 +192,15 @@ function FilhosPageContent() {
     setEditingFilho(filho)
     setForm({
       nome: filho.nome || "",
-      data_nascimento: filho.data_nascimento || filho.dataNascimento || "",
+      data_nascimento: filho.data_nascimento || "",
       sexo: filho.sexo || "",
       tamanho_roupa: filho.tamanho_roupa || "2",
       tamanho_calcado: filho.tamanho_calcado || "",
-      preferencia_estilo: filho.preferencia_estilo || "",
-      cores_preferidas: filho.cores_preferidas || "",
-      personagens_preferidos: filho.personagens_preferidos || "",
+      preferencia_estilo: "",
+      cores_preferidas: "",
+      personagens_preferidos: "",
       observacoes: filho.observacoes || "",
-      status: filho.status || "ativo"
+      status: "ativo"
     })
     setIsDialogOpen(true)
   }
@@ -205,27 +215,37 @@ function FilhosPageContent() {
       return toast({ variant: "destructive", title: "Nome obrigatório", description: "Informe o nome da criança." })
     }
 
-    const targetClientId = clienteId || editingFilho?.cliente_id || editingFilho?.clientId
+    const targetClientId = clienteId || editingFilho?.cliente_id
     if (!targetClientId) {
       return toast({ variant: "destructive", title: "Erro", description: "Esta criança deve estar vinculada a um cliente." })
     }
 
     setIsSaving(true)
     try {
-      const dataToSave = {
-        ...form,
-        cliente_id: targetClientId,
-        tenant_id: tenantId
+      const payload = {
+        customerId: targetClientId,
+        name: form.nome,
+        birthDate: form.data_nascimento || null,
+        gender: form.sexo || null,
+        shoeSize: form.tamanho_calcado || null,
+        clothingSize: form.tamanho_roupa || null,
+        notes: form.observacoes || null,
       }
 
+      let res
       if (editingFilho) {
-        await CrmService.updateDocument(db, "filhos", editingFilho.id, dataToSave, activeProfile as any)
-        toast({ title: "Filho atualizado!", description: `${form.nome} foi atualizado.` })
+        res = await updateChild(editingFilho.id, payload)
       } else {
-        await CrmService.createDocument(db, "filhos", dataToSave, activeProfile as any)
-        toast({ title: "Filho cadastrado!", description: `${form.nome} foi adicionado com sucesso.` })
+        res = await createChild(payload)
       }
-      setIsDialogOpen(false)
+
+      if (res.success) {
+        toast({ title: editingFilho ? "Filho atualizado!" : "Filho cadastrado!", description: "Dados persistidos no Supabase." })
+        await loadData()
+        setIsDialogOpen(false)
+      } else {
+        toast({ variant: "destructive", title: "Erro ao salvar", description: res.error })
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Erro ao salvar" })
     } finally {
@@ -236,8 +256,13 @@ function FilhosPageContent() {
   const handleDelete = async () => {
     if (!deletingFilho) return
     try {
-      await CrmService.deleteDocument(db, "filhos", deletingFilho.id, activeProfile as any, false)
-      toast({ title: "Filho arquivado", description: "O registro foi movido para o histórico." })
+      const res = await deleteChild(deletingFilho.id)
+      if (res.success) {
+        toast({ title: "Filho removido", description: "O registro foi excluído do Supabase." })
+        await loadData()
+      } else {
+        toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
+      }
     } catch {
       toast({ variant: "destructive", title: "Erro ao excluir" })
     } finally {
@@ -339,7 +364,7 @@ function FilhosPageContent() {
       {error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
-          <p className="text-sm">{(error as any).message || "Erro de conexão com o banco de dados."}</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 
@@ -356,7 +381,7 @@ function FilhosPageContent() {
         /* View single customer children */
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           {filteredFilhos.map((filho) => {
-            const dataNasc = filho.data_nascimento || filho.dataNascimento
+            const dataNasc = filho.data_nascimento
             return (
               <Card key={filho.id} className="border border-slate-100 hover:border-indigo-500/30 hover:shadow-md transition-all bg-white group">
                 <CardContent className="p-5">
@@ -408,14 +433,6 @@ function FilhosPageContent() {
                     )}
                   </div>
 
-                  {(filho.preferencia_estilo || filho.cores_preferidas || filho.personagens_preferidos) && (
-                    <div className="mt-3 bg-slate-50 p-2 rounded-lg border text-[10px] text-slate-600 space-y-0.5">
-                      {filho.preferencia_estilo && <p><span className="text-slate-400">Estilo:</span> {filho.preferencia_estilo}</p>}
-                      {filho.cores_preferidas && <p><span className="text-slate-400">Cores:</span> {filho.cores_preferidas}</p>}
-                      {filho.personagens_preferidos && <p><span className="text-slate-400">Personagens:</span> {filho.personagens_preferidos}</p>}
-                    </div>
-                  )}
-
                   {filho.observacoes && (
                     <p className="text-[11px] text-muted-foreground italic mt-3 line-clamp-2">Obs: {filho.observacoes}</p>
                   )}
@@ -438,7 +455,7 @@ function FilhosPageContent() {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                 {filhosCliente.map((filho) => {
-                  const dataNasc = filho.data_nascimento || filho.dataNascimento
+                  const dataNasc = filho.data_nascimento
                   return (
                     <Card key={filho.id} className="border border-slate-100 hover:border-indigo-500/30 hover:shadow-md transition-all bg-white group">
                       <CardContent className="p-4 flex flex-col justify-between h-full">
@@ -486,14 +503,6 @@ function FilhosPageContent() {
                             </Badge>
                           )}
                         </div>
-
-                        {(filho.preferencia_estilo || filho.cores_preferidas || filho.personagens_preferidos) && (
-                          <div className="mt-2 bg-slate-50 p-1.5 rounded-lg border text-[9px] text-slate-600 space-y-0.5">
-                            {filho.preferencia_estilo && <p><span className="text-slate-400">Estilo:</span> {filho.preferencia_estilo}</p>}
-                            {filho.cores_preferidas && <p><span className="text-slate-400">Cores:</span> {filho.cores_preferidas}</p>}
-                            {filho.personagens_preferidos && <p><span className="text-slate-400">Personagens:</span> {filho.personagens_preferidos}</p>}
-                          </div>
-                        )}
                       </CardContent>
                     </Card>
                   )
@@ -558,23 +567,6 @@ function FilhosPageContent() {
               <div className="space-y-1">
                 <Label htmlFor="fcalcado">Tamanho de Calçado</Label>
                 <Input id="fcalcado" placeholder="Ex: 24" {...field("tamanho_calcado")} />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label htmlFor="festilo">Preferência de Estilo</Label>
-              <Input id="festilo" placeholder="Ex: Casual, blogueirinho, colorido..." {...field("preferencia_estilo")} />
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <Label htmlFor="fcores">Cores Preferidas</Label>
-                <Input id="fcores" placeholder="Ex: Azul, amarelo..." {...field("cores_preferidas")} />
-              </div>
-
-              <div className="space-y-1">
-                <Label htmlFor="fpersonagem">Personagens Favoritos</Label>
-                <Input id="fpersonagem" placeholder="Ex: Homem Aranha, Patrulha Canina" {...field("personagens_preferidos")} />
               </div>
             </div>
 

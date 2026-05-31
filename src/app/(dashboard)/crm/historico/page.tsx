@@ -1,44 +1,56 @@
 "use client"
 
-import React, { useMemo, useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import React, { useMemo, useState, useEffect, useCallback } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
-import { History, Search, Loader2, Calendar, User, Eye, AlertCircle, RefreshCw } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
-import { useProfile } from "@/lib/contexts/profile-context"
+import { History, Search, Loader2, Calendar, User, AlertCircle } from "lucide-react"
+import { getActivityLogs } from "@/lib/crm/actions"
 
 export default function HistoricoCrmPage() {
-  const db = useFirestore()
-  const { activeProfile } = useProfile()
-  const tenantId = activeProfile?.empresaId || "default-tenant"
-
   const [searchTerm, setSearchTerm] = useState("")
   const [moduleFilter, setModuleFilter] = useState("todos")
 
-  // Query global activity logs
-  const logsQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(
-      collection(db, "logs_atividades"),
-      where("empresa_id", "==", tenantId)
-    )
-  }, [db, tenantId])
+  // Supabase states
+  const [logs, setLogs] = useState<any[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const { data: logsData, isLoading, error } = useCollection(logsQuery)
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const res = await getActivityLogs()
+      if (res.success && res.data) {
+        // Map to compatible frontend structure
+        const mapped = res.data.map((l: any) => ({
+          usuario_nome: l.user?.name || "Sistema",
+          acao: l.action,
+          modulo: l.module,
+          detalhes: l.details,
+          registro_id: l.recordId || "",
+          data_hora: { seconds: new Date(l.createdAt).getTime() / 1000 }
+        }))
+        setLogs(mapped)
+      } else {
+        setError(res.error || "Erro ao carregar logs.")
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError("Falha ao carregar trilha de auditoria do CRM.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   // Sort logs by timestamp (newest first)
   const sortedLogs = useMemo(() => {
-    if (!logsData) return []
-    return [...logsData]
-      .sort((a, b) => {
-        const timeA = a.data_hora?.seconds || new Date(a.data_hora).getTime() / 1000 || 0
-        const timeB = b.data_hora?.seconds || new Date(b.data_hora).getTime() / 1000 || 0
-        return timeB - timeA
-      })
+    if (!logs) return []
+    return [...logs]
       .filter(log => {
         // Match Search
         const matchSearch = 
@@ -51,17 +63,17 @@ export default function HistoricoCrmPage() {
         
         return matchSearch && matchModule
       })
-  }, [logsData, searchTerm, moduleFilter])
+  }, [logs, searchTerm, moduleFilter])
 
   // Extract unique module names for filters
   const modules = useMemo(() => {
-    if (!logsData) return []
+    if (!logs) return []
     const unique = new Set<string>()
-    logsData.forEach(l => {
+    logs.forEach(l => {
       if (l.modulo) unique.add(l.modulo)
     })
     return Array.from(unique)
-  }, [logsData])
+  }, [logs])
 
   const getAcaoColor = (acao: string) => {
     switch (acao) {
@@ -102,7 +114,7 @@ export default function HistoricoCrmPage() {
       {error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
-          <p className="text-sm">{(error as any).message || "Erro ao listar logs."}</p>
+          <p className="text-sm">{error}</p>
         </div>
       )}
 

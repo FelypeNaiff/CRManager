@@ -1,8 +1,8 @@
 "use client"
 
-import React, { useState, useMemo, useEffect } from "react"
+import React, { useState, useMemo, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -46,33 +46,46 @@ import {
 import { 
   Search, 
   UserPlus, 
-  Filter, 
   MoreVertical, 
   Phone, 
   Mail, 
-  MapPin, 
   Tag as TagIcon, 
   Loader2, 
   Baby, 
   History, 
   Wallet, 
-  Repeat, 
   Pencil, 
   Trash2, 
   Plus, 
   AlertCircle,
   Eye,
   CheckCircle,
-  Sparkles,
   Info,
   User,
   PlusCircle
 } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where, getDocs, doc, writeBatch } from "firebase/firestore"
+
+// Firebase imports for reading hybrid collections (e.g., trocas_devolucoes)
+import { useFirestore } from "@/firebase"
+import { collection, query, where, getDocs } from "firebase/firestore"
+
 import { toast } from "@/hooks/use-toast"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { CrmService } from "@/lib/crm-service"
+import {
+  getCustomers,
+  createCustomer,
+  updateCustomer,
+  deleteCustomer,
+  createChild,
+  updateChild,
+  deleteChild,
+  getTags,
+  addTagToCustomer,
+  removeTagFromCustomer,
+  adjustWalletBalance,
+  getCustomerHistory,
+  getWalletHistory
+} from "@/lib/crm/actions"
 
 // Standard Brazilian phone mask helper
 function formatPhone(v: string): string {
@@ -133,8 +146,6 @@ const emptyForm = {
 export default function ClientesPage() {
   const db = useFirestore()
   const { activeProfile } = useProfile()
-  const tenantId = activeProfile?.empresaId || "default-tenant"
-  
   const searchParams = useSearchParams()
 
   // Search & Filter state
@@ -174,10 +185,11 @@ export default function ClientesPage() {
     if (!walletHistory || walletHistory.length === 0) return 0
     return walletHistory.reduce((acc, move) => {
       const val = move.valor || 0
-      const isPositive = move.saldo_posterior > move.saldo_anterior || move.tipo_movimentacao === "ENTRADA" || move.tipo_movimentacao === "ESTORNO"
+      const isPositive = move.tipo_movimentacao === "ENTRADA"
       return isPositive ? acc + val : acc - val
     }, 0)
   }, [walletHistory])
+
   const [returnsHistory, setReturnsHistory] = useState<any[]>([])
   const [availableTags, setAvailableTags] = useState<any[]>([])
   const [selectedTags, setSelectedTags] = useState<string[]>([])
@@ -189,16 +201,10 @@ export default function ClientesPage() {
   const [adjustReason, setAdjustReason] = useState("")
   const [isSavingWallet, setIsSavingWallet] = useState(false)
 
-  // Quick Child Addition & Size updates inside details abas
+  // Quick Child Addition inside details abas
   const [isQuickAddFilhoOpen, setIsQuickAddFilhoOpen] = useState(false)
-  const [isQuickSizeUpdateOpen, setIsQuickSizeUpdateOpen] = useState(false)
-  const [selectedFilhoForUpdate, setSelectedFilhoForUpdate] = useState<any>(null)
   const [quickFilhoForm, setQuickFilhoForm] = useState(emptyFilhoForm)
   const [isSavingQuickFilho, setIsSavingQuickFilho] = useState(false)
-  const [newTamanhoRoupa, setNewTamanhoRoupa] = useState("")
-  const [newTamanhoCalcado, setNewTamanhoCalcado] = useState("")
-  const [sizeUpdateReason, setSizeUpdateReason] = useState("")
-  const [isSavingSizeUpdate, setIsSavingSizeUpdate] = useState(false)
 
   // Quick Customer child addition fields
   const [rapidoFilhoNome, setRapidoFilhoNome] = useState("")
@@ -206,6 +212,91 @@ export default function ClientesPage() {
 
   // Mapping client IDs to their wallet balances
   const [walletsMap, setWalletsMap] = useState<Record<string, number>>({})
+
+  // Supabase states
+  const [rawCustomers, setRawCustomers] = useState<any[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [custRes, tagsRes] = await Promise.all([
+        getCustomers(),
+        getTags()
+      ])
+
+      if (custRes.success && custRes.data) {
+        // Map postgres model to compatible frontend structure
+        const mapped = custRes.data.map((c: any) => ({
+          id: c.id,
+          nome: c.name,
+          email: c.email,
+          whatsapp_principal: c.phone,
+          whatsapp: c.phone,
+          cpf: c.cpf,
+          data_nascimento: c.birthMonth && c.birthDay ? `${c.birthYear || 2000}-${String(c.birthMonth).padStart(2, '0')}-${String(c.birthDay).padStart(2, '0')}` : "",
+          instagram: c.instagram,
+          observacoes: c.notes,
+          status: c.status,
+          vip: c.status === 'vip',
+          tags: c.tagRelations.map((r: any) => r.tag.name),
+          children: c.children,
+          wallet: c.wallet
+        }))
+        setRawCustomers(mapped)
+
+        // Build wallet balance mapping
+        const wMap: Record<string, number> = {}
+        custRes.data.forEach((c: any) => {
+          if (c.wallet) {
+            wMap[c.id] = Number(c.wallet.balance)
+          }
+        })
+        setWalletsMap(wMap)
+      } else {
+        setError(custRes.error || "Erro ao carregar clientes.")
+      }
+
+      if (tagsRes.success && tagsRes.data) {
+        setAvailableTags(tagsRes.data)
+      }
+    } catch (e: any) {
+      console.error(e)
+      setError("Falha ao carregar dados do Supabase.")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
+
+  const filteredCustomers = useMemo(() => {
+    if (!rawCustomers) return []
+    return rawCustomers.filter(c => {
+      const matchSearch = 
+        c.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        c.whatsapp_principal?.includes(searchTerm) ||
+        c.cpf?.replace(/\D/g, "").includes(searchTerm.replace(/\D/g, ""))
+      
+      const matchStatus = statusFilter === "todos" || c.status === statusFilter
+      if (!matchSearch || !matchStatus) return false
+
+      const tabParam = searchParams?.get("tab")
+      if (tabParam === "aniversariantes") {
+        const dateField = c.data_nascimento
+        if (!dateField) return false
+        const bdayMonth = new Date(dateField).getMonth() + 1
+        const currentMonth = new Date().getMonth() + 1
+        return bdayMonth === currentMonth
+      }
+
+      return true
+    })
+  }, [rawCustomers, searchTerm, statusFilter, searchParams])
 
   const handleSaveQuickFilho = async () => {
     if (!quickFilhoForm.nome.trim()) {
@@ -215,169 +306,39 @@ export default function ClientesPage() {
 
     setIsSavingQuickFilho(true)
     try {
-      const dataToSave = {
-        ...quickFilhoForm,
-        cliente_id: selectedCustomer.id,
-        tenant_id: tenantId,
-        data_atualizacao_tamanho: new Date().toISOString()
+      const payload = {
+        customerId: selectedCustomer.id,
+        name: quickFilhoForm.nome,
+        birthDate: quickFilhoForm.data_nascimento || null,
+        gender: quickFilhoForm.sexo || null,
+        shoeSize: quickFilhoForm.tamanho_calcado || null,
+        clothingSize: quickFilhoForm.tamanho_roupa || null,
+        notes: quickFilhoForm.observacoes || null,
       }
 
-      await CrmService.createDocument(db, "filhos", dataToSave, activeProfile as any)
+      const res = await createChild(payload)
 
-      // Add to timeline
-      await CrmService.createDocument(db, "historico_cliente", {
-        cliente_id: selectedCustomer.id,
-        tipo_acao: "CADASTRO_FILHO",
-        descricao: `Filho(a) ${quickFilhoForm.nome} cadastrado(a) com tamanho de roupa: ${quickFilhoForm.tamanho_roupa || 'Não informado'}`,
-        tenant_id: tenantId
-      }, activeProfile as any)
-
-      toast({ title: "Filho cadastrado!", description: `${quickFilhoForm.nome} foi adicionado à ficha do cliente.` })
-      
-      // Reload children aba
-      const kidsSnap = await getDocs(query(collection(db, "filhos"), where("cliente_id", "==", selectedCustomer.id)))
-      setFilhos(kidsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
-
-      const historySnap = await getDocs(query(collection(db, "historico_cliente"), where("cliente_id", "==", selectedCustomer.id)))
-      setHistoryLogs(historySnap.docs.map(d => ({ id: d.id, ...d.data() }) as any).sort((a: any, b: any) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)))
-
-      setIsQuickAddFilhoOpen(false)
-      setQuickFilhoForm(emptyFilhoForm)
+      if (res.success) {
+        toast({ title: "Filho cadastrado!", description: "Dados gravados no Supabase." })
+        await loadData()
+        // Reload details aba
+        if (selectedCustomer) {
+          const freshData = rawCustomers?.find(c => c.id === selectedCustomer.id)
+          if (freshData) {
+            handleOpenDetails(freshData)
+          }
+        }
+        setIsQuickAddFilhoOpen(false)
+        setQuickFilhoForm(emptyFilhoForm)
+      } else {
+        toast({ variant: "destructive", title: "Erro ao cadastrar filho", description: res.error })
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Erro ao cadastrar filho" })
     } finally {
       setIsSavingQuickFilho(false)
     }
   }
-
-  const handleSaveSizeUpdate = async () => {
-    if (!selectedFilhoForUpdate) return
-    if (!newTamanhoRoupa && !newTamanhoCalcado) {
-      return toast({ variant: "destructive", title: "Campos vazios", description: "Informe ao menos um novo tamanho." })
-    }
-    if (!sizeUpdateReason.trim()) {
-      return toast({ variant: "destructive", title: "Motivo obrigatório", description: "Escreva uma breve observação." })
-    }
-
-    setIsSavingSizeUpdate(true)
-    try {
-      const anteriorRoupa = selectedFilhoForUpdate.tamanho_roupa || "Não informado"
-      const anteriorCalcado = selectedFilhoForUpdate.tamanho_calcado || "Não informado"
-
-      const updatedFields: any = {
-        data_atualizacao_tamanho: new Date().toISOString()
-      }
-      if (newTamanhoRoupa) updatedFields.tamanho_roupa = newTamanhoRoupa
-      if (newTamanhoCalcado) updatedFields.tamanho_calcado = newTamanhoCalcado
-
-      await CrmService.updateDocument(db, "filhos", selectedFilhoForUpdate.id, updatedFields, activeProfile as any)
-
-      // Add timeline log
-      const histText = `Tamanhos de ${selectedFilhoForUpdate.nome} atualizados. ` +
-        (newTamanhoRoupa ? `Roupa: ${anteriorRoupa} → ${newTamanhoRoupa}. ` : "") +
-        (newTamanhoCalcado ? `Calçado: ${anteriorCalcado} → ${newTamanhoCalcado}. ` : "") +
-        `Motivo: ${sizeUpdateReason}`
-
-      await CrmService.createDocument(db, "historico_cliente", {
-        cliente_id: selectedCustomer.id,
-        tipo_acao: "ATUALIZACAO_TAMANHO",
-        descricao: histText,
-        tenant_id: tenantId
-      }, activeProfile as any)
-
-      toast({ title: "Tamanhos atualizados!", description: "Histórico de tamanhos gravado com sucesso." })
-      
-      // Reload children and history
-      const kidsSnap = await getDocs(query(collection(db, "filhos"), where("cliente_id", "==", selectedCustomer.id)))
-      setFilhos(kidsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
-      
-      const historySnap = await getDocs(query(collection(db, "historico_cliente"), where("cliente_id", "==", selectedCustomer.id)))
-      setHistoryLogs(historySnap.docs.map(d => ({ id: d.id, ...d.data() }) as any).sort((a: any, b: any) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)))
-
-      setIsQuickSizeUpdateOpen(false)
-      setNewTamanhoRoupa("")
-      setNewTamanhoCalcado("")
-      setSizeUpdateReason("")
-    } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao atualizar tamanhos" })
-    } finally {
-      setIsSavingSizeUpdate(false)
-    }
-  }
-
-  const openQuickSizeUpdate = (filho: any) => {
-    setSelectedFilhoForUpdate(filho)
-    setNewTamanhoRoupa(filho.tamanho_roupa || "")
-    setNewTamanhoCalcado(filho.tamanho_calcado || "")
-    setSizeUpdateReason("")
-    setIsQuickSizeUpdateOpen(true)
-  }
-
-  // 1. Fetch CRM Clients query
-  const clientesQuery = useMemoFirebase(() => {
-    if (!db) return null
-    return query(
-      collection(db, "clientes"),
-      where("tenant_id", "==", tenantId),
-      where("deleted_at", "==", null)
-    )
-  }, [db, tenantId])
-
-  const { data: customers, isLoading, error } = useCollection(clientesQuery)
-
-  const tabParam = searchParams?.get("tab")
-
-  // Filter clients locally
-  const filteredCustomers = useMemo(() => {
-    if (!customers) return []
-    return customers.filter(c => {
-      const matchSearch = 
-        c.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.whatsapp_principal?.includes(searchTerm) ||
-        c.cpf?.replace(/\D/g, "").includes(searchTerm.replace(/\D/g, ""))
-      
-      const matchStatus = statusFilter === "todos" || c.status === statusFilter
-      if (!matchSearch || !matchStatus) return false
-
-      if (tabParam === "aniversariantes") {
-        const dateField = c.data_nascimento || c.dataNascimento
-        if (!dateField) return false
-        const bdayMonth = new Date(dateField).getMonth() + 1
-        const currentMonth = new Date().getMonth() + 1
-        return bdayMonth === currentMonth
-      }
-
-      return true
-    })
-  }, [customers, searchTerm, statusFilter, tabParam])
-
-  // Fetch initial tags and wallet mapping on mount
-  useEffect(() => {
-    async function loadTagsAndWallets() {
-      if (!db) return
-      try {
-        const snap = await getDocs(query(collection(db, "tags"), where("tenant_id", "==", tenantId)))
-        setAvailableTags(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      } catch (e) {
-        console.error("Erro ao carregar tags:", e)
-      }
-
-      try {
-        const wSnap = await getDocs(query(collection(db, "carteiras_clientes"), where("tenant_id", "==", tenantId)))
-        const mapping: Record<string, number> = {}
-        wSnap.docs.forEach(doc => {
-          const data = doc.data()
-          if (data.cliente_id) {
-            mapping[data.cliente_id] = data.saldo_atual || 0
-          }
-        })
-        setWalletsMap(mapping)
-      } catch (e) {
-        console.error("Erro ao carregar carteiras:", e)
-      }
-    }
-    loadTagsAndWallets()
-  }, [db, tenantId, isFormOpen, isDetailsOpen, customers])
 
   // Open creation dialog
   const [isCadastroRapido, setIsCadastroRapido] = useState(false)
@@ -405,29 +366,36 @@ export default function ClientesPage() {
       instagram: customer.instagram || "",
       email: customer.email || "",
       data_nascimento: customer.data_nascimento || "",
-      endereco: customer.endereco || "",
-      numero: customer.numero || "",
-      complemento: customer.complemento || "",
-      bairro: customer.bairro || "",
-      cidade: customer.cidade || "",
-      estado: customer.estado || "",
-      cep: customer.cep || "",
-      origem: customer.origem || "Loja Física",
-      vip: !!customer.vip,
-      aceita_marketing: customer.aceita_marketing !== false,
+      endereco: "",
+      numero: "",
+      complemento: "",
+      bairro: "",
+      cidade: "",
+      estado: "",
+      cep: "",
+      origem: "Loja Física",
+      vip: customer.status === 'vip',
+      aceita_marketing: true,
       observacoes: customer.observacoes || "",
       status: customer.status || "ativo"
     })
     
     // Load existing linked children
-    try {
-      const snap = await getDocs(query(collection(db, "filhos"), where("cliente_id", "==", customer.id)))
-      setFilhos(snap.docs.map(d => ({ id: d.id, ...d.data() })))
-      setDeletedFilhos([])
-    } catch (e) {
-      console.error(e)
+    if (customer.children) {
+      setFilhos(customer.children.map((f: any) => ({
+        id: f.id,
+        nome: f.name,
+        data_nascimento: f.birthDate ? new Date(f.birthDate).toISOString().substring(0, 10) : "",
+        sexo: f.gender || "",
+        tamanho_roupa: f.clothingSize || "2",
+        tamanho_calcado: f.shoeSize || "",
+        observacoes: f.notes || "",
+        status: "ativo"
+      })))
+    } else {
+      setFilhos([])
     }
-
+    setDeletedFilhos([])
     setIsFormOpen(true)
   }
 
@@ -442,33 +410,63 @@ export default function ClientesPage() {
     setSelectedCustomer(customer)
     setIsDetailsOpen(true)
     
-    // Load tabs data: children, history, wallet balance, wallet movements, tags
+    // Load tabs data from Supabase / Hybrid Firebase
     try {
       // 1. Kids
-      const kidsSnap = await getDocs(query(collection(db, "filhos"), where("cliente_id", "==", customer.id)))
-      setFilhos(kidsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+      if (customer.children) {
+        setFilhos(customer.children.map((f: any) => ({
+          id: f.id,
+          nome: f.name,
+          data_nascimento: f.birthDate ? new Date(f.birthDate).toISOString().substring(0, 10) : "",
+          sexo: f.gender || "",
+          tamanho_roupa: f.clothingSize || "2",
+          tamanho_calcado: f.shoeSize || "",
+          observacoes: f.notes || ""
+        })))
+      }
 
       // 2. Client history logs
-      const historySnap = await getDocs(query(collection(db, "historico_cliente"), where("cliente_id", "==", customer.id)))
-      setHistoryLogs(historySnap.docs.map(d => ({ id: d.id, ...d.data() }) as any).sort((a: any, b: any) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)))
+      const historyRes = await getCustomerHistory(customer.id)
+      if (historyRes.success && historyRes.data) {
+        setHistoryLogs(historyRes.data.map((h: any) => ({
+          id: h.id,
+          tipo_acao: h.actionType,
+          descricao: h.description,
+          created_at: { seconds: new Date(h.createdAt).getTime() / 1000 }
+        })))
+      }
 
       // 3. Wallet details
-      const walletSnap = await getDocs(query(collection(db, "carteiras_clientes"), where("cliente_id", "==", customer.id)))
-      if (!walletSnap.empty) {
-        const wData = { id: walletSnap.docs[0].id, ...walletSnap.docs[0].data() }
-        setWalletInfo(wData)
+      if (customer.wallet) {
+        const wInfo = {
+          id: customer.wallet.id,
+          saldo_atual: Number(customer.wallet.balance)
+        }
+        setWalletInfo(wInfo)
 
         // 4. Wallet movements
-        const walletMovesSnap = await getDocs(query(collection(db, "movimentacoes_saldo"), where("carteira_id", "==", wData.id)))
-        setWalletHistory(walletMovesSnap.docs.map(d => ({ id: d.id, ...d.data() }) as any).sort((a: any, b: any) => (b.created_at?.seconds || 0) - (a.created_at?.seconds || 0)))
+        const walletMoves = await getWalletHistory(customer.wallet.id)
+        if (walletMoves.success && walletMoves.data) {
+          setWalletHistory(walletMoves.data.map((m: any) => ({
+            id: m.id,
+            tipo_movimentacao: m.type === 'credit' ? 'ENTRADA' : 'SAIDA',
+            origem: m.reason?.includes('AJUSTE') ? 'AJUSTE_MANUAL' : 'SISTEMA',
+            valor: Number(m.amount),
+            observacao: m.reason || "",
+            usuario_responsavel: "Operador",
+            created_at: { seconds: new Date(m.createdAt).getTime() / 1000 }
+          })))
+        }
       } else {
         setWalletInfo(null)
         setWalletHistory([])
       }
 
-      // 5. Returns
-      const returnsSnap = await getDocs(query(collection(db, "trocas_devolucoes"), where("cliente_id", "==", customer.id)))
-      setReturnsHistory(returnsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+      // 5. Returns (Hybrid query on Firebase Firestore since sale transactions remain there)
+      if (db) {
+        const returnsSnap = await getDocs(query(collection(db, "trocas_devolucoes"), where("cliente_id", "==", customer.id)))
+        setReturnsHistory(returnsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+      }
 
       // 6. Selected Tags
       setSelectedTags(customer.tags || [])
@@ -480,7 +478,7 @@ export default function ClientesPage() {
 
   // Kids sub-form operations
   const handleAddFilho = () => {
-    setFilhos([...filhos, { nome: "", data_nascimento: "", sexo: "", tamanho_roupa: "2", tamanho_calcado: "", preferencia_estilo: "", status: "ativo" }])
+    setFilhos([...filhos, { nome: "", data_nascimento: "", sexo: "", tamanho_roupa: "2", tamanho_calcado: "", observacoes: "", status: "ativo" }])
   }
 
   const handleFilhoChange = (index: number, field: string, value: any) => {
@@ -498,17 +496,6 @@ export default function ClientesPage() {
     setFilhos(newFilhos)
   }
 
-  // Primary WhatsApp Unique verification and validation
-  const validateWhatsappUnique = async (phone: string, excludeId?: string) => {
-    if (!phone) return true
-    const snap = await getDocs(
-      query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("whatsapp_principal", "==", phone))
-    )
-    if (snap.empty) return true
-    if (excludeId && snap.docs.length === 1 && snap.docs[0].id === excludeId) return true
-    return false
-  }
-
   // Save Cliente form (and linked Filhos)
   const handleSave = async () => {
     if (!form.nome.trim()) {
@@ -522,53 +509,54 @@ export default function ClientesPage() {
     setIsSaving(true)
 
     try {
-      // Unique verification
-      const isUnique = await validateWhatsappUnique(cleanWhatsapp, editingCustomer?.id)
-      if (!isUnique) {
-        setIsSaving(false)
-        return toast({ 
-          variant: "destructive", 
-          title: "WhatsApp Duplicado", 
-          description: "Já existe um cliente cadastrado com este WhatsApp principal." 
-        })
+      let bDay: number | null = null
+      let bMonth: number | null = null
+      let bYear: number | null = null
+
+      if (form.data_nascimento) {
+        const parts = form.data_nascimento.split("-")
+        if (parts.length === 3) {
+          bYear = parseInt(parts[0])
+          bMonth = parseInt(parts[1])
+          bDay = parseInt(parts[2])
+        }
       }
 
-      const clientData = {
-        ...form,
-        whatsapp_principal: cleanWhatsapp,
-        whatsapp_secundario: form.whatsapp_secundario.replace(/\D/g, "")
+      const clientPayload = {
+        name: form.nome,
+        email: form.email || null,
+        phone: cleanWhatsapp,
+        cpf: form.cpf || null,
+        birthDay: bDay,
+        birthMonth: bMonth,
+        birthYear: bYear,
+        instagram: form.instagram || null,
+        notes: form.observacoes || null,
+        status: form.status,
       }
 
       let savedClient: any = null
       if (editingCustomer) {
-        savedClient = await CrmService.updateDocument(db, "clientes", editingCustomer.id, clientData, activeProfile as any)
-        toast({ title: "Cliente atualizado!", description: "Dados gravados com sucesso." })
+        const res = await updateCustomer(editingCustomer.id, clientPayload)
+        if (res.success) {
+          savedClient = res.data
+          toast({ title: "Cliente atualizado!", description: "Dados gravados no Supabase." })
+        } else {
+          setIsSaving(false)
+          return toast({ variant: "destructive", title: "Erro ao atualizar", description: res.error })
+        }
       } else {
-        savedClient = await CrmService.createDocument(db, "clientes", clientData, activeProfile as any)
-        
-        // Auto-create Wallet for new customer
-        const walletRef = await CrmService.createDocument(db, "carteiras_clientes", {
-          cliente_id: savedClient.id,
-          saldo_atual: 0,
-          total_creditos_gerados: 0,
-          total_creditos_utilizados: 0,
-          total_creditos_expirados: 0,
-          ultima_movimentacao: new Date()
-        }, activeProfile as any)
-
-        // Auto-create history log for new customer
-        await CrmService.createDocument(db, "historico_cliente", {
-          cliente_id: savedClient.id,
-          tipo_acao: "CADASTRO_CLIENTE",
-          descricao: `Cliente ${form.nome} cadastrado na base de dados com carteira inicial preparada.`,
-          tenant_id: tenantId
-        }, activeProfile as any)
-
-        toast({ title: "Cliente criado!", description: "Responsável cadastrado, carteira inicial criada e log de auditoria registrado." })
+        const res = await createCustomer(clientPayload)
+        if (res.success) {
+          savedClient = res.data
+          toast({ title: "Cliente criado!", description: "Cadastro realizado com carteira inicial preparada." })
+        } else {
+          setIsSaving(false)
+          return toast({ variant: "destructive", title: "Erro ao criar cliente", description: res.error })
+        }
       }
 
-      // Save/Update Filhos in batch
-      const clientId = editingCustomer ? editingCustomer.id : savedClient.id
+      const clientId = savedClient.id
       let batchFilhos = [...filhos]
 
       if (isCadastroRapido && rapidoFilhoNome.trim()) {
@@ -577,7 +565,7 @@ export default function ClientesPage() {
           const anos = Number(rapidoFilhoIdade)
           if (!isNaN(anos) && anos >= 0) {
             const anoNasc = new Date().getFullYear() - anos
-            dataNascCalculada = `${anoNasc}-01-01`
+            dataNascCalculada = `${anoNasc}-06-15`
           }
         }
 
@@ -587,9 +575,6 @@ export default function ClientesPage() {
           sexo: "M",
           tamanho_roupa: "2",
           tamanho_calcado: "",
-          preferencia_estilo: "",
-          cores_preferidas: "",
-          personagens_preferidos: "",
           observacoes: "",
           status: "ativo"
         }]
@@ -597,32 +582,29 @@ export default function ClientesPage() {
 
       for (const filho of batchFilhos) {
         if (!filho.nome.trim()) continue
-        const filhoData = {
-          ...filho,
-          cliente_id: clientId,
-          tenant_id: tenantId
+        const childPayload = {
+          customerId: clientId,
+          name: filho.nome,
+          birthDate: filho.data_nascimento || null,
+          gender: filho.sexo || null,
+          shoeSize: filho.tamanho_calcado || null,
+          clothingSize: filho.tamanho_roupa || null,
+          notes: filho.observacoes || null
         }
 
         if (filho.id) {
-          await CrmService.updateDocument(db, "filhos", filho.id, filhoData, activeProfile as any)
+          await updateChild(filho.id, childPayload)
         } else {
-          await CrmService.createDocument(db, "filhos", filhoData, activeProfile as any)
-
-          // Auto-create history log for linked child creation in batch
-          await CrmService.createDocument(db, "historico_cliente", {
-            cliente_id: clientId,
-            tipo_acao: "CADASTRO_FILHO",
-            descricao: `Filho(a) ${filhoData.nome} cadastrado(a) e vinculado(a) ao responsável.`,
-            tenant_id: tenantId
-          }, activeProfile as any)
+          await createChild(childPayload)
         }
       }
 
       // Process deleted kids
       for (const delId of deletedFilhos) {
-        await CrmService.deleteDocument(db, "filhos", delId, activeProfile as any, true)
+        await deleteChild(delId)
       }
 
+      await loadData()
       setIsFormOpen(false)
     } catch (e) {
       console.error(e)
@@ -636,8 +618,13 @@ export default function ClientesPage() {
   const handleDelete = async () => {
     if (!deletingId) return
     try {
-      await CrmService.deleteDocument(db, "clientes", deletingId, activeProfile as any, false)
-      toast({ title: "Cliente inativado", description: "O cliente foi movido para o arquivo." })
+      const res = await deleteCustomer(deletingId)
+      if (res.success) {
+        toast({ title: "Cliente arquivado", description: "O cliente foi movido para o arquivo no Supabase." })
+        await loadData()
+      } else {
+        toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
+      }
     } catch (e) {
       toast({ variant: "destructive", title: "Erro ao excluir" })
     } finally {
@@ -658,46 +645,27 @@ export default function ClientesPage() {
 
     setIsSavingWallet(true)
     try {
-      const valor = Number(adjustAmount)
-      const saldoAnterior = walletInfo.saldo_atual || 0
-      const saldoPosterior = adjustType === "ENTRADA" ? saldoAnterior + valor : saldoAnterior - valor
+      const res = await adjustWalletBalance({
+        customerId: selectedCustomer.id,
+        amount: Number(adjustAmount),
+        type: adjustType === "ENTRADA" ? "credit" : "debit",
+        reason: adjustReason
+      })
 
-      if (saldoPosterior < 0) {
-        setIsSavingWallet(false)
-        return toast({ variant: "destructive", title: "Saldo negativo não permitido", description: "O saldo final não pode ser menor que zero." })
+      if (res.success) {
+        toast({ title: "Saldo ajustado!", description: `Carteira atualizada no Supabase.` })
+        await loadData()
+        // Reload details tab to show changes
+        const freshData = rawCustomers?.find(c => c.id === selectedCustomer.id)
+        if (freshData) {
+          handleOpenDetails(freshData)
+        }
+        setIsAdjustingWallet(false)
+        setAdjustAmount("")
+        setAdjustReason("")
+      } else {
+        toast({ variant: "destructive", title: "Erro ao processar ajuste", description: res.error })
       }
-
-      // 1. Create wallet movement
-      await CrmService.createDocument(db, "movimentacoes_saldo", {
-        cliente_id: selectedCustomer.id,
-        carteira_id: walletInfo.id,
-        tipo_movimentacao: adjustType,
-        origem: "AJUSTE_MANUAL",
-        valor: valor,
-        saldo_anterior: saldoAnterior,
-        saldo_posterior: saldoPosterior,
-        usuario_responsavel: activeProfile?.nome || "System",
-        observacao: adjustReason
-      }, activeProfile as any)
-
-      // 2. Update wallet totals
-      const updatedWallet = {
-        saldo_atual: saldoPosterior,
-        total_creditos_gerados: adjustType === "ENTRADA" ? (walletInfo.total_creditos_gerados || 0) + valor : (walletInfo.total_creditos_gerados || 0),
-        total_creditos_utilizados: adjustType === "SAIDA" ? (walletInfo.total_creditos_utilizados || 0) + valor : (walletInfo.total_creditos_utilizados || 0),
-        ultima_movimentacao: new Date()
-      }
-      await CrmService.updateDocument(db, "carteiras_clientes", walletInfo.id, updatedWallet, activeProfile as any)
-
-      toast({ title: "Saldo ajustado!", description: `Carteira atualizada com sucesso.` })
-      
-      // Reload details tab to show changes
-      handleOpenDetails(selectedCustomer)
-      
-      // Close adjustment form
-      setIsAdjustingWallet(false)
-      setAdjustAmount("")
-      setAdjustReason("")
     } catch (e) {
       console.error(e)
       toast({ variant: "destructive", title: "Erro ao processar ajuste" })
@@ -709,16 +677,25 @@ export default function ClientesPage() {
   // Update client tags list
   const handleUpdateTags = async (tagNome: string) => {
     if (!selectedCustomer) return
-    let updated: string[] = []
-    if (selectedTags.includes(tagNome)) {
-      updated = selectedTags.filter(t => t !== tagNome)
-    } else {
-      updated = [...selectedTags, tagNome]
-    }
-    
+    const tagObj = availableTags.find(t => t.name === tagNome)
+    if (!tagObj) return
+
     try {
-      await CrmService.updateDocument(db, "clientes", selectedCustomer.id, { tags: updated }, activeProfile as any)
-      setSelectedTags(updated)
+      if (selectedTags.includes(tagNome)) {
+        const relToDelete = selectedCustomer.tagRelations?.find((r: any) => r.tag?.name === tagNome)
+        if (relToDelete) {
+          await removeTagFromCustomer(selectedCustomer.id, relToDelete.tagId)
+        }
+      } else {
+        await addTagToCustomer(selectedCustomer.id, tagObj.id)
+      }
+      
+      await loadData()
+      
+      const freshData = rawCustomers?.find(c => c.id === selectedCustomer.id)
+      if (freshData) {
+        setSelectedTags(freshData.tags || [])
+      }
       toast({ title: "Tags atualizadas" })
     } catch (e) {
       toast({ variant: "destructive", title: "Erro ao salvar tags" })
@@ -771,13 +748,12 @@ export default function ClientesPage() {
         </div>
       </div>
 
-      {/* Customers List Grid */}
       {error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
           <div>
             <h3 className="font-semibold text-base">Erro na base</h3>
-            <p className="text-sm">{(error as any).message || "Consulte as permissões de acesso do Firestore."}</p>
+            <p className="text-sm">{error}</p>
           </div>
         </div>
       )}
@@ -797,20 +773,13 @@ export default function ClientesPage() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {filteredCustomers.map((customer) => (
             <Card key={customer.id} className="overflow-hidden border border-slate-100 shadow-sm hover:border-indigo-500/30 group hover:shadow-md transition-all duration-300 bg-white">
-              <CardHeader className="p-4 pb-1 flex flex-row items-start justify-between space-y-0">
-                <div className="flex items-center gap-3">
-                  <div className={`h-11 w-11 rounded-full flex items-center justify-center text-white font-bold text-lg ${customer.vip ? 'bg-amber-500' : 'bg-indigo-600'}`}>
-                    {customer.nome?.charAt(0)?.toUpperCase() || "C"}
-                  </div>
-                  <div className="overflow-hidden">
-                    <h3 className="font-bold text-sm text-slate-800 truncate group-hover:text-indigo-600 transition-colors">{customer.nome}</h3>
-                    <div className="flex items-center gap-1.5 mt-0.5">
-                      <Badge className="text-[9px] h-4" variant={customer.status === "ativo" ? "default" : "secondary"}>
-                        {customer.status}
-                      </Badge>
-                      {customer.vip && <Badge className="bg-amber-500 text-white text-[9px] h-4">★ VIP</Badge>}
-                    </div>
-                  </div>
+              <div className="p-4 pb-2 flex justify-between items-start">
+                <div>
+                  <h3 className="font-bold text-slate-800 group-hover:text-indigo-600 transition-colors line-clamp-1">{customer.nome}</h3>
+                  <p className="text-[11px] text-muted-foreground flex items-center gap-1 mt-0.5">
+                    <Phone className="h-3 w-3 shrink-0" />
+                    {formatPhone(customer.whatsapp_principal)}
+                  </p>
                 </div>
                 
                 <DropdownMenu>
@@ -819,687 +788,397 @@ export default function ClientesPage() {
                       <MoreVertical className="h-4 w-4" />
                     </Button>
                   </DropdownMenuTrigger>
-                  <DropdownMenuContent align="end" className="w-48">
+                  <DropdownMenuContent align="end">
                     <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenDetails(customer)}>
-                      <Eye className="mr-2 h-4 w-4 text-indigo-500" /> Detalhes / Abas
+                      <Eye className="mr-2 h-4 w-4 text-indigo-500" /> Ficha Completa
                     </DropdownMenuItem>
                     <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenEdit(customer)}>
-                      <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Dados
+                      <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ficha
                     </DropdownMenuItem>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => handleOpenDelete(customer.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Inativar Cliente
+                      <Trash2 className="mr-2 h-4 w-4" /> Arquivar
                     </DropdownMenuItem>
                   </DropdownMenuContent>
                 </DropdownMenu>
-              </CardHeader>
-              
-              <CardContent className="p-4 pt-3 space-y-3">
-                <div className="space-y-1.5 text-xs">
-                  <div className="flex items-center gap-2 text-slate-500">
-                    <Phone className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                    <span>{formatPhone(customer.whatsapp_principal)}</span>
-                  </div>
-                  {customer.email && (
-                    <div className="flex items-center gap-2 text-slate-500 truncate">
-                      <Mail className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span className="truncate">{customer.email}</span>
-                    </div>
-                  )}
-                  {customer.cidade && (
-                    <div className="flex items-center gap-2 text-slate-500">
-                      <MapPin className="h-3.5 w-3.5 text-slate-400 shrink-0" />
-                      <span>{customer.cidade} - {customer.estado}</span>
-                    </div>
-                  )}
-                </div>
+              </div>
 
-                {customer.tags && customer.tags.length > 0 && (
-                  <div className="flex flex-wrap gap-1 pt-2">
-                    {customer.tags.map((tg: string) => (
-                      <Badge key={tg} variant="outline" className="text-[9px] h-4 bg-slate-50 text-slate-600">
-                        {tg}
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                <div className="flex items-center justify-between border-t border-slate-100 pt-2.5 mt-2.5">
-                  <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider flex items-center gap-1">
-                    <Wallet className="h-3 w-3 text-indigo-500" /> Saldo
+              <CardContent className="p-4 pt-1 space-y-3 text-xs">
+                {/* Balance display */}
+                <div className="bg-slate-50 p-2.5 rounded-lg flex items-center justify-between border">
+                  <span className="text-slate-400 font-semibold uppercase text-[9px] flex items-center gap-1">
+                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Crédito
                   </span>
-                  <strong className="text-xs font-bold text-indigo-600 bg-indigo-50/50 px-2 py-0.5 rounded-md border border-indigo-100/30">
+                  <strong className="text-indigo-600 text-sm">
                     R$ {(walletsMap[customer.id] || 0).toFixed(2)}
                   </strong>
                 </div>
+
+                {/* Children names list */}
+                {customer.children && customer.children.length > 0 ? (
+                  <div className="space-y-1">
+                    <span className="text-[9px] text-slate-400 font-semibold block uppercase">Filhos</span>
+                    <div className="flex flex-wrap gap-1">
+                      {customer.children.map((kid: any) => (
+                        <Badge key={kid.id} variant="secondary" className="text-[9px] font-normal py-0 px-2 flex items-center gap-0.5 bg-slate-100 text-slate-700">
+                          <Baby className="h-2.5 w-2.5" />
+                          {kid.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <span className="text-[10px] text-slate-400 italic block">Sem filhos vinculados</span>
+                )}
+
+                {/* Display active tags */}
+                {customer.tags && customer.tags.length > 0 && (
+                  <div className="space-y-1 pt-1 border-t border-slate-50">
+                    <div className="flex flex-wrap gap-1">
+                      {customer.tags.map((t: string) => (
+                        <Badge key={t} className="text-[8px] bg-indigo-50 text-indigo-700 hover:bg-indigo-50 border border-indigo-100 font-bold px-1.5 py-0">
+                          {t}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}
         </div>
       )}
 
-      {/* ADD/EDIT DIALOG */}
+      {/* DIALOG ADD/EDIT CUSTOMER */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-xl font-bold flex items-center gap-2 text-slate-800">
-              {editingCustomer ? "Editar Registro do Cliente" : isCadastroRapido ? "Cadastro Rápido de Cliente" : "Novo Cliente Responsável"}
+            <DialogTitle className="text-lg font-bold text-slate-800">
+              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente Responsável"}
             </DialogTitle>
             <DialogDescription>
-              {isCadastroRapido 
-                ? "Insira apenas o nome e WhatsApp do comprador principal para iniciar a venda rapidamente." 
-                : "Insira as informações completas do comprador. Você também poderá vincular filhos nesta tela."}
+              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentação."}
             </DialogDescription>
           </DialogHeader>
 
-          <div className="space-y-6 py-4">
+          <div className="space-y-4 py-3 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2 md:col-span-2">
-                <Label htmlFor="fnome">Nome Completo *</Label>
-                <Input 
-                  id="fnome" 
-                  value={form.nome} 
-                  onChange={e => setForm(p => ({ ...p, nome: e.target.value }))} 
-                  placeholder="Ex: Amanda Maria dos Santos"
-                />
+              <div className="space-y-1">
+                <Label htmlFor="cnome">Nome Completo *</Label>
+                <Input id="cnome" placeholder="Ex: Felipe Naiff" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="fcpf">CPF</Label>
-                <Input 
-                  id="fcpf" 
-                  value={form.cpf} 
-                  onChange={e => setForm(p => ({ ...p, cpf: e.target.value }))} 
-                  placeholder="000.000.000-00"
-                />
+              <div className="space-y-1">
+                <Label htmlFor="ccpf">CPF</Label>
+                <Input id="ccpf" placeholder="000.000.000-00" value={form.cpf} onChange={e => setForm({ ...form, cpf: e.target.value })} />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="fwhatsapp">WhatsApp Principal (Busca única) *</Label>
-                <Input 
-                  id="fwhatsapp" 
-                  value={form.whatsapp_principal} 
-                  onChange={e => setForm(p => ({ ...p, whatsapp_principal: e.target.value }))} 
-                  placeholder="(00) 00000-0000"
-                />
-              </div>
-
-              {isCadastroRapido && (
-                <div className="md:col-span-2 border-t pt-4 mt-2">
-                  <h4 className="font-semibold text-xs text-slate-700 mb-3 flex items-center gap-1.5 uppercase tracking-wider">
-                    <Baby className="h-4 w-4 text-indigo-500" /> Informações do Filho (Opcional)
-                  </h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="frapidonome" className="text-xs text-slate-500">Nome do Filho</Label>
-                      <Input 
-                        id="frapidonome" 
-                        value={rapidoFilhoNome} 
-                        onChange={e => setRapidoFilhoNome(e.target.value)} 
-                        placeholder="Ex: Amanda dos Santos"
-                        className="h-9"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="frapidoidade" className="text-xs text-slate-500">Idade (Anos)</Label>
-                      <Input 
-                        id="frapidoidade" 
-                        type="number"
-                        min={0}
-                        value={rapidoFilhoIdade} 
-                        onChange={e => setRapidoFilhoIdade(e.target.value)} 
-                        placeholder="Ex: 5"
-                        className="h-9"
-                      />
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {!isCadastroRapido && (
-                <>
-                  <div className="space-y-2">
-                    <Label htmlFor="fwhatsapp2">WhatsApp Secundário</Label>
-                    <Input 
-                      id="fwhatsapp2" 
-                      value={form.whatsapp_secundario} 
-                      onChange={e => setForm(p => ({ ...p, whatsapp_secundario: e.target.value }))} 
-                      placeholder="(00) 00000-0000"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="finsta">Instagram</Label>
-                    <Input 
-                      id="finsta" 
-                      value={form.instagram} 
-                      onChange={e => setForm(p => ({ ...p, instagram: e.target.value }))} 
-                      placeholder="@usuario"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="femail">E-mail</Label>
-                    <Input 
-                      id="femail" 
-                      value={form.email} 
-                      onChange={e => setForm(p => ({ ...p, email: e.target.value }))} 
-                      placeholder="cliente@provedor.com"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="fnasc">Data de Nascimento</Label>
-                    <Input 
-                      id="fnasc" 
-                      type="date" 
-                      value={form.data_nascimento} 
-                      onChange={e => setForm(p => ({ ...p, data_nascimento: e.target.value }))} 
-                    />
-                  </div>
-
-                  {/* Endereço */}
-                  <div className="md:col-span-2 border-t pt-4 mt-2">
-                    <h4 className="font-semibold text-sm text-slate-800 mb-3 flex items-center gap-2">
-                      <MapPin className="h-4 w-4 text-indigo-500" /> Endereço de Entrega/Cobrança
-                    </h4>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                      <div className="space-y-2 col-span-2 sm:col-span-3">
-                        <Label htmlFor="fend">Endereço (Rua/Avenida)</Label>
-                        <Input id="fend" value={form.endereco} onChange={e => setForm(p => ({ ...p, endereco: e.target.value }))} placeholder="Rua..." />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fnum">Número</Label>
-                        <Input id="fnum" value={form.numero} onChange={e => setForm(p => ({ ...p, numero: e.target.value }))} placeholder="123" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fcomp">Complemento</Label>
-                        <Input id="fcomp" value={form.complemento} onChange={e => setForm(p => ({ ...p, complemento: e.target.value }))} placeholder="Apto, Sala..." />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fbairro">Bairro</Label>
-                        <Input id="fbairro" value={form.bairro} onChange={e => setForm(p => ({ ...p, bairro: e.target.value }))} placeholder="Bairro..." />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fcid">Cidade</Label>
-                        <Input id="fcid" value={form.cidade} onChange={e => setForm(p => ({ ...p, cidade: e.target.value }))} placeholder="Macapá" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="fest">Estado</Label>
-                        <Input id="fest" value={form.estado} onChange={e => setForm(p => ({ ...p, estado: e.target.value }))} placeholder="AP" maxLength={2} />
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* CRM Options */}
-                  <div className="md:col-span-2 border-t pt-4 mt-2 grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/50">
-                      <div className="flex flex-col">
-                        <Label className="text-sm font-semibold">Cliente VIP</Label>
-                        <span className="text-[10px] text-muted-foreground">Destacar em relatórios</span>
-                      </div>
-                      <Switch checked={form.vip} onCheckedChange={v => setForm(p => ({ ...p, vip: v }))} />
-                    </div>
-
-                    <div className="flex items-center justify-between p-3 border rounded-xl bg-slate-50/50">
-                      <div className="flex flex-col">
-                        <Label className="text-sm font-semibold">Marketing WhatsApp</Label>
-                        <span className="text-[10px] text-muted-foreground">Aceita receber ofertas</span>
-                      </div>
-                      <Switch checked={form.aceita_marketing} onCheckedChange={v => setForm(p => ({ ...p, aceita_marketing: v }))} />
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label>Origem do Cliente</Label>
-                      <Select value={form.origem} onValueChange={v => setForm(p => ({ ...p, origem: v }))}>
-                        <SelectTrigger className="h-10">
-                          <SelectValue placeholder="Origem" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Loja Física">Loja Física</SelectItem>
-                          <SelectItem value="Instagram">Instagram</SelectItem>
-                          <SelectItem value="Indicação">Indicação</SelectItem>
-                          <SelectItem value="Campanha">Campanha</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2 space-y-2">
-                    <Label htmlFor="fobs">Observações Internas</Label>
-                    <Textarea 
-                      id="fobs" 
-                      value={form.observacoes} 
-                      onChange={e => setForm(p => ({ ...p, observacoes: e.target.value }))} 
-                      placeholder="Restrições, gostos ou notas sobre o atendimento..."
-                    />
-                  </div>
-                </>
-              )}
             </div>
 
-            {/* Linked Kids Panel */}
-            {/* Linked Kids Panel */}
-            {!isCadastroRapido && (
-              <div className="border-t pt-6">
-                <div className="flex items-center justify-between mb-4">
-                  <div>
-                    <h3 className="font-semibold text-slate-800 flex items-center gap-2">
-                      <Baby className="h-5 w-5 text-indigo-600" /> Filhos Vinculados
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-0.5">Determine o perfil da criança para auxiliar campanhas futuras e tamanhos.</p>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" className="border-indigo-200 text-indigo-600 hover:bg-indigo-50/50" onClick={handleAddFilho}>
-                    <Plus className="h-4 w-4 mr-1" /> Adicionar Filho
-                  </Button>
-                </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="cwhats">WhatsApp Principal *</Label>
+                <Input id="cwhats" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_principal} onChange={e => setForm({ ...form, whatsapp_principal: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cwhats2">WhatsApp Secundário</Label>
+                <Input id="cwhats2" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_secundario} onChange={e => setForm({ ...form, whatsapp_secundario: e.target.value })} />
+              </div>
+            </div>
 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1">
+                <Label htmlFor="cemail">E-mail</Label>
+                <Input id="cemail" type="email" placeholder="cliente@email.com" value={form.email} onChange={e => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="cnasc">Data de Nascimento</Label>
+                <Input id="cnasc" type="date" value={form.data_nascimento} onChange={e => setForm({ ...form, data_nascimento: e.target.value })} />
+              </div>
+            </div>
+
+            {!isCadastroRapido ? (
+              <>
+                <Separator />
+                <h3 className="font-bold text-slate-800 text-sm">Vincular Filhos / Dependentes</h3>
+                
                 {filhos.length === 0 ? (
-                  <div className="text-center p-6 border rounded-xl bg-slate-50/40 text-muted-foreground text-xs">
-                    Nenhuma criança cadastrada para este responsável.
-                  </div>
+                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsável.</p>
                 ) : (
-                  <div className="space-y-4">
-                    {filhos.map((f, index) => (
-                      <div key={index} className="p-4 border rounded-xl bg-slate-50/50 grid grid-cols-1 sm:grid-cols-4 gap-3 relative">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Nome da Criança</Label>
-                          <Input value={f.nome} onChange={e => handleFilhoChange(index, "nome", e.target.value)} placeholder="Nome..." />
-                        </div>
-                        
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs">Nascimento</Label>
-                            {f.data_nascimento && <span className="text-[10px] text-indigo-600 font-semibold">{calcIdade(f.data_nascimento)}</span>}
-                          </div>
-                          <Input type="date" value={f.data_nascimento} onChange={e => handleFilhoChange(index, "data_nascimento", e.target.value)} />
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-xs">Sexo</Label>
-                          <Select value={f.sexo} onValueChange={v => handleFilhoChange(index, "sexo", v)}>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Sexo" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="M">Menino</SelectItem>
-                              <SelectItem value="F">Menina</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <div className="space-y-1">
-                          <Label className="text-xs">Tamanho de Roupa</Label>
-                          <Select value={f.tamanho_roupa} onValueChange={v => handleFilhoChange(index, "tamanho_roupa", v)}>
-                            <SelectTrigger className="h-9">
-                              <SelectValue placeholder="Tamanho" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {["RN", "P", "M", "G", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
-                                <SelectItem key={t} value={t}>{t}</SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-
-                        <Button 
-                          type="button" 
-                          variant="ghost" 
-                          size="icon" 
-                          className="absolute right-2 top-2 text-rose-600 hover:bg-rose-50"
-                          onClick={() => handleRemoveFilho(index)}
-                        >
-                          <Trash2 className="h-4 w-4" />
+                  <div className="space-y-3">
+                    {filhos.map((filho, idx) => (
+                      <div key={idx} className="border p-3 rounded-lg bg-slate-50/50 space-y-3 relative">
+                        <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500 absolute top-2 right-2" onClick={() => handleRemoveFilho(idx)}>
+                          ✕
                         </Button>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="space-y-1">
+                            <Label>Nome do Filho *</Label>
+                            <Input placeholder="Ex: Arthur Naiff" value={filho.nome} onChange={e => handleFilhoChange(idx, "nome", e.target.value)} />
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Nascimento</Label>
+                            <Input type="date" value={filho.data_nascimento} onChange={e => handleFilhoChange(idx, "data_nascimento", e.target.value)} />
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="space-y-1">
+                            <Label>Sexo</Label>
+                            <select className="w-full border rounded h-9 px-2 bg-white" value={filho.sexo} onChange={e => handleFilhoChange(idx, "sexo", e.target.value)}>
+                              <option value="">Selecionar</option>
+                              <option value="M">Menino</option>
+                              <option value="F">Menina</option>
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Tam. Roupa</Label>
+                            <select className="w-full border rounded h-9 px-2 bg-white" value={filho.tamanho_roupa} onChange={e => handleFilhoChange(idx, "tamanho_roupa", e.target.value)}>
+                              {["RN", "P", "M", "G", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
+                                <option key={t} value={t}>{t}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div className="space-y-1">
+                            <Label>Calçado</Label>
+                            <Input placeholder="Ex: 24" value={filho.tamanho_calcado} onChange={e => handleFilhoChange(idx, "tamanho_calcado", e.target.value)} />
+                          </div>
+                        </div>
                       </div>
                     ))}
                   </div>
                 )}
+                
+                <Button variant="outline" className="h-9 gap-1 border-indigo-100 text-indigo-600 hover:bg-indigo-50/50" onClick={handleAddFilho}>
+                  <Plus className="h-4 w-4" /> Adicionar Dependente
+                </Button>
+              </>
+            ) : (
+              <div className="bg-indigo-50/30 p-3 rounded-lg border space-y-3">
+                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1">
+                    <Label>Nome do Filho</Label>
+                    <Input placeholder="Ex: Lucas" value={rapidoFilhoNome} onChange={e => setRapidoFilhoNome(e.target.value)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label>Idade Aproximada (Anos)</Label>
+                    <Input type="number" placeholder="Ex: 4" value={rapidoFilhoIdade} onChange={e => setRapidoFilhoIdade(e.target.value)} />
+                  </div>
+                </div>
               </div>
             )}
+
+            <Separator />
+            
+            <div className="space-y-2">
+              <Label>Observações de Atendimento</Label>
+              <Textarea placeholder="Histórico de alergias, marcas preferidas, restrições..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+            </div>
+
+            <div className="flex items-center gap-6 bg-slate-50 p-3 rounded-lg border">
+              <div className="flex items-center gap-2">
+                <Switch id="cvip" checked={form.vip === true} onCheckedChange={checked => setForm({ ...form, vip: checked, status: checked ? 'ativo' : 'ativo' })} />
+                <Label htmlFor="cvip" className="font-semibold cursor-pointer">Marcar como Cliente VIP</Label>
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch id="cmarketing" checked={form.aceita_marketing} onCheckedChange={checked => setForm({ ...form, aceita_marketing: checked })} />
+                <Label htmlFor="cmarketing" className="font-semibold cursor-pointer">Aceita WhatsApp Marketing</Label>
+              </div>
+            </div>
           </div>
 
           <DialogFooter className="border-t pt-4">
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancelar</Button>
             <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSave} disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingCustomer ? "Salvar Alterações" : "Criar Cadastro"}
+              {editingCustomer ? "Salvar Alterações" : "Concluir Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* CONFIRM DELETE DIALOG */}
+      {/* CONFIRM DELETE CUSTOMER */}
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-bold text-slate-800">Inativar Cliente Responsável</AlertDialogTitle>
+            <AlertDialogTitle className="font-bold text-slate-800">Inativar Ficha do Cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja arquivar e inativar o registro deste cliente? Ele não aparecerá nas buscas padrão de vendas e CRM, mas seus históricos e saldos serão preservados.
+              Deseja arquivar este cliente? O saldo atual da carteira permanecerá congelado, mas o cadastro não constará nas listagens de vendas ativas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-500" onClick={handleDelete}>
-              Confirmar Inativação
+              Confirmar Arquivamento
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* DETAILS VIEW WITH INTEGRATED TABS */}
+      {/* DETAILS VIEW DIALOG */}
       <Dialog open={isDetailsOpen} onOpenChange={setIsDetailsOpen}>
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
           <DialogHeader className="border-b pb-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="h-12 w-12 rounded-full bg-indigo-500/10 flex items-center justify-center text-indigo-600 font-bold text-xl">
-                  {selectedCustomer?.nome?.charAt(0)?.toUpperCase()}
-                </div>
-                <div>
-                  <DialogTitle className="text-xl font-bold text-slate-800">{selectedCustomer?.nome}</DialogTitle>
-                  <p className="text-xs text-muted-foreground mt-0.5">WhatsApp: {formatPhone(selectedCustomer?.whatsapp_principal)}</p>
+            <div className="flex justify-between items-start">
+              <div>
+                <DialogTitle className="text-xl font-bold text-slate-800">{selectedCustomer?.nome}</DialogTitle>
+                <div className="flex flex-wrap items-center gap-3 mt-1.5 text-slate-500 text-xs">
+                  <span className="flex items-center gap-1"><Phone className="h-3.5 w-3.5" /> {formatPhone(selectedCustomer?.whatsapp_principal)}</span>
+                  {selectedCustomer?.email && <span className="flex items-center gap-1"><Mail className="h-3.5 w-3.5" /> {selectedCustomer?.email}</span>}
                 </div>
               </div>
-              
-              <div className="flex items-center gap-2">
-                {selectedCustomer?.vip && <Badge className="bg-amber-500 text-white">★ VIP</Badge>}
-                <Badge variant={selectedCustomer?.status === "ativo" ? "default" : "secondary"}>{selectedCustomer?.status}</Badge>
-              </div>
+              <Badge className={selectedCustomer?.status === 'vip' ? "bg-amber-100 text-amber-800 border-amber-200 font-bold" : "bg-indigo-50 text-indigo-700 border-indigo-200"}>
+                {selectedCustomer?.status?.toUpperCase()}
+              </Badge>
             </div>
           </DialogHeader>
 
-          <Tabs defaultValue="dados" className="w-full mt-4">
-            <TabsList className="grid w-full grid-cols-2 md:grid-cols-7 bg-slate-100 p-1 rounded-lg h-auto">
-              <TabsTrigger value="dados" className="text-xs py-2">Dados</TabsTrigger>
-              <TabsTrigger value="filhos" className="text-xs py-2">Filhos</TabsTrigger>
-              <TabsTrigger value="historico" className="text-xs py-2">Histórico</TabsTrigger>
-              <TabsTrigger value="carteira" className="text-xs py-2">Carteira</TabsTrigger>
-              <TabsTrigger value="trocas" className="text-xs py-2">Trocas</TabsTrigger>
-              <TabsTrigger value="tags" className="text-xs py-2">Tags</TabsTrigger>
-              <TabsTrigger value="obs" className="text-xs py-2">Obs</TabsTrigger>
+          <Tabs defaultValue="ficha" className="w-full mt-4">
+            <TabsList className="bg-white border w-full justify-start gap-1 p-1">
+              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Básica</TabsTrigger>
+              <TabsTrigger value="filhos" className="flex items-center gap-1.5"><Baby className="h-4 w-4 text-emerald-600" /> Dependentes ({filhos.length})</TabsTrigger>
+              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Créditos/Carteira</TabsTrigger>
+              <TabsTrigger value="trocas" className="flex items-center gap-1.5">Trocas ({returnsHistory.length})</TabsTrigger>
+              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> Histórico CRM ({historyLogs.length})</TabsTrigger>
             </TabsList>
 
-            {/* TAB DADOS */}
-            <TabsContent value="dados" className="space-y-4 py-4">
-              <div className="grid grid-cols-2 gap-4 text-xs">
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">Nome Completo</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1">{selectedCustomer?.nome}</p>
+            {/* TAB: Ficha Básica */}
+            <TabsContent value="ficha" className="space-y-4 pt-4 text-xs">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="bg-slate-50 p-3 rounded-lg border">
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">CPF</span>
+                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Não informado"}</span>
+                  </div>
+                  <div className="bg-slate-50 p-3 rounded-lg border">
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Data de Nascimento</span>
+                    <span className="text-slate-800 font-medium block mt-1">
+                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Não informada"}
+                    </span>
+                  </div>
                 </div>
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">CPF</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1">{selectedCustomer?.cpf || "Não informado"}</p>
-                </div>
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">WhatsApp Principal</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1">{formatPhone(selectedCustomer?.whatsapp_principal)}</p>
-                </div>
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">WhatsApp Secundário</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1">{formatPhone(selectedCustomer?.whatsapp_secundario) || "Não informado"}</p>
-                </div>
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">E-mail</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1 truncate">{selectedCustomer?.email || "Não informado"}</p>
-                </div>
-                <div className="p-3 border rounded-xl">
-                  <p className="text-slate-400 font-medium">Instagram</p>
-                  <p className="text-sm font-bold text-indigo-600 mt-1">{selectedCustomer?.instagram || "Não informado"}</p>
-                </div>
-                <div className="p-3 border rounded-xl col-span-2">
-                  <p className="text-slate-400 font-medium">Endereço Principal</p>
-                  <p className="text-sm font-bold text-slate-800 mt-1">
-                    {selectedCustomer?.endereco ? `${selectedCustomer.endereco}, ${selectedCustomer.numero}` : "Sem endereço cadastrado"}
-                    {selectedCustomer?.bairro ? ` - ${selectedCustomer.bairro}` : ""}
-                    {selectedCustomer?.cidade ? ` - ${selectedCustomer.cidade}/${selectedCustomer.estado}` : ""}
-                  </p>
+
+                <div className="space-y-3">
+                  {selectedCustomer?.observacoes && (
+                    <div className="bg-slate-50 p-3 rounded-lg border">
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Notas de Atendimento</span>
+                      <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{selectedCustomer?.observacoes}</p>
+                    </div>
+                  )}
+
+                  <div className="bg-slate-50 p-3 rounded-lg border space-y-2">
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentação</span>
+                    
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {availableTags.map((tag) => {
+                        const active = selectedTags.includes(tag.name)
+                        return (
+                          <button
+                            key={tag.id}
+                            onClick={() => handleUpdateTags(tag.name)}
+                            className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
+                              active
+                                ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
+                                : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
+                            }`}
+                          >
+                            {tag.name}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
             </TabsContent>
 
-            {/* TAB FILHOS */}
-            <TabsContent value="filhos" className="space-y-4 py-4">
-              <div className="flex items-center justify-between border-b pb-3">
-                <div>
-                  <h3 className="font-bold text-slate-800 text-sm flex items-center gap-2">
-                    <Baby className="h-5 w-5 text-indigo-600" /> Perfil das Crianças
-                  </h3>
-                  <p className="text-[11px] text-muted-foreground">Cada perfil gerencia tamanhos, idades e preferências segmentadas.</p>
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="outline" 
-                  className="border-indigo-200 text-indigo-600 hover:bg-indigo-50/50 gap-1.5 h-8 text-xs font-semibold"
-                  onClick={() => {
-                    setQuickFilhoForm(emptyFilhoForm)
-                    setIsQuickAddFilhoOpen(true)
-                  }}
-                >
-                  <PlusCircle className="h-3.5 w-3.5" /> Adicionar Filho
+            {/* TAB: Dependentes */}
+            <TabsContent value="filhos" className="space-y-4 pt-4 text-xs">
+              <div className="flex justify-between items-center">
+                <h3 className="font-bold text-slate-800 text-sm">Crianças Associadas</h3>
+                <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 h-8 text-[11px]" onClick={() => setIsQuickAddFilhoOpen(true)}>
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Criança
                 </Button>
               </div>
 
               {filhos.length === 0 ? (
-                <div className="text-center py-10 border rounded-xl bg-slate-50/50 text-slate-500 text-xs">
-                  Sem perfil de filhos cadastrados. Clique no botão acima para adicionar um filho.
+                <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
+                  Sem crianças vinculadas a este responsável.
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  {filhos.map((f, idx) => (
-                    <Card key={idx} className="border shadow-none rounded-xl bg-slate-50/10 hover:bg-slate-50/30 transition-colors">
-                      <CardHeader className="p-4 flex flex-row items-start justify-between gap-3 pb-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {filhos.map((filho, idx) => (
+                    <Card key={idx} className="border border-slate-100 shadow-sm bg-white p-4">
+                      <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                          <div className={`h-10 w-10 rounded-full flex items-center justify-center font-bold text-sm shadow-sm ${f.sexo === 'F' ? 'bg-pink-100 text-pink-600' : 'bg-blue-100 text-blue-600'}`}>
-                            {f.nome?.charAt(0)?.toUpperCase()}
+                          <div className={`h-9 w-9 rounded-full flex items-center justify-center font-bold text-sm ${filho.sexo === "F" ? "bg-pink-100 text-pink-600" : "bg-blue-100 text-blue-600"}`}>
+                            {filho.nome?.charAt(0)?.toUpperCase()}
                           </div>
                           <div>
-                            <h4 className="font-bold text-sm text-slate-800 flex items-center gap-1.5">
-                              {f.nome}
-                              <Badge className={`text-[9px] px-1.5 py-0 ${f.sexo === 'F' ? 'bg-pink-100 text-pink-700 hover:bg-pink-100' : 'bg-blue-100 text-blue-700 hover:bg-blue-100'}`}>
-                                {f.sexo === 'F' ? 'F' : 'M'}
-                              </Badge>
-                            </h4>
-                            {f.data_nascimento && <span className="text-[10px] text-muted-foreground block mt-0.5">{calcIdade(f.data_nascimento)} ({new Date(f.data_nascimento).toLocaleDateString('pt-BR')})</span>}
-                          </div>
-                        </div>
-
-                        <Button 
-                          size="sm" 
-                          variant="ghost" 
-                          className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50"
-                          title="Atualização Rápida de Tamanho"
-                          onClick={() => openQuickSizeUpdate(f)}
-                        >
-                          <Sparkles className="h-4 w-4" />
-                        </Button>
-                      </CardHeader>
-                      <CardContent className="p-4 pt-0 space-y-2 text-xs">
-                        <div className="grid grid-cols-2 gap-2 border-t pt-3">
-                          <div className="p-2 bg-white rounded-lg border flex flex-col justify-between">
-                            <span className="text-[10px] text-slate-400 font-medium">Roupa</span>
-                            <span className="font-bold text-slate-700 text-sm mt-0.5">{f.tamanho_roupa || "Não inf."}</span>
-                          </div>
-                          <div className="p-2 bg-white rounded-lg border flex flex-col justify-between">
-                            <span className="text-[10px] text-slate-400 font-medium">Calçado</span>
-                            <span className="font-bold text-slate-700 text-sm mt-0.5">{f.tamanho_calcado || "Não inf."}</span>
-                          </div>
-                        </div>
-
-                        <div className="space-y-1 mt-2">
-                          <p className="text-[10px] text-slate-400 font-medium">Preferências e Estilo</p>
-                          <div className="space-y-1 bg-white p-2 rounded-lg border text-[11px] text-slate-600">
-                            {f.preferencia_estilo && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Estilo:</span>
-                                <span className="font-medium">{f.preferencia_estilo}</span>
-                              </div>
-                            )}
-                            {f.cores_preferidas && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Cores:</span>
-                                <span className="font-medium">{f.cores_preferidas}</span>
-                              </div>
-                            )}
-                            {f.personagens_preferidos && (
-                              <div className="flex justify-between">
-                                <span className="text-slate-400">Personagens:</span>
-                                <span className="font-medium">{f.personagens_preferidos}</span>
-                              </div>
-                            )}
-                            {!f.preferencia_estilo && !f.cores_preferidas && !f.personagens_preferidos && (
-                              <span className="text-slate-400 italic text-[10px]">Sem preferências cadastradas</span>
+                            <p className="font-bold text-slate-800">{filho.nome}</p>
+                            {filho.data_nascimento && (
+                              <p className="text-[10px] text-slate-400 mt-0.5">
+                                {new Date(filho.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR")} · {calcIdade(filho.data_nascimento)}
+                              </p>
                             )}
                           </div>
                         </div>
+                      </div>
 
-                        {f.data_atualizacao_tamanho && (
-                          <div className="text-[9px] text-slate-400 flex items-center gap-1.5 mt-1 justify-end">
-                            <History className="h-3 w-3" />
-                            Última at. tamanho: {new Date(f.data_atualizacao_tamanho).toLocaleDateString('pt-BR')}
-                          </div>
+                      <div className="flex items-center gap-1.5 flex-wrap mt-3">
+                        <Badge variant="outline" className={`text-[8px] h-4 ${filho.sexo === "M" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-pink-50 text-pink-700 border-pink-200"}`}>
+                          {filho.sexo === "M" ? "Menino" : "Menina"}
+                        </Badge>
+                        <Badge variant="outline" className="text-[8px] h-4 bg-slate-50 text-slate-600">
+                          Roupas: {filho.tamanho_roupa || "2"}
+                        </Badge>
+                        {filho.tamanho_calcado && (
+                          <Badge variant="outline" className="text-[8px] h-4 bg-indigo-50 text-indigo-700 border-indigo-100">
+                            Calçado: {filho.tamanho_calcado}
+                          </Badge>
                         )}
-
-                        {f.observacoes && (
-                          <div className="mt-2 p-2 rounded-lg bg-yellow-50/50 border border-yellow-100 text-slate-600 text-[11px]">
-                            <span className="font-semibold text-yellow-800">Obs:</span> {f.observacoes}
-                          </div>
-                        )}
-                      </CardContent>
+                      </div>
                     </Card>
                   ))}
                 </div>
               )}
             </TabsContent>
 
-            {/* TAB HISTORICO */}
-            <TabsContent value="historico" className="space-y-4 py-4">
-              {historyLogs.length === 0 ? (
-                <div className="text-center py-10 border rounded-xl bg-slate-50/50 text-slate-500 text-xs">
-                  Nenhum histórico registrado para este cliente.
+            {/* TAB: Carteira de Créditos */}
+            <TabsContent value="carteira" className="space-y-4 pt-4 text-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-indigo-50/50 p-4 border rounded-xl">
+                <div>
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo Disponível</span>
+                  <strong className="text-2xl text-indigo-600 block mt-1">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</strong>
                 </div>
-              ) : (
-                <div className="relative border-l pl-4 ml-2 space-y-6 max-h-[300px] overflow-y-auto">
-                  {historyLogs.map((log, idx) => (
-                    <div key={idx} className="relative">
-                      <div className="absolute left-[-21px] top-1.5 h-3.5 w-3.5 rounded-full border-2 border-white bg-indigo-500 shadow-sm" />
-                      <div className="flex flex-col">
-                        <span className="text-[10px] text-slate-400">
-                          {log.created_at ? new Date(log.created_at.seconds * 1000).toLocaleString("pt-BR") : "Agora mesmo"}
-                        </span>
-                        <span className="font-bold text-xs text-slate-800 mt-0.5">{log.tipo_acao}</span>
-                        <span className="text-xs text-slate-600 mt-0.5">{log.descricao}</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </TabsContent>
 
-            {/* TAB CARTEIRA */}
-            <TabsContent value="carteira" className="space-y-4 py-4">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <Card className="border shadow-none rounded-xl bg-indigo-50/20">
-                  <CardHeader className="p-3 pb-0">
-                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase">Saldo Disponível</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3 space-y-1">
-                    <div className="text-2xl font-bold text-indigo-600">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</div>
-                    <span className="text-[9px] text-indigo-500/80 font-medium block">
-                      ✓ R$ {computedBalanceFromExtrato.toFixed(2)} calculado pelo extrato
-                    </span>
-                  </CardContent>
-                </Card>
-
-                <Card className="border shadow-none rounded-xl">
-                  <CardHeader className="p-3 pb-0">
-                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase">Créditos Gerados</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3">
-                    <div className="text-2xl font-bold text-emerald-600">R$ {walletInfo?.total_creditos_gerados?.toFixed(2) || "0.00"}</div>
-                  </CardContent>
-                </Card>
-
-                <Card className="border shadow-none rounded-xl">
-                  <CardHeader className="p-3 pb-0">
-                    <CardTitle className="text-xs font-semibold text-slate-500 uppercase">Créditos Utilizados</CardTitle>
-                  </CardHeader>
-                  <CardContent className="p-3">
-                    <div className="text-2xl font-bold text-rose-600">R$ {walletInfo?.total_creditos_utilizados?.toFixed(2) || "0.00"}</div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Botão de ajuste manual */}
-              <div className="flex justify-end mt-2">
-                <Button className="bg-amber-500 hover:bg-amber-600 text-white font-medium text-xs gap-1.5 h-8" onClick={() => setIsAdjustingWallet(!isAdjustingWallet)}>
-                  <Wallet className="h-4 w-4" /> Ajuste Manual de Saldo
+                <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 self-start sm:self-auto" onClick={() => setIsAdjustingWallet(true)}>
+                  <PlusCircle className="h-4 w-4" /> Ajuste Manual de Saldo
                 </Button>
               </div>
 
-              {isAdjustingWallet && (
-                <div className="p-4 border border-amber-200 rounded-xl bg-amber-50/20 space-y-4">
-                  <h4 className="font-bold text-xs text-amber-800">Ajuste Manual de Crédito Autorizado</h4>
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                    <div className="space-y-1">
-                      <Label className="text-xs">Tipo do Ajuste</Label>
-                      <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
-                        <SelectTrigger className="h-9">
-                          <SelectValue placeholder="Tipo" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="ENTRADA">Adicionar Crédito (Entrada)</SelectItem>
-                          <SelectItem value="SAIDA">Retirar Crédito (Saída)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-
-                    <div className="space-y-1">
-                      <Label className="text-xs">Valor (R$)</Label>
-                      <Input type="number" step="0.01" value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} placeholder="0.00" className="h-9" />
-                    </div>
-
-                    <div className="space-y-1 col-span-1 sm:col-span-3">
-                      <Label className="text-xs">Motivo / Observação Obrigatória *</Label>
-                      <Input value={adjustReason} onChange={e => setAdjustReason(e.target.value)} placeholder="Ajuste comercial, devolução de peças fora do prazo, etc..." className="h-9" />
-                    </div>
-                  </div>
-
-                  <div className="flex justify-end gap-2 pt-2 border-t border-amber-100">
-                    <Button variant="ghost" size="sm" className="text-xs" onClick={() => setIsAdjustingWallet(false)}>Cancelar</Button>
-                    <Button className="bg-amber-600 hover:bg-amber-500 text-white text-xs h-8 px-4" onClick={handleSaveWalletAdjustment} disabled={isSavingWallet}>
-                      {isSavingWallet ? "Gravando..." : "Salvar Ajuste"}
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {/* Extrato Extendido da carteira */}
               <div className="space-y-2">
-                <h4 className="font-bold text-xs text-slate-700">Histórico de Movimentações da Carteira</h4>
+                <h4 className="font-bold text-slate-800 text-sm">Histórico do Extrato</h4>
                 {walletHistory.length === 0 ? (
-                  <div className="text-center py-6 border rounded-xl bg-slate-50/50 text-slate-500 text-xs">
-                    Nenhuma transação financeira efetuada.
-                  </div>
+                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentação registrada.</p>
                 ) : (
-                  <div className="max-h-[200px] overflow-y-auto border rounded-xl divide-y text-xs">
-                    {walletHistory.map((item, idx) => (
-                      <div key={idx} className="p-3 flex items-center justify-between hover:bg-slate-50/50">
-                        <div className="space-y-0.5">
+                  <div className="border rounded-xl divide-y bg-white">
+                    {walletHistory.map((move, idx) => (
+                      <div key={idx} className="p-3 flex items-center justify-between">
+                        <div>
                           <div className="flex items-center gap-2">
-                            <span className={`font-bold uppercase ${item.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {item.tipo_movimentacao}
+                            <span className={`font-bold uppercase ${move.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              {move.tipo_movimentacao}
                             </span>
-                            <Badge variant="outline" className="text-[9px] font-normal">{item.origem}</Badge>
+                            <Badge variant="outline" className="text-[8px] font-normal h-4">{move.origem}</Badge>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">Responsável: {item.usuario_responsavel} · Obs: {item.observacao}</p>
+                          <p className="text-[10px] text-muted-foreground mt-0.5">Motivo: {move.observacao}</p>
                         </div>
                         <div className="text-right">
-                          <span className={`font-bold text-sm ${item.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                            {item.tipo_movimentacao === 'ENTRADA' ? '+' : '-'} R$ {item.valor?.toFixed(2)}
-                          </span>
-                          <p className="text-[9px] text-slate-400">{item.created_at ? new Date(item.created_at.seconds * 1000).toLocaleDateString("pt-BR") : ""}</p>
+                          <strong className={move.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}>
+                            {move.tipo_movimentacao === 'ENTRADA' ? '+' : '-'} R$ {move.valor?.toFixed(2)}
+                          </strong>
+                          <p className="text-[9px] text-slate-400 mt-0.5">
+                            {move.created_at ? new Date(move.created_at.seconds * 1000).toLocaleString("pt-BR") : ""}
+                          </p>
                         </div>
                       </div>
                     ))}
@@ -1508,23 +1187,26 @@ export default function ClientesPage() {
               </div>
             </TabsContent>
 
-            {/* TAB TROCAS */}
-            <TabsContent value="trocas" className="space-y-4 py-4">
+            {/* TAB: Trocas e Devoluções */}
+            <TabsContent value="trocas" className="space-y-4 pt-4 text-xs">
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Trocas (PDV)</h3>
               {returnsHistory.length === 0 ? (
-                <div className="text-center py-10 border rounded-xl bg-slate-50/50 text-slate-500 text-xs">
-                  Sem trocas ou devoluções registradas no histórico.
+                <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
+                  Nenhuma troca registrada para este comprador.
                 </div>
               ) : (
-                <div className="max-h-[300px] overflow-y-auto border rounded-xl divide-y text-xs">
+                <div className="border rounded-xl divide-y bg-white">
                   {returnsHistory.map((item, idx) => (
                     <div key={idx} className="p-3 flex items-center justify-between">
                       <div>
-                        <span className="font-bold uppercase text-slate-700">{item.tipo}</span>
-                        <p className="text-[10px] text-slate-500">Motivo: {item.motivo} · Destino: {item.destino_produto}</p>
+                        <strong className="text-slate-800">Troca #{item.venda_id?.substring(0,8) || item.id?.substring(0,8)}</strong>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Responsável: {item.vendedor_nome || "Balcão"}</p>
                       </div>
                       <div className="text-right">
-                        <span className="font-bold text-slate-800">R$ {item.valor_total?.toFixed(2)}</span>
-                        <p className="text-[10px] text-slate-400">{new Date(item.created_at).toLocaleDateString("pt-BR")}</p>
+                        <strong className="text-indigo-600">R$ {Number(item.valor_credito || item.valor || 0).toFixed(2)}</strong>
+                        <p className="text-[9px] text-slate-400 mt-0.5">
+                          {item.created_at ? new Date(item.created_at.seconds * 1000).toLocaleString("pt-BR") : ""}
+                        </p>
                       </div>
                     </div>
                   ))}
@@ -1532,231 +1214,123 @@ export default function ClientesPage() {
               )}
             </TabsContent>
 
-            {/* TAB TAGS */}
-            <TabsContent value="tags" className="space-y-4 py-4">
-              <div>
-                <h4 className="font-bold text-xs text-slate-700 mb-2">Vincule Tags de Segmentação ao Perfil</h4>
-                <p className="text-[11px] text-muted-foreground mb-4">Selecione as tags adequadas para categorizar este cliente nas listas de WhatsApp.</p>
-                
-                <div className="flex flex-wrap gap-2">
-                  {availableTags.map((tag) => {
-                    const isSelected = selectedTags.includes(tag.nome)
-                    return (
-                      <Badge 
-                        key={tag.id} 
-                        style={{ backgroundColor: isSelected ? tag.cor : '#e2e8f0', color: isSelected ? '#fff' : '#475569' }}
-                        className="cursor-pointer px-3 py-1 text-xs border-0 hover:opacity-85 select-none"
-                        onClick={() => handleUpdateTags(tag.nome)}
-                      >
-                        {tag.nome} {isSelected ? "✓" : "+"}
-                      </Badge>
-                    )
-                  })}
+            {/* TAB: Histórico CRM */}
+            <TabsContent value="historico" className="space-y-4 pt-4 text-xs">
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Auditoria do Cliente</h3>
+              {historyLogs.length === 0 ? (
+                <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
+                  Sem registros de histórico.
                 </div>
-              </div>
-            </TabsContent>
-
-            {/* TAB OBSERVACOES */}
-            <TabsContent value="obs" className="space-y-4 py-4">
-              <Card className="border shadow-none rounded-xl">
-                <CardContent className="p-4 text-xs text-slate-700 whitespace-pre-wrap italic">
-                  {selectedCustomer?.observacoes || "Sem observações internas cadastradas."}
-                </CardContent>
-              </Card>
+              ) : (
+                <div className="border rounded-xl divide-y bg-white">
+                  {historyLogs.map((log) => (
+                    <div key={log.id} className="p-3 flex items-center gap-3">
+                      <div className="h-6 w-6 rounded-full bg-slate-100 flex items-center justify-center shrink-0">
+                        <CheckCircle className="h-3.5 w-3.5 text-indigo-500" />
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-semibold text-slate-800">{log.tipo_acao}</p>
+                        <p className="text-[10px] text-slate-500 mt-0.5">{log.descricao}</p>
+                      </div>
+                      <span className="text-[9px] text-slate-400 shrink-0 self-start">
+                        {log.created_at ? new Date(log.created_at.seconds * 1000).toLocaleString("pt-BR") : ""}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </TabsContent>
           </Tabs>
 
-          <DialogFooter className="border-t pt-4">
-            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Fechar Abas</Button>
+          <DialogFooter className="border-t pt-4 mt-6">
+            <Button variant="outline" onClick={() => setIsDetailsOpen(false)}>Fechar Ficha</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* QUICK ADD FILHO DIALOG */}
+      {/* QUICK ADD CHILD IN DETAILS */}
       <Dialog open={isQuickAddFilhoOpen} onOpenChange={setIsQuickAddFilhoOpen}>
         <DialogContent className="max-w-md bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Baby className="h-5 w-5 text-indigo-600" /> Cadastrar Filho(a)
-            </DialogTitle>
-            <DialogDescription>
-              Adicione uma criança à ficha de {selectedCustomer?.nome}.
-            </DialogDescription>
+            <DialogTitle className="text-base font-bold text-slate-800">Vincular Novo Filho</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 py-3 text-xs">
+          <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>Nome da Criança *</Label>
-              <Input 
-                value={quickFilhoForm.nome} 
-                onChange={e => setQuickFilhoForm(p => ({ ...p, nome: e.target.value }))}
-                placeholder="Ex: Amanda dos Santos"
-              />
+              <Label>Nome Completo</Label>
+              <Input placeholder="Ex: Arthur" value={quickFilhoForm.nome} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, nome: e.target.value })} />
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label>Nascimento</Label>
-                <Input 
-                  type="date" 
-                  value={quickFilhoForm.data_nascimento} 
-                  onChange={e => setQuickFilhoForm(p => ({ ...p, data_nascimento: e.target.value }))}
-                />
+                <Input type="date" value={quickFilhoForm.data_nascimento} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, data_nascimento: e.target.value })} />
               </div>
-
               <div className="space-y-1">
                 <Label>Sexo</Label>
-                <Select value={quickFilhoForm.sexo} onValueChange={v => setQuickFilhoForm(p => ({ ...p, sexo: v }))}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="M">Menino</SelectItem>
-                    <SelectItem value="F">Menina</SelectItem>
-                  </SelectContent>
-                </Select>
+                <select className="w-full border rounded h-9 px-2 bg-white" value={quickFilhoForm.sexo} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, sexo: e.target.value })}>
+                  <option value="">Selecionar</option>
+                  <option value="M">Menino</option>
+                  <option value="F">Menina</option>
+                </select>
               </div>
             </div>
-
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label>Tamanho de Roupa</Label>
-                <Select value={quickFilhoForm.tamanho_roupa} onValueChange={v => setQuickFilhoForm(p => ({ ...p, tamanho_roupa: v }))}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Roupa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["RN", "P", "M", "G", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <Label>Tamanho Roupa</Label>
+                <select className="w-full border rounded h-9 px-2 bg-white" value={quickFilhoForm.tamanho_roupa} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, tamanho_roupa: e.target.value })}>
+                  {["RN", "P", "M", "G", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
+                    <option key={t} value={t}>{t}</option>
+                  ))}
+                </select>
               </div>
-
               <div className="space-y-1">
-                <Label>Tamanho de Calçado</Label>
-                <Input 
-                  value={quickFilhoForm.tamanho_calcado} 
-                  onChange={e => setQuickFilhoForm(p => ({ ...p, tamanho_calcado: e.target.value }))}
-                  placeholder="Ex: 22"
-                />
+                <Label>Calçado</Label>
+                <Input placeholder="Ex: 24" value={quickFilhoForm.tamanho_calcado} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, tamanho_calcado: e.target.value })} />
               </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Preferência de Estilo</Label>
-              <Input 
-                value={quickFilhoForm.preferencia_estilo} 
-                onChange={e => setQuickFilhoForm(p => ({ ...p, preferencia_estilo: e.target.value }))}
-                placeholder="Ex: Casual, blogueirinho, colorido..."
-              />
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Cores Preferidas</Label>
-                <Input 
-                  value={quickFilhoForm.cores_preferidas} 
-                  onChange={e => setQuickFilhoForm(p => ({ ...p, cores_preferidas: e.target.value }))}
-                  placeholder="Azul, verde..."
-                />
-              </div>
-
-              <div className="space-y-1">
-                <Label>Personagens Favoritos</Label>
-                <Input 
-                  value={quickFilhoForm.personagens_preferidos} 
-                  onChange={e => setQuickFilhoForm(p => ({ ...p, personagens_preferidos: e.target.value }))}
-                  placeholder="Batman, Mickey..."
-                />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <Label>Observações Gerais</Label>
-              <Textarea 
-                value={quickFilhoForm.observacoes} 
-                onChange={e => setQuickFilhoForm(p => ({ ...p, observacoes: e.target.value }))}
-                placeholder="Alergias, preferências de tecidos ou observações..."
-                className="h-16"
-              />
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsQuickAddFilhoOpen(false)}>Cancelar</Button>
-            <Button 
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm"
-              size="sm"
-              onClick={handleSaveQuickFilho}
-              disabled={isSavingQuickFilho}
-            >
-              {isSavingQuickFilho ? "Salvando..." : "Salvar Filho"}
+          <DialogFooter className="border-t pt-3">
+            <Button variant="outline" onClick={() => setIsQuickAddFilhoOpen(false)}>Cancelar</Button>
+            <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSaveQuickFilho} disabled={isSavingQuickFilho}>
+              {isSavingQuickFilho && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Vincular
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* QUICK SIZE UPDATE DIALOG */}
-      <Dialog open={isQuickSizeUpdateOpen} onOpenChange={setIsQuickSizeUpdateOpen}>
-        <DialogContent className="max-w-sm bg-white rounded-xl">
+      {/* ADJUST WALLET DIALOG IN DETAILS */}
+      <Dialog open={isAdjustingWallet} onOpenChange={setIsAdjustingWallet}>
+        <DialogContent className="max-w-md bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-800 flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-indigo-600" /> Atualizar Tamanho Rápido
-            </DialogTitle>
-            <DialogDescription>
-              Atualize as medidas de {selectedFilhoForUpdate?.nome}. O histórico de alterações será registrado na ficha do cliente.
-            </DialogDescription>
+            <DialogTitle className="text-base font-bold text-slate-800">Ajuste de Saldo da Carteira</DialogTitle>
           </DialogHeader>
-
-          <div className="space-y-4 py-3 text-xs">
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <Label>Novo Tamanho Roupa</Label>
-                <Select value={newTamanhoRoupa} onValueChange={setNewTamanhoRoupa}>
-                  <SelectTrigger className="h-9">
-                    <SelectValue placeholder="Roupa" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {["RN", "P", "M", "G", "1", "2", "3", "4", "6", "8", "10", "12", "14", "16"].map(t => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-                <span className="text-[10px] text-muted-foreground block mt-0.5">Anterior: {selectedFilhoForUpdate?.tamanho_roupa || "Não inf."}</span>
-              </div>
-
-              <div className="space-y-1">
-                <Label>Novo Tamanho Calçado</Label>
-                <Input 
-                  value={newTamanhoCalcado} 
-                  onChange={e => setNewTamanhoCalcado(e.target.value)}
-                  placeholder="Ex: 24"
-                />
-                <span className="text-[10px] text-muted-foreground block mt-0.5">Anterior: {selectedFilhoForUpdate?.tamanho_calcado || "Não inf."}</span>
-              </div>
-            </div>
-
+          <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>Motivo / Observação da Atualização *</Label>
-              <Textarea 
-                value={sizeUpdateReason} 
-                onChange={e => setSizeUpdateReason(e.target.value)}
-                placeholder="Ex: Cresceu rápido, presente do avô..."
-                className="h-20"
-              />
+              <Label>Ação</Label>
+              <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
+                <SelectTrigger className="h-9">
+                  <SelectValue placeholder="Selecionar" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="ENTRADA">Adicionar Crédito (Entrada)</SelectItem>
+                  <SelectItem value="SAIDA">Debitar Crédito (Saída)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <Label>Valor (R$)</Label>
+              <Input type="number" step="0.01" placeholder="0.00" value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <Label>Justificativa Obrigatória</Label>
+              <Input placeholder="Ex: Ajuste manual" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} />
             </div>
           </div>
-
-          <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setIsQuickSizeUpdateOpen(false)}>Cancelar</Button>
-            <Button 
-              className="bg-indigo-600 hover:bg-indigo-500 text-white font-semibold shadow-sm"
-              size="sm"
-              onClick={handleSaveSizeUpdate}
-              disabled={isSavingSizeUpdate}
-            >
-              {isSavingSizeUpdate ? "Salvando..." : "Salvar Tamanho"}
+          <DialogFooter className="border-t pt-3">
+            <Button variant="outline" onClick={() => setIsAdjustingWallet(false)}>Cancelar</Button>
+            <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSaveWalletAdjustment} disabled={isSavingWallet}>
+              {isSavingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Aplicar
             </Button>
           </DialogFooter>
         </DialogContent>

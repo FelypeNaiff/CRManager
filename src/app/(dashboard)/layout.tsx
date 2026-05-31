@@ -13,6 +13,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { useUser, useAuth, useFirestore } from "@/firebase"
 import { useProfile } from "@/lib/contexts/profile-context"
+import { logoutProfileSession } from "@/lib/auth/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -88,8 +89,9 @@ export default function DashboardLayout({
 
   if (!user || !activeProfile) return null
 
-  const handleLogoutProfile = () => {
+  const handleLogoutProfile = async () => {
     logoutProfile()
+    await logoutProfileSession()
     router.push("/selecionar-perfil")
   }
 
@@ -106,6 +108,7 @@ export default function DashboardLayout({
     }
 
     logoutProfile()
+    await logoutProfileSession()
     await signOut(auth)
     router.push("/login")
   }

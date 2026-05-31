@@ -1,9 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { useRouter } from "next/navigation"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { addDoc, collection, doc, getDoc, query, orderBy, updateDoc, serverTimestamp } from "firebase/firestore"
+import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -13,15 +11,19 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Package, Save, X, Info, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
+import { useFirestore } from "@/firebase"
+import { collection, getDocs, query, orderBy } from "firebase/firestore"
+import {
+  getProductById,
+  updateProduct,
+  getProductCategories,
+  getSuppliers,
+  createInventoryMovement
+} from "@/lib/crm/products-actions"
 
-interface EditarProdutoPageProps {
-  params: {
-    id: string
-  }
-}
-
-export default function EditarProdutoPage({ params }: EditarProdutoPageProps) {
+export default function EditarProdutoPage() {
   const router = useRouter()
+  const params = useParams<{ id: string }>()
   const db = useFirestore()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
@@ -52,64 +54,92 @@ export default function EditarProdutoPage({ params }: EditarProdutoPageProps) {
     origem: "0",
     pesoLiquido: 0,
     pesoBruto: 0,
-    variacoes: [],
+    variacoes: [] as Array<{ codigoInterno: string; codigoBarras: string; tamanho: string; estoqueAtual: number; cor?: string }>,
   })
-
-  const fornecedoresQuery = useMemoFirebase(() => db ? query(collection(db, "fornecedores"), orderBy("nomeFornecedor", "asc")) : null, [db])
-  const { data: fornecedores } = useCollection(fornecedoresQuery)
-
-  const gruposQuery = useMemoFirebase(() => db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null, [db])
-  const { data: grupos } = useCollection(gruposQuery)
-
-  const gradesQuery = useMemoFirebase(() => db ? query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")) : null, [db])
-  const { data: grades } = useCollection(gradesQuery)
-
-  const unidadesQuery = useMemoFirebase(() => db ? query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")) : null, [db])
-  const { data: unidades } = useCollection(unidadesQuery)
+  const [fornecedores, setFornecedores] = useState<any[]>([])
+  const [grupos, setGrupos] = useState<any[]>([])
+  const [grades, setGrades] = useState<any[]>([])
+  const [unidades, setUnidades] = useState<any[]>([])
 
   const custoFinal = useMemo(() => {
     return Number(form.custoBase) + Number(form.despesasAcessorias) + Number(form.outrasDespesas)
   }, [form.custoBase, form.despesasAcessorias, form.outrasDespesas])
 
   useEffect(() => {
-    if (!db) return
+    async function loadSelectData() {
+      const [catRes, supRes] = await Promise.all([
+        getProductCategories(),
+        getSuppliers()
+      ]);
+      if (catRes.success && catRes.data) {
+        setGrupos(catRes.data);
+      }
+      if (supRes.success && supRes.data) {
+        const mappedS = supRes.data.map((s: any) => ({
+          id: s.id,
+          nomeFornecedor: s.name,
+        }));
+        setFornecedores(mappedS);
+      }
 
+      if (db) {
+        try {
+          const gradesSnap = await getDocs(query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")))
+          setGrades(gradesSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        } catch (e) {
+          console.error("Erro ao carregar grades:", e)
+        }
+
+        try {
+          const unitsSnap = await getDocs(query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")))
+          setUnidades(unitsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+        } catch (e) {
+          console.error("Erro ao carregar unidades:", e)
+        }
+      }
+    }
+    loadSelectData();
+  }, [db]);
+
+  useEffect(() => {
     const loadProduto = async () => {
       setIsLoading(true)
       try {
-        const produtoDoc = await getDoc(doc(db, "produtos", params.id))
-        if (produtoDoc.exists()) {
-          const produtoData: any = produtoDoc.data()
+        const res = await getProductById(params.id)
+        if (res.success && res.data) {
+          const produtoData = res.data
+          const defaultVariant = produtoData.variants.find((v: any) => v.name === 'Único') || produtoData.variants[0]
+          
           setForm({
-            nome: produtoData.nome || "",
-            codigoInterno: produtoData.codigoInterno || "",
-            codigoBarras: produtoData.codigoBarras || "",
-            grupo: produtoData.grupo || "",
-            unidadeMedida: produtoData.unidadeMedida || "UN",
-            unidadeConversao: produtoData.unidadeConversao || "1",
-            custoBase: produtoData.custoBase || 0,
-            despesasAcessorias: produtoData.despesasAcessorias || 0,
-            outrasDespesas: produtoData.outrasDespesas || 0,
-            lucroUtilizado: produtoData.lucroUtilizado || 0,
-            valorVenda: produtoData.valorVenda || 0,
-            fornecedorId: produtoData.fornecedorId || "",
-            possuiVariacoes: produtoData.possuiVariacoes || "Não",
-            estoqueAtual: produtoData.estoqueAtual || 0,
-            estoqueMinimo: produtoData.estoqueMinimo || 0,
-            estoqueMaximo: produtoData.estoqueMaximo || 0,
-            genero: produtoData.genero || "todos",
-            tamanho: produtoData.tamanho || "",
-            cor: produtoData.cor || "",
-            ncm: produtoData.ncm || "",
-            cest: produtoData.cest || "",
-            origem: produtoData.origem || "0",
-            pesoLiquido: produtoData.pesoLiquido || 0,
-            pesoBruto: produtoData.pesoBruto || 0,
-            variacoes: produtoData.variacoes || [],
+            nome: produtoData.name || "",
+            codigoInterno: produtoData.internalCode || "",
+            codigoBarras: defaultVariant?.barcode || "",
+            grupo: produtoData.categoryId || "",
+            unidadeMedida: "UN",
+            unidadeConversao: "1",
+            custoBase: defaultVariant ? Number(defaultVariant.costPrice) : 0,
+            despesasAcessorias: 0,
+            outrasDespesas: 0,
+            lucroUtilizado: 0,
+            valorVenda: defaultVariant ? Number(defaultVariant.salePrice) : 0,
+            fornecedorId: produtoData.supplierId || "",
+            possuiVariacoes: "Não",
+            estoqueAtual: defaultVariant ? Number(defaultVariant.currentStock) : 0,
+            estoqueMinimo: defaultVariant ? Number(defaultVariant.minimumStock) : 0,
+            estoqueMaximo: 0,
+            genero: "todos",
+            tamanho: "",
+            cor: "",
+            ncm: "",
+            cest: "",
+            origem: "0",
+            pesoLiquido: 0,
+            pesoBruto: 0,
+            variacoes: [],
           })
-          setInitialStock(Number(produtoData.estoqueAtual || 0))
+          setInitialStock(defaultVariant ? Number(defaultVariant.currentStock) : 0)
         } else {
-          toast({ variant: "destructive", title: "Produto não encontrado" })
+          toast({ variant: "destructive", title: res.error || "Produto não encontrado" })
           router.push("/produtos")
         }
       } catch (error) {
@@ -121,7 +151,7 @@ export default function EditarProdutoPage({ params }: EditarProdutoPageProps) {
     }
 
     loadProduto()
-  }, [db, params.id, router])
+  }, [params.id, router])
 
   const handleFieldChange = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -157,59 +187,53 @@ export default function EditarProdutoPage({ params }: EditarProdutoPageProps) {
     }
   }, [form.possuiVariacoes, form.variacoes, form.estoqueAtual])
 
-  const createStockMovementRecord = async (oldQty: number, newQty: number) => {
-    if (!db) return
-    const diff = Number(newQty) - Number(oldQty)
-    if (diff === 0) return
-
-    const tipo = diff > 0 ? "Entrada" : "Saída"
-    try {
-      await addDoc(collection(db, "movimentacoes_estoque"), {
-        produtoId: params.id,
-        dataHora: serverTimestamp(),
-        entidade: "Estoque manual",
-        tipo,
-        qntMovim: diff,
-        qntFinal: Number(newQty),
-        custoUnit: Number(form.valorVenda || 0),
-        custoTotal: Number(form.valorVenda || 0) * diff,
-        descricao: "Ajuste via edição de produto",
-      })
-    } catch (error) {
-      console.error("Erro ao criar movimentação de estoque:", error)
-    }
-  }
-
   const handleSave = async () => {
     if (!form.nome.trim()) {
       toast({ variant: "destructive", title: "Nome obrigatório", description: "O produto precisa ter um nome." })
       return
     }
 
-    if (!db) {
-      toast({ variant: "destructive", title: "Erro de Conexão", description: "Banco de dados não disponível." })
-      return
-    }
-
     setIsSaving(true)
     try {
       const newStock = Number(form.estoqueAtual)
-      await updateDoc(doc(db, "produtos", params.id), {
-        ...form,
-        custoBase: Number(form.custoBase),
-        despesasAcessorias: Number(form.despesasAcessorias),
-        outrasDespesas: Number(form.outrasDespesas),
-        lucroUtilizado: Number(form.lucroUtilizado),
-        valorVenda: Number(form.valorVenda),
-        estoqueAtual: newStock,
-        estoqueMinimo: Number(form.estoqueMinimo),
-        estoqueMaximo: Number(form.estoqueMaximo),
-        pesoLiquido: Number(form.pesoLiquido),
-        pesoBruto: Number(form.pesoBruto),
-        updatedAt: serverTimestamp(),
+      const diff = newStock - initialStock
+
+      const updateRes = await updateProduct(params.id, {
+        name: form.nome,
+        internalCode: form.codigoInterno,
+        categoryId: form.grupo || null,
+        supplierId: form.fornecedorId || null,
+        description: "",
+        imageUrl: "",
+        thumbnailUrl: "",
+        galleryUrls: [],
+        costPrice: Number(form.custoBase),
+        salePrice: Number(form.valorVenda),
+        barcode: form.codigoBarras || null,
+        barcodeType: null,
+        minimumStock: Number(form.estoqueMinimo),
       })
 
-      await createStockMovementRecord(initialStock, newStock)
+      if (!updateRes.success) {
+        toast({ variant: "destructive", title: updateRes.error || "Erro ao salvar produto." })
+        return
+      }
+
+      if (diff !== 0) {
+        const prod = await getProductById(params.id)
+        if (prod.success && prod.data) {
+          const defaultVariant = prod.data.variants.find((v: any) => v.name === 'Único') || prod.data.variants[0]
+          if (defaultVariant) {
+            await createInventoryMovement({
+              variantId: defaultVariant.id,
+              quantity: diff,
+              type: 'MANUAL_ADJUSTMENT',
+              reason: 'Ajuste via edição de produto',
+              warehouseId: 'LOJA_PRINCIPAL'
+            })
+          }
+        }
+      }
 
       toast({ title: "Produto atualizado com sucesso." })
       router.push("/produtos")

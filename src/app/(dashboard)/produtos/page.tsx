@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
 import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
-import { collection, query, orderBy, deleteDoc, doc, updateDoc, addDoc, serverTimestamp, getDocs } from "firebase/firestore"
+import { collection, query, orderBy } from "firebase/firestore"
 import { toast } from "@/hooks/use-toast"
 import {
   DropdownMenu,
@@ -21,6 +21,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MovimentacoesModal } from "@/components/produtos/MovimentacoesModal"
+import {
+  getProducts,
+  getProductCategories,
+  getSuppliers,
+  createProduct,
+  deleteProduct,
+  createInventoryMovement,
+  getProductPriceHistory
+} from "@/lib/crm/products-actions"
 
 export default function ProdutosPage() {
   const router = useRouter()
@@ -48,20 +57,75 @@ export default function ProdutosPage() {
   const [viewingProduto, setViewingProduto] = useState<any>(null)
   const [historicoValores, setHistoricoValores] = useState<any[]>([])
 
-  const produtosQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "produtos"), orderBy("createdAt", "desc")) : null
-  }, [db])
-  const { data: produtos, isLoading, error } = useCollection(produtosQuery)
+  const [produtos, setProdutos] = useState<any[] | null>(null)
+  const [grupos, setGrupos] = useState<any[] | null>(null)
+  const [fornecedores, setFornecedores] = useState<any[] | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<any>(null)
 
-  const gruposQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null
-  }, [db])
-  const { data: grupos } = useCollection(gruposQuery)
+  const loadData = useCallback(async () => {
+    setIsLoading(true)
+    setError(null)
+    try {
+      const [prodRes, catRes, supRes] = await Promise.all([
+        getProducts(),
+        getProductCategories(),
+        getSuppliers()
+      ]);
 
-  const fornecedoresQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "fornecedores"), orderBy("nomeFornecedor", "asc")) : null
-  }, [db])
-  const { data: fornecedores } = useCollection(fornecedoresQuery)
+      if (prodRes.success && prodRes.data) {
+        const mapped = prodRes.data.map((p: any) => {
+          const defaultVariant = p.variants.find((v: any) => v.name === 'Único') || p.variants[0];
+          return {
+            id: p.id,
+            variantId: defaultVariant?.id || "",
+            nome: p.name,
+            codigoInterno: p.internalCode,
+            codigoBarras: defaultVariant?.barcode || "",
+            valorVenda: defaultVariant ? Number(defaultVariant.salePrice) : 0,
+            valorCusto: defaultVariant ? Number(defaultVariant.costPrice) : 0,
+            estoqueAtual: defaultVariant ? Number(defaultVariant.currentStock) : 0,
+            grupo: p.categoryId || "",
+            fornecedorId: p.supplierId || "",
+            imageUrl: p.imageUrl || "",
+            thumbnailUrl: p.thumbnailUrl || "",
+            galleryUrls: p.galleryUrls || [],
+            legacyFirebaseId: p.legacyFirebaseId,
+            createdAt: p.createdAt ? {
+              toMillis: () => new Date(p.createdAt).getTime(),
+              seconds: Math.floor(new Date(p.createdAt).getTime() / 1000)
+            } : null
+          };
+        });
+        setProdutos(mapped);
+      } else if (!prodRes.success) {
+        setError({ message: prodRes.error });
+      }
+
+      if (catRes.success && catRes.data) {
+        setGrupos(catRes.data);
+      }
+      if (supRes.success && supRes.data) {
+        const mappedS = supRes.data.map((s: any) => ({
+          id: s.id,
+          nome: s.name,
+          nomeFornecedor: s.name,
+          cnpjFornecedor: s.cnpjCpf,
+          emailFornecedor: s.email,
+          telefoneFornecedor: s.phone
+        }));
+        setFornecedores(mappedS);
+      }
+    } catch (err: any) {
+      setError({ message: err.message });
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   const [cols, setCols] = useState({
     codigo: true,
@@ -140,8 +204,13 @@ export default function ProdutosPage() {
   const handleDelete = async (id: string) => {
     if (confirm("Tem certeza que deseja excluir este produto?")) {
       try {
-        await deleteDoc(doc(db, "produtos", id))
-        toast({ title: "Produto excluído com sucesso." })
+        const res = await deleteProduct(id)
+        if (res.success) {
+          toast({ title: "Produto excluído com sucesso." })
+          await loadData()
+        } else {
+          toast({ variant: "destructive", title: res.error || "Erro ao excluir produto." })
+        }
       } catch (err) {
         toast({ variant: "destructive", title: "Erro ao excluir produto." })
       }
@@ -152,75 +221,67 @@ export default function ProdutosPage() {
     setViewingProduto(produto)
     setIsViewModalOpen(true)
     
-    if (db) {
-        const hq = query(collection(db, "produtos", produto.id, "historico_precos"), orderBy("dataAlteracao", "desc"))
-        const snaps = await getDocs(hq)
-        setHistoricoValores(snaps.docs.map(d => ({id: d.id, ...d.data()})))
+    try {
+      const res = await getProductPriceHistory(produto.id)
+      if (res.success && res.data) {
+        const mappedHistory = res.data.map((h: any) => ({
+          id: h.id,
+          valorCusto: Number(h.newCostPrice),
+          valorVenda: Number(h.newSalePrice),
+          dataAlteracao: {
+            toMillis: () => new Date(h.createdAt).getTime(),
+            seconds: Math.floor(new Date(h.createdAt).getTime() / 1000)
+          },
+          justificativa: h.changeReason
+        }))
+        setHistoricoValores(mappedHistory)
+      } else {
+        setHistoricoValores([])
+      }
+    } catch (err) {
+      console.error("Error loading price history:", err)
+      setHistoricoValores([])
     }
   }
 
   const handleOpenStockModal = (produto: any) => {
     setStockProduto({
       id: produto.id,
+      variantId: produto.variantId,
       nome: produto.nome || "",
       estoqueAtual: produto.estoqueAtual || 0,
     })
     setIsStockModalOpen(true)
   }
 
-  const createStockMovementRecord = async (
-    produtoId: string,
-    oldQty: number,
-    newQty: number,
-    custoUnit: number,
-    descricao: string
-  ) => {
-    if (!db) return
-    const diff = Number(newQty) - Number(oldQty)
-    if (diff === 0) return
-
-    const tipo = diff > 0 ? "Entrada" : "Saída"
-    try {
-      await addDoc(collection(db, "movimentacoes_estoque"), {
-        produtoId,
-        dataHora: serverTimestamp(),
-        entidade: "Estoque manual",
-        tipo,
-        qntMovim: diff,
-        qntFinal: Number(newQty),
-        custoUnit: Number(custoUnit || 0),
-        custoTotal: Number(custoUnit || 0) * diff,
-        descricao,
-      })
-    } catch (err) {
-      console.error("Erro ao criar movimentação de estoque:", err)
-    }
-  }
-
   const handleSaveStock = async () => {
-    if (!stockProduto || !db) return
+    if (!stockProduto) return
     setIsSaving(true)
     try {
       const existingProduto = produtos?.find((p: any) => p.id === stockProduto.id)
       const oldStock = Number(existingProduto?.estoqueAtual || 0)
       const newStock = Number(stockProduto.estoqueAtual)
-      const custoUnit = Number(existingProduto?.valorVenda || 0)
+      const diff = newStock - oldStock
 
-      await updateDoc(doc(db, "produtos", stockProduto.id), {
-        estoqueAtual: newStock,
-        updatedAt: serverTimestamp(),
-      })
+      if (diff !== 0) {
+        const res = await createInventoryMovement({
+          variantId: stockProduto.variantId,
+          quantity: diff,
+          type: 'MANUAL_ADJUSTMENT',
+          reason: 'Ajuste manual de estoque pelo usuário',
+          warehouseId: 'LOJA_PRINCIPAL'
+        })
 
-      await createStockMovementRecord(
-        stockProduto.id,
-        oldStock,
-        newStock,
-        custoUnit,
-        `Ajuste manual de estoque pelo usuário`
-      )
-
-      toast({ title: "Estoque atualizado com sucesso!" })
-      setIsStockModalOpen(false)
+        if (res.success) {
+          toast({ title: "Estoque atualizado com sucesso!" })
+          setIsStockModalOpen(false)
+          await loadData()
+        } else {
+          toast({ variant: "destructive", title: res.error || "Erro ao atualizar estoque." })
+        }
+      } else {
+        setIsStockModalOpen(false)
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao atualizar estoque." })
     } finally {
@@ -231,14 +292,27 @@ export default function ProdutosPage() {
   const handleCloneProduct = async (produto: any) => {
     setIsSaving(true)
     try {
-      await addDoc(collection(db, "produtos"), {
-        ...produto,
-        id: undefined,
-        nome: `${produto.nome} (Cópia)`,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+      const res = await createProduct({
+        name: `${produto.nome} (Cópia)`,
+        internalCode: `${produto.codigoInterno}-C-${Math.floor(Math.random() * 1000)}`,
+        description: "",
+        categoryId: produto.grupo || null,
+        supplierId: produto.fornecedorId || null,
+        imageUrl: produto.imageUrl || "",
+        thumbnailUrl: produto.thumbnailUrl || "",
+        galleryUrls: produto.galleryUrls || [],
+        costPrice: Number(produto.valorCusto || 0),
+        salePrice: Number(produto.valorVenda || 0),
+        barcode: produto.codigoBarras || null,
+        barcodeType: null,
       })
-      toast({ title: "Produto clonado com sucesso!" })
+
+      if (res.success) {
+        toast({ title: "Produto clonado com sucesso!" })
+        await loadData()
+      } else {
+        toast({ variant: "destructive", title: res.error || "Erro ao clonar produto." })
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao clonar produto." })
     } finally {

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
+import { useState, useMemo, useEffect, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,9 +11,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { Textarea } from "@/components/ui/textarea"
 import { Package, Save, X, Info, UploadCloud, RefreshCw, Plus } from "lucide-react"
 import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, addDoc, serverTimestamp, query, orderBy } from "firebase/firestore"
+import { collection, query, orderBy } from "firebase/firestore"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
+import {
+  getProductCategories,
+  getSuppliers,
+  createProductCategory,
+  createSupplier,
+  createProduct
+} from "@/lib/crm/products-actions"
 
 export default function NovoProdutoPage() {
   const router = useRouter()
@@ -61,15 +68,37 @@ export default function NovoProdutoPage() {
     return Number(form.custoBase) + Number(form.despesasAcessorias) + Number(form.outrasDespesas)
   }, [form.custoBase, form.despesasAcessorias, form.outrasDespesas])
 
-  const fornecedoresQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "fornecedores"), orderBy("nomeFornecedor", "asc")) : null;
-  }, [db]);
-  const { data: fornecedores } = useCollection(fornecedoresQuery);
+  const [fornecedores, setFornecedores] = useState<any[]>([])
+  const [grupos, setGrupos] = useState<any[]>([])
 
-  const gruposQuery = useMemoFirebase(() => {
-    return db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null;
-  }, [db]);
-  const { data: grupos } = useCollection(gruposQuery);
+  const loadDependencies = useCallback(async () => {
+    try {
+      const [catRes, supRes] = await Promise.all([
+        getProductCategories(),
+        getSuppliers()
+      ]);
+      if (catRes.success && catRes.data) {
+        setGrupos(catRes.data);
+      }
+      if (supRes.success && supRes.data) {
+        const mappedS = supRes.data.map((s: any) => ({
+          id: s.id,
+          nome: s.name,
+          nomeFornecedor: s.name,
+          cnpjFornecedor: s.cnpjCpf,
+          emailFornecedor: s.email,
+          telefoneFornecedor: s.phone
+        }));
+        setFornecedores(mappedS);
+      }
+    } catch (error) {
+      console.error("Error loading dropdown data:", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadDependencies();
+  }, [loadDependencies]);
 
   const gradesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")) : null;
@@ -153,22 +182,25 @@ export default function NovoProdutoPage() {
   }
 
   const handleCreateNewGrupo = async () => {
-    if (!newGrupoName.trim() || !db) {
+    if (!newGrupoName.trim()) {
       toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
       return
     }
     setIsCreatingGrupo(true)
     try {
-      const docRef = await addDoc(collection(db, "gruposProdutos"), {
-        nome: newGrupoName,
-        descricao: "",
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      handleFieldChange("grupo", docRef.id)
-      setNewGrupoName("")
-      setIsNewGrupoDialogOpen(false)
-      toast({ title: "Grupo criado com sucesso!" })
+      const res = await createProductCategory({
+        name: newGrupoName,
+        description: ""
+      });
+      if (res.success && res.data) {
+        handleFieldChange("grupo", res.data.id)
+        setNewGrupoName("")
+        setIsNewGrupoDialogOpen(false)
+        toast({ title: "Grupo criado com sucesso!" })
+        await loadDependencies()
+      } else {
+        toast({ variant: "destructive", title: res.error || "Erro ao criar grupo." })
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao criar grupo." })
     } finally {
@@ -183,12 +215,13 @@ export default function NovoProdutoPage() {
     }
     setIsCreatingGrade(true)
     try {
+      const { addDoc } = await import("firebase/firestore")
       await addDoc(collection(db, "gradesVariacoes"), {
         nome: newGradeName,
         tipo: newGradeType,
         valores: newGradeValues.split(",").map(v => v.trim()).filter(Boolean),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
       })
       setNewGradeName("")
       setNewGradeType("tamanho")
@@ -209,11 +242,12 @@ export default function NovoProdutoPage() {
     }
     setIsCreatingUnidade(true)
     try {
+      const { addDoc } = await import("firebase/firestore")
       await addDoc(collection(db, "unidadesProdutos"), {
         nome: newUnidadeName,
         sigla: newUnidadeSigla.toUpperCase(),
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
       })
       handleFieldChange("unidadeMedida", newUnidadeSigla.toUpperCase())
       setNewUnidadeName("")
@@ -228,22 +262,24 @@ export default function NovoProdutoPage() {
   }
 
   const handleCreateNewFornecedor = async () => {
-    if (!newFornecedorName.trim() || !db) {
+    if (!newFornecedorName.trim()) {
       toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
       return
     }
     setIsCreatingFornecedor(true)
     try {
-      const docRef = await addDoc(collection(db, "fornecedores"), {
-        nomeFornecedor: newFornecedorName,
-        ativo: true,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      handleFieldChange("fornecedorId", docRef.id)
-      setNewFornecedorName("")
-      setIsNewFornecedorDialogOpen(false)
-      toast({ title: "Fornecedor criado com sucesso!" })
+      const res = await createSupplier({
+        name: newFornecedorName
+      });
+      if (res.success && res.data) {
+        handleFieldChange("fornecedorId", res.data.id)
+        setNewFornecedorName("")
+        setIsNewFornecedorDialogOpen(false)
+        toast({ title: "Fornecedor criado com sucesso!" })
+        await loadDependencies()
+      } else {
+        toast({ variant: "destructive", title: res.error || "Erro ao criar fornecedor." })
+      }
     } catch (err) {
       toast({ variant: "destructive", title: "Erro ao criar fornecedor." })
     } finally {
@@ -257,22 +293,29 @@ export default function NovoProdutoPage() {
       return
     }
 
-    if (!db) {
-      toast({ variant: "destructive", title: "Erro de Conexão", description: "Banco de dados não disponível." })
-      return
-    }
-
     setIsSaving(true)
     try {
-      await addDoc(collection(db, "produtos"), {
-        ...form,
-        custoFinal,
-        variacoes: form.possuiVariacoes === "Sim" ? variacoes : [],
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
-      toast({ title: "Sucesso!", description: "Produto cadastrado com sucesso." })
-      router.push("/produtos")
+      const res = await createProduct({
+        name: form.nome,
+        internalCode: form.codigoInterno || `COD-${Date.now()}`,
+        description: "",
+        categoryId: form.grupo || null,
+        supplierId: form.fornecedorId || null,
+        imageUrl: "",
+        thumbnailUrl: "",
+        galleryUrls: [],
+        costPrice: Number(form.custoBase),
+        salePrice: Number(form.valorVenda),
+        barcode: form.codigoBarras || null,
+        barcodeType: null,
+      });
+
+      if (res.success) {
+        toast({ title: "Sucesso!", description: "Produto cadastrado com sucesso." })
+        router.push("/produtos")
+      } else {
+        toast({ variant: "destructive", title: "Erro", description: res.error || "Ocorreu um erro ao salvar o produto." })
+      }
     } catch (error) {
       console.error(error)
       toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao salvar o produto." })
