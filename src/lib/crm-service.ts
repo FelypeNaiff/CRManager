@@ -66,7 +66,7 @@ export const CrmService = {
 
     // Trigger seeding of base CRM tags if we are initializing tags/system
     if (collectionName === "clientes" || collectionName === "tags") {
-      await seedCrmBasico(db, tenantId, userId);
+      // seedCrmBasico is deprecated/not implemented
     }
     
     // Write activity log

@@ -1,32 +1,74 @@
 "use client"
 
-import { useEffect } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { AppSidebar } from "@/components/layout/app-sidebar"
 import { ConfigSidebar } from "@/components/layout/config-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { RequirePermission } from "@/components/permissions/require-permission"
-import { useUser } from "@/lib/legacy-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
+
+interface SessionData {
+  userId: string
+  name: string
+  email: string
+  role: string
+  isAdmin: boolean
+  companyId?: string
+  permissions?: Record<string, boolean>
+}
 
 export default function ConfiguracoesLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const { user, isUserLoading } = useUser()
-  const { activeProfile, isLoadingProfile } = useProfile()
+  const { activeProfile, loginProfile } = useProfile()
   const router = useRouter()
 
-  useEffect(() => {
-    if (!isUserLoading && !user) {
-      router.push("/login")
-    } else if (!isUserLoading && user && !isLoadingProfile && !activeProfile) {
-      router.push("/selecionar-perfil")
-    }
-  }, [user, isUserLoading, activeProfile, isLoadingProfile, router])
+  const [sessionData, setSessionData] = useState<SessionData | null>(null)
+  const [isSessionLoading, setIsSessionLoading] = useState(true)
 
-  if (isUserLoading || isLoadingProfile) {
+  // On mount: fetch real session from the HTTP-only cookie via API
+  useEffect(() => {
+    async function loadSession() {
+      try {
+        const res = await fetch('/api/auth/session', { cache: 'no-store' })
+        if (res.ok) {
+          const body = await res.json()
+          if (body.authenticated && body.session) {
+            const sess: SessionData = body.session
+            setSessionData(sess)
+
+            // Sync profile context from real session
+            loginProfile({
+              id: sess.userId,
+              nome: sess.name,
+              email: sess.email,
+              role: sess.role,
+              isAdmin: sess.isAdmin,
+              empresaId: sess.companyId,
+              permissions: sess.permissions,
+            })
+          } else {
+            window.location.replace('/login')
+          }
+        } else {
+          window.location.replace('/login')
+        }
+      } catch (err) {
+        console.error('[ConfiguracoesLayout] Session fetch failed:', err)
+        window.location.replace('/login')
+      } finally {
+        setIsSessionLoading(false)
+      }
+    }
+
+    loadSession()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  if (isSessionLoading) {
     return (
       <div className="flex min-h-screen w-full bg-background">
         {/* Skeleton Sidebar Principal */}
@@ -82,7 +124,7 @@ export default function ConfiguracoesLayout({
     )
   }
 
-  if (!user || !activeProfile) return null
+  if (!sessionData || !activeProfile) return null
 
   return (
     <SidebarProvider defaultOpen={true}>

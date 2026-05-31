@@ -52,17 +52,16 @@ export default function DashboardLayout({
             const sess: SessionData = body.session
             setSessionData(sess)
 
-            // Sync profile context from real session if not already loaded
-            if (!activeProfile) {
-              loginProfile({
-                id: sess.userId,
-                nome: sess.name,
-                email: sess.email,
-                role: sess.role,
-                isAdmin: sess.isAdmin,
-                empresaId: sess.companyId,
-              })
-            }
+            // Sync profile context from real session
+            loginProfile({
+              id: sess.userId,
+              nome: sess.name,
+              email: sess.email,
+              role: sess.role,
+              isAdmin: sess.isAdmin,
+              empresaId: sess.companyId,
+              permissions: (sess as any).permissions,
+            })
           } else {
             // No valid session — redirect to login
             window.location.replace('/login')

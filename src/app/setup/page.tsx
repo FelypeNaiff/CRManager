@@ -18,7 +18,7 @@ export default function SetupPage() {
 
   useEffect(() => {
     if (!auth) return;
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = auth.onAuthStateChanged((user: any) => {
       setUserUid(user?.uid || null)
     })
     return () => unsubscribe()

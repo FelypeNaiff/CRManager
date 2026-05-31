@@ -86,7 +86,7 @@ export default function FornecedoresPage() {
 
   const { data: fornecedores, isLoading, error } = useCollection(fornecedoresQuery)
 
-  const filteredItems = (fornecedores || []).filter(c =>
+  const filteredItems = (fornecedores || []).filter((c: any) =>
     c.nomeFornecedor?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     c.cnpj?.includes(searchTerm)
   )
@@ -237,7 +237,7 @@ export default function FornecedoresPage() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {filteredItems.map((item) => (
+          {filteredItems.map((item: any) => (
             <Card key={item.id} className="overflow-hidden group hover:border-primary/50 transition-colors shadow-sm rounded-sm">
               <CardHeader className="p-4 pb-0 flex flex-row items-start justify-between space-y-0">
                 <div className="flex items-center gap-3">

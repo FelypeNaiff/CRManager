@@ -24,6 +24,7 @@ export async function GET() {
         role: session.role,
         isAdmin: session.isAdmin,
         companyId: session.companyId,
+        permissions: session.permissions,
       },
     });
   } catch (error) {

@@ -301,7 +301,7 @@ export default function SegmentacoesPage() {
     })
 
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n")
+      + [headers.join(","), ...rows.map((e: any) => e.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n")
     
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
@@ -538,7 +538,7 @@ export default function SegmentacoesPage() {
               <div className="border-t border-slate-100 pt-3 space-y-2">
                 <span className="font-bold text-[10px] text-slate-400 uppercase tracking-wider block flex items-center gap-1"><Tag className="h-3.5 w-3.5 text-indigo-500" /> Filtrar por Tags</span>
                 <div className="flex flex-wrap gap-1.5 pt-1">
-                  {tags?.map(t => {
+                  {tags?.map((t: any) => {
                     const isSelected = selectedTagsFilter.includes(t.nome)
                     return (
                       <Badge 
@@ -578,7 +578,7 @@ export default function SegmentacoesPage() {
               <CardHeader className="pb-2">
                 <CardDescription className="text-slate-400 text-xs font-semibold uppercase tracking-wider">Volume de Saldos Elegíveis</CardDescription>
                 <h2 className="text-2xl font-bold tracking-tight text-emerald-600 mt-1">
-                  R$ {filteredClients.reduce((acc, c) => acc + (clientStats[c.id]?.saldoDisponivel || 0), 0).toFixed(2)}
+                  R$ {filteredClients.reduce((acc: number, c: any) => acc + (clientStats[c.id]?.saldoDisponivel || 0), 0).toFixed(2)}
                 </h2>
               </CardHeader>
               <CardContent className="pb-4 text-[10px] text-slate-400">
@@ -592,7 +592,7 @@ export default function SegmentacoesPage() {
                 <h2 className="text-2xl font-bold tracking-tight text-indigo-600 mt-1">
                   R$ {(() => {
                     if (filteredClients.length === 0) return "0.00"
-                    const sum = filteredClients.reduce((acc, c) => acc + (clientStats[c.id]?.ticketMedio || 0), 0)
+                    const sum = filteredClients.reduce((acc: number, c: any) => acc + (clientStats[c.id]?.ticketMedio || 0), 0)
                     return (sum / filteredClients.length).toFixed(2)
                   })()}
                 </h2>

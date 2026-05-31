@@ -105,7 +105,7 @@ const navItems = [
       { title: "Vendas", url: "/comercial/vendas", icon: ShoppingCart },
       { title: "Metas", url: "/comercial/metas", icon: PieChart },
       { title: "Comissões", url: "/comercial/comissoes", icon: DollarSign },
-      { title: "PDV (Em Breve)", url: "#", icon: Store },
+      { title: "PDV", url: "/pdv", icon: Store },
       { 
         title: "Trocas e Devoluções", 
         icon: Repeat,
@@ -151,7 +151,7 @@ const navItems = [
       { title: "Caixas", url: "/financeiro/caixas", icon: Store },
       { title: "Contas Bancárias", url: "/financeiro/contas-bancarias", icon: Building2 },
       { title: "Transferências", url: "/financeiro/transferencias", icon: Repeat },
-      { title: "Vales de Funcionários", url: "/financeiro/vales-funcionarios", icon: Users },
+      { title: "Vales de Funcionários", url: "/financeiro/vales", icon: Users },
       { title: "Relatórios", url: "/financeiro/relatorios", icon: FileText },
       { title: "Opções Auxiliares", url: "/financeiro/opcoes-auxiliares", icon: Settings },
     ],
@@ -160,7 +160,7 @@ const navItems = [
     title: "Marketing",
     icon: Megaphone,
     items: [
-      { title: "Campanhas", url: "/campanhas", icon: Megaphone },
+      { title: "Campanhas", url: "/crm/campanhas", icon: Megaphone },
       { title: "Templates", url: "/templates", icon: FileText },
     ],
   },

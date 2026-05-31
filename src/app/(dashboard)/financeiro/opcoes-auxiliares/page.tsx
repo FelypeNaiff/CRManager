@@ -419,7 +419,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
                 <SelectTrigger><SelectValue placeholder="Nenhum (Raiz)"/></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="null">Nenhum (Raiz)</SelectItem>
-                  {data?.filter(d => d.id !== editingItem?.id).sort((a:any, b:any) => a.code.localeCompare(b.code)).map((d: any) => (
+                  {data?.filter((d: any) => d.id !== editingItem?.id).sort((a:any, b:any) => a.code.localeCompare(b.code)).map((d: any) => (
                     <SelectItem key={d.id} value={d.id}>{d.code} - {d.name}</SelectItem>
                   ))}
                 </SelectContent>

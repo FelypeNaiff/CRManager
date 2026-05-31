@@ -85,14 +85,14 @@ export default function EditarProdutoPage() {
       if (db) {
         try {
           const gradesSnap = await getDocs(query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")))
-          setGrades(gradesSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+          setGrades(gradesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
         } catch (e) {
           console.error("Erro ao carregar grades:", e)
         }
 
         try {
           const unitsSnap = await getDocs(query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")))
-          setUnidades(unitsSnap.docs.map(d => ({ id: d.id, ...d.data() })))
+          setUnidades(unitsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
         } catch (e) {
           console.error("Erro ao carregar unidades:", e)
         }

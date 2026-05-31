@@ -22,7 +22,7 @@ export default function GradesVariacoesPage() {
   }, [db])
   const { data: grades } = useCollection(gradesQuery)
 
-  const filteredGrades = grades?.filter(g => 
+  const filteredGrades = grades?.filter((g: any) => 
     g.nome.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
 
@@ -137,7 +137,7 @@ export default function GradesVariacoesPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredGrades.map(grade => (
+              {filteredGrades.map((grade: any) => (
                 <tr key={grade.id} className="border-b hover:bg-gray-50">
                   <td className="p-3 font-medium">{grade.nome}</td>
                   <td className="p-3 text-gray-600">{grade.valores?.join(", ") || "-"}</td>

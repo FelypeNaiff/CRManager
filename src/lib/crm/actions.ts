@@ -627,4 +627,22 @@ export async function getActivityLogs() {
   }
 }
 
+export async function getCustomerExchangeReturns(customerId: string) {
+  const session = await requirePermission('Clientes', 'visualizar');
+  try {
+    const list = await prisma.exchangeReturn.findMany({
+      where: {
+        customerId,
+        companyId: session.companyId,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    return { success: true, data: list };
+  } catch (error: any) {
+    console.error('Error fetching customer exchange returns:', error);
+    return { success: false, error: 'Erro ao buscar trocas e devoluções.' };
+  }
+}
+
+
 

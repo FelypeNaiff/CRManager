@@ -1,1 +1,16 @@
-export const collection = () => null; export const doc = () => null; export const getDocs = () => null; export const query = () => null; export const orderBy = () => null; export const where = () => null; export const addDoc = () => null; export const updateDoc = () => null; export const deleteDoc = () => null; export const serverTimestamp = () => new Date(); export const limit = () => null; export const setDoc = () => null; export const onSnapshot = () => null; export const writeBatch = () => ({ commit: () => null, set: () => null, update: () => null, delete: () => null }); export const getDoc = () => null;
+export const collection = (...args: any[]) => ({}) as any;
+export const doc = (...args: any[]) => ({}) as any;
+export const getDocs = (...args: any[]) => Promise.resolve({ docs: [] as any[] }) as any;
+export const query = (...args: any[]) => ({}) as any;
+export const orderBy = (...args: any[]) => ({}) as any;
+export const where = (...args: any[]) => ({}) as any;
+export const addDoc = (...args: any[]) => Promise.resolve({ id: "mock-id" }) as any;
+export const updateDoc = (...args: any[]) => Promise.resolve() as any;
+export const deleteDoc = (...args: any[]) => Promise.resolve() as any;
+export const serverTimestamp = (...args: any[]) => new Date() as any;
+export const limit = (...args: any[]) => ({}) as any;
+export const setDoc = (...args: any[]) => Promise.resolve() as any;
+export const onSnapshot = (...args: any[]) => (() => {}) as any;
+export const writeBatch = (...args: any[]) => ({ commit: () => Promise.resolve(), set: () => {}, update: () => {}, delete: () => {} }) as any;
+export const getDoc = (...args: any[]) => Promise.resolve({ exists: () => false, data: () => null }) as any;
+export const increment = (amount: number) => amount as any;

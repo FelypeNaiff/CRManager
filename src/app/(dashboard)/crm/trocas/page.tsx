@@ -144,7 +144,7 @@ export default function TrocasDevolucoesPage() {
       try {
         const q = query(collection(db, "vendas"), where("clientId", "==", form.cliente_id))
         const snap = await getDocs(q)
-        setCustomerSales(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        setCustomerSales(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
       } catch (e) {
         console.error("Erro ao carregar vendas do cliente:", e)
       } finally {
@@ -166,7 +166,7 @@ export default function TrocasDevolucoesPage() {
       try {
         const q = query(collection(db, `vendas/${form.venda_id}/venda_itens`))
         const snap = await getDocs(q)
-        setSaleItems(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+        setSaleItems(snap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
         setUseCatalogProduct(false) // default to sale items
       } catch (e) {
         console.error("Erro ao carregar itens da venda:", e)
@@ -224,19 +224,19 @@ export default function TrocasDevolucoesPage() {
   const filteredReturns = useMemo(() => {
     if (!returns) return []
     return returns
-      .map(r => ({
+      .map((r: any) => ({
         ...r,
         client: clientsMap[r.cliente_id] || { nome: "Consumidor Avulso" },
         product: productsMap[r.produto_id] || { nome: "Produto não localizado" }
       }))
-      .filter(r => {
+      .filter((r: any) => {
         // Tab filtering
         if (activeTab === "aberto") return r.status === "em_aberto"
         if (activeTab === "finalizadas") return r.status === "finalizado"
         if (activeTab === "creditos") return r.gera_credito === true
         return true // historico
       })
-      .filter(r => {
+      .filter((r: any) => {
         // Search filtering
         const search = searchTerm.toLowerCase()
         return (
@@ -246,7 +246,7 @@ export default function TrocasDevolucoesPage() {
           r.venda_id?.toLowerCase().includes(search)
         )
       })
-      .sort((a, b) => {
+      .sort((a: any, b: any) => {
         const tA = a.created_at?.seconds || new Date(a.created_at).getTime() / 1000 || 0
         const tB = b.created_at?.seconds || new Date(b.created_at).getTime() / 1000 || 0
         return tB - tA
@@ -437,7 +437,7 @@ export default function TrocasDevolucoesPage() {
         </div>
       ) : (
         <div className="grid gap-4 grid-cols-1">
-          {filteredReturns.map((item: any, idx) => {
+          {filteredReturns.map((item: any, idx: number) => {
             const itemDate = item.created_at?.seconds 
               ? new Date(item.created_at.seconds * 1000) 
               : new Date(item.created_at)
@@ -537,7 +537,7 @@ export default function TrocasDevolucoesPage() {
                   className="w-full h-10 px-3 border rounded-lg bg-white text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                 >
                   <option value="">Selecione um cliente...</option>
-                  {clients?.map(c => (
+                  {clients?.map((c: any) => (
                     <option key={c.id} value={c.id}>{c.nome} ({c.whatsapp_principal})</option>
                   ))}
                 </select>
@@ -592,7 +592,7 @@ export default function TrocasDevolucoesPage() {
                     className="w-full h-10 px-3 border rounded-lg bg-white text-xs text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
                   >
                     <option value="">Buscar no catálogo completo...</option>
-                    {globalProducts?.map(p => (
+                    {globalProducts?.map((p: any) => (
                       <option key={p.id} value={p.id}>{p.nome} (Ref: {p.codigoInterno || p.codigo || "N/A"}) - R$ {Number(p.preco || 0).toFixed(2)}</option>
                     ))}
                   </select>

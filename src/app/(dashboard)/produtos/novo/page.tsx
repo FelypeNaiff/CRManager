@@ -445,7 +445,7 @@ export default function NovoProdutoPage() {
                       <SelectItem value="CX">Caixa (CX)</SelectItem>
                       <SelectItem value="KG">Quilograma (KG)</SelectItem>
                       <SelectItem value="MT">Metro (MT)</SelectItem>
-                      {unidades?.filter(u => !["UN", "CX", "KG", "MT"].includes(u.sigla)).map(u => (
+                      {unidades?.filter((u: any) => !["UN", "CX", "KG", "MT"].includes(u.sigla)).map((u: any) => (
                         <SelectItem key={u.id} value={u.sigla}>{u.nome} ({u.sigla})</SelectItem>
                       ))}
                     </SelectContent>
@@ -641,7 +641,7 @@ export default function NovoProdutoPage() {
                                 <Select value={v.tamanho} onValueChange={(val) => handleVariacaoChange(i, "tamanho", val)}>
                                   <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
                                   <SelectContent>
-                                    {grades?.map(grade => (
+                                    {grades?.map((grade: any) => (
                                       <SelectGroup key={grade.id}>
                                         <SelectLabel className="bg-muted/50 text-muted-foreground">{grade.nome}</SelectLabel>
                                         {grade.valores?.map((valor: string) => (

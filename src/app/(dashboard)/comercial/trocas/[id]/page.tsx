@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/contexts/profile-context";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
@@ -9,10 +9,13 @@ import { Input } from "@/components/ui/input";
 import { getSaleAction } from "@/lib/sales/actions/get-sale-action";
 import { processExchangeReturnAction } from "@/lib/sales/actions/create-exchange-action";
 
-export default function TrocaIdPage({ params }: { params: { id: string } }) {
+export default function TrocaIdPage({ params }: { params: Promise<{ id: string }> }) {
   const router = useRouter();
   const { activeProfile } = useProfile();
   
+  const unwrappedParams = use(params);
+  const id = unwrappedParams.id;
+
   const [sale, setSale] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   
@@ -22,8 +25,8 @@ export default function TrocaIdPage({ params }: { params: { id: string } }) {
   const [processing, setProcessing] = useState(false);
 
   useEffect(() => {
-    if (activeProfile?.empresaId && params.id) {
-      getSaleAction(params.id).then(res => {
+    if (activeProfile?.empresaId && id) {
+      getSaleAction(id).then(res => {
         if (res.success && res.sale) {
           setSale(res.sale);
           // Initialize return items
@@ -36,7 +39,7 @@ export default function TrocaIdPage({ params }: { params: { id: string } }) {
         setLoading(false);
       });
     }
-  }, [activeProfile, params.id]);
+  }, [activeProfile, id]);
 
   if (loading) return <div className="p-6">Carregando...</div>;
   if (!sale) return <div className="p-6">Venda não encontrada.</div>;

@@ -22,7 +22,7 @@ export default function GruposProdutosPage() {
   }, [db])
   const { data: grupos } = useCollection(gruposQuery)
 
-  const filteredGrupos = grupos?.filter(g => 
+  const filteredGrupos = grupos?.filter((g: any) => 
     g.nome.toLowerCase().includes(searchTerm.toLowerCase())
   ) || []
 
@@ -131,7 +131,7 @@ export default function GruposProdutosPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredGrupos.map(grupo => (
+              {filteredGrupos.map((grupo: any) => (
                 <tr key={grupo.id} className="border-b hover:bg-gray-50">
                   <td className="p-3 font-medium">{grupo.nome}</td>
                   <td className="p-3 text-gray-600">{grupo.descricao || "-"}</td>
