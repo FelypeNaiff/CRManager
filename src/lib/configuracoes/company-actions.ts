@@ -16,7 +16,7 @@ const CompanyFormSchema = z.object({
   cnae: z.string().optional().nullable().or(z.literal('')),
   telefone: z.string().optional().nullable().or(z.literal('')),
   whatsapp: z.string().optional().nullable().or(z.literal('')),
-  email: z.string().email('E-mail inválido').optional().nullable().or(z.literal('')),
+  email: z.string().email('E-mail inválido').optional().nullable().or(z.literal('')).or(z.null()),
   site: z.string().optional().nullable().or(z.literal('')),
   cep: z.string().optional().nullable().or(z.literal('')),
   logradouro: z.string().optional().nullable().or(z.literal('')),
@@ -28,6 +28,15 @@ const CompanyFormSchema = z.object({
   nomeExibido: z.string().optional().nullable().or(z.literal('')),
   observacoes: z.string().optional().nullable().or(z.literal('')),
   status: z.string().default('ativo'),
+  regimeApuracao: z.string().optional().nullable().or(z.literal('')),
+  naturezaReceitaPadrao: z.string().optional().nullable().or(z.literal('')),
+  naturezaDespesaPadrao: z.string().optional().nullable().or(z.literal('')),
+  observacoesFiscais: z.string().optional().nullable().or(z.literal('')),
+  pixChave: z.string().optional().nullable().or(z.literal('')),
+  pixTipo: z.string().optional().nullable().or(z.literal('')),
+  bancoPrincipal: z.string().optional().nullable().or(z.literal('')),
+  agenciaPrincipal: z.string().optional().nullable().or(z.literal('')),
+  contaPrincipal: z.string().optional().nullable().or(z.literal('')),
 });
 
 /**
@@ -47,7 +56,7 @@ export async function getCompanyAction() {
 /**
  * Action to update company data and log activity.
  */
-export async function updateCompanyAction(rawData: any) {
+export async function updateCompanyAction(rawData: any, updateType?: 'contatos' | 'enderecos' | 'fiscal' | 'financeiro-fiscal' | 'gerais') {
   const session = await requirePermission('Configurações gerais', 'editar');
   try {
     const validatedData = CompanyFormSchema.parse(rawData);
@@ -58,14 +67,32 @@ export async function updateCompanyAction(rawData: any) {
       validatedData as CompanyDataInput
     );
 
+    // Determine audit details and module
+    let logModule = 'Minha Empresa';
+    let logDetails = `Atualizou os dados da empresa. Razão Social: ${updatedCompany.razaoSocial}, Fantasia: ${updatedCompany.nomeFantasia}`;
+
+    if (updateType === 'contatos') {
+      logModule = 'CONFIGURACOES';
+      logDetails = 'Atualização dos contatos da empresa';
+    } else if (updateType === 'enderecos') {
+      logModule = 'CONFIGURACOES';
+      logDetails = 'Atualização do endereço da empresa';
+    } else if (updateType === 'fiscal') {
+      logModule = 'CONFIGURACOES';
+      logDetails = 'Atualização dos dados fiscais da empresa';
+    } else if (updateType === 'financeiro-fiscal') {
+      logModule = 'CONFIGURACOES';
+      logDetails = 'Atualização dos parâmetros financeiro-fiscais da empresa';
+    }
+
     // Record activity log
     await writeActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'UPDATE',
-      module: 'Minha Empresa',
+      module: logModule,
       recordId: updatedCompany.id,
-      details: `Atualizou os dados da empresa. Razão Social: ${updatedCompany.razaoSocial}, Fantasia: ${updatedCompany.nomeFantasia}`,
+      details: logDetails,
     });
 
     return { success: true, data: updatedCompany };

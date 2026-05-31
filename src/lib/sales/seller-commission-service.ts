@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
 
 const prisma = new PrismaClient();
 
@@ -11,10 +12,10 @@ export class SellerCommissionService {
     });
     if (!seller || !seller.isSeller) return;
 
-    const { company } = seller;
+    const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
 
     // Se empresa habilita metas e há metas ativas, soma
-    if (company.enableSellerGoals) {
+    if (settings.enableSellerGoals) {
       const now = new Date();
       const activeGoals = await tx.sellerGoal.findMany({
         where: {
@@ -32,17 +33,26 @@ export class SellerCommissionService {
       }
     }
 
-    // Se empresa habilita comissões e vendedor tem taxa maior que 0, cria comissão
-    if (company.enableSellerCommission && seller.commissionRate && seller.commissionRate.toNumber() > 0) {
-      const commissionAmount = sale.totalAmount * (seller.commissionRate.toNumber() / 100);
-      await tx.sellerCommission.create({
-        data: {
-          userId: seller.id,
-          saleId: sale.id,
-          amount: commissionAmount,
-          status: "PENDING"
-        }
-      });
+    // Se empresa habilita comissões, calcula e cria
+    if (settings.enableCommissions) {
+      let rate = 0;
+      if (seller.commissionRate && seller.commissionRate.toNumber() > 0) {
+        rate = seller.commissionRate.toNumber();
+      } else if (settings.defaultCommissionRate && settings.defaultCommissionRate.toNumber() > 0) {
+        rate = settings.defaultCommissionRate.toNumber();
+      }
+
+      if (rate > 0) {
+        const commissionAmount = sale.totalAmount * (rate / 100);
+        await tx.sellerCommission.create({
+          data: {
+            userId: seller.id,
+            saleId: sale.id,
+            amount: commissionAmount,
+            status: "PENDING"
+          }
+        });
+      }
     }
   }
 
@@ -53,9 +63,9 @@ export class SellerCommissionService {
     });
     if (!seller || !seller.isSeller) return;
 
-    const { company } = seller;
+    const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
 
-    if (company.enableSellerGoals) {
+    if (settings.enableSellerGoals) {
       const now = new Date(sale.createdAt); // Data original da venda
       const activeGoals = await tx.sellerGoal.findMany({
         where: {
@@ -73,26 +83,17 @@ export class SellerCommissionService {
       }
     }
 
-    if (company.enableSellerCommission) {
+    if (settings.enableCommissions) {
       // Procura comissão atrelada
       const commissions = await tx.sellerCommission.findMany({
         where: { saleId: sale.id }
       });
 
       for (const commission of commissions) {
-        if (commission.status === "PAID") {
-          // Neste caso a comissão já foi paga, fluxo financeiro deveria abater futuramente,
-          // mas vamos marcar como CANCELLED de qualquer forma para auditoria.
-          await tx.sellerCommission.update({
-            where: { id: commission.id },
-            data: { status: "CANCELLED" }
-          });
-        } else {
-          await tx.sellerCommission.update({
-            where: { id: commission.id },
-            data: { status: "CANCELLED" }
-          });
-        }
+        await tx.sellerCommission.update({
+          where: { id: commission.id },
+          data: { status: "CANCELLED" }
+        });
       }
     }
   }

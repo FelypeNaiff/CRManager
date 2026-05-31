@@ -33,6 +33,15 @@ model Company {
   nomeExibido                          String?                @map("nome_exibido")
   observacoes                          String?                @db.Text
   status                               String                 @default("ativo")
+  regimeApuracao                       String?                @map("regime_apuracao")
+  naturezaReceitaPadrao                String?                @map("natureza_receita_padrao")
+  naturezaDespesaPadrao                String?                @map("natureza_despesa_padrao")
+  observacoesFiscais                   String?                @db.Text @map("observacoes_fiscais")
+  pixChave                             String?                @map("pix_chave")
+  pixTipo                              String?                @map("pix_tipo")
+  bancoPrincipal                       String?                @map("banco_principal")
+  agenciaPrincipal                     String?                @map("agencia_principal")
+  contaPrincipal                       String?                @map("conta_principal")
   createdAt                            DateTime               @default(now()) @map("created_at")
   updatedAt                            DateTime               @updatedAt @map("updated_at")
   allowNegativeStockOnManualAdjustment Boolean                @default(true) @map("allow_negative_stock_on_manual_adjustment")
@@ -41,6 +50,7 @@ model Company {
   enableCustomerCredit                 Boolean                @default(false) @map("enable_customer_credit")
   enableSellerCommission               Boolean                @default(false) @map("enable_seller_commission")
   enableSellerGoals                    Boolean                @default(false) @map("enable_seller_goals")
+  operationalSettings                  OperationalSettings?
   accountsReceivable                   AccountsReceivable[]
   activityLogs                         ActivityLog[]
   bankAccounts                         BankAccount[]
@@ -859,4 +869,58 @@ model ExchangeReturnItem {
   variant               ProductVariant @relation(fields: [variantId], references: [id])
 
   @@map("exchange_return_items")
+}
+
+model OperationalSettings {
+  id                             String   @id @default(cuid())
+  companyId                      String   @unique @map("company_id")
+  company                        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Descontos
+  allowDiscount                  Boolean  @default(true) @map("allow_discount")
+  sellerDiscountLimit            Decimal  @default(5.00) @map("seller_discount_limit") @db.Decimal(10, 2)
+  managerDiscountLimit           Decimal  @default(10.00) @map("manager_discount_limit") @db.Decimal(10, 2)
+  adminDiscountLimit             Decimal  @default(100.00) @map("admin_discount_limit") @db.Decimal(10, 2)
+  requireAuthorizationAboveLimit Boolean  @default(true) @map("require_authorization_above_limit")
+
+  // Caixa
+  requireOpenCashRegister        Boolean  @default(true) @map("require_open_cash_register")
+  requireCloseCashRegister       Boolean  @default(true) @map("require_close_cash_register")
+  allowCashWithdrawal            Boolean  @default(true) @map("allow_cash_withdrawal")
+  allowCashSupply                Boolean  @default(true) @map("allow_cash_supply")
+
+  // Venda
+  allowSaleWithoutCustomer       Boolean  @default(true) @map("allow_sale_without_customer")
+  requireCustomerOnSale          Boolean  @default(false) @map("require_customer_on_sale")
+  allowNegativeStock             Boolean  @default(false) @map("allow_negative_stock")
+  reserveStockOnDraftSale        Boolean  @default(false) @map("reserve_stock_on_draft_sale")
+  allowSaleCancellation          Boolean  @default(true) @map("allow_sale_cancellation")
+  requireAuthorizationToCancelSale Boolean  @default(true) @map("require_authorization_to_cancel_sale")
+  cancellationTimeLimit          Int      @default(30) @map("cancellation_time_limit")
+
+  // Impressão
+  autoPrintReceipt               Boolean  @default(false) @map("auto_print_receipt")
+  enableThermalPrinter           Boolean  @default(false) @map("enable_thermal_printer")
+  receiptModel                   String   @default("simples") @map("receipt_model")
+
+  // Pagamentos
+  defaultPixKey                  String?  @map("default_pix_key")
+  maxInstallments                Int      @default(1) @map("max_installments")
+  defaultInterestRate            Decimal  @default(0.00) @map("default_interest_rate") @db.Decimal(10, 2)
+
+  // Metas / Comissões
+  enableCommissions              Boolean  @default(true) @map("enable_commissions")
+  defaultCommissionRate          Decimal  @default(0.00) @map("default_commission_rate") @db.Decimal(10, 2)
+  enableSellerGoals              Boolean  @default(true) @map("enable_seller_goals")
+
+  // Carteira / Saldo
+  enableCustomerWallet           Boolean  @default(true) @map("enable_customer_wallet")
+  walletExpirationDays           Int?     @map("wallet_expiration_days")
+  allowPartialWalletUsage        Boolean  @default(true) @map("allow_partial_wallet_usage")
+
+  createdAt                      DateTime @default(now()) @map("created_at")
+  updatedAt                      DateTime @updatedAt @map("updated_at")
+
+  @@index([companyId])
+  @@map("operational_settings")
 }

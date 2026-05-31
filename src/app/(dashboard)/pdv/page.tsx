@@ -7,6 +7,7 @@ import { searchVariantsAction, searchCustomersAction } from "@/lib/sales/actions
 import { listSellersAction } from "@/lib/sales/actions/list-sellers-action";
 import { listPaymentMethodsAction } from "@/lib/sales/actions/list-payment-methods-action";
 import { createSaleAction } from "@/lib/sales/actions/create-sale-action";
+import { getOperationalSettingsAction } from "@/lib/configuracoes/operational-settings-actions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -37,6 +38,7 @@ export default function PDVPage() {
   // New Payment Form
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
   const [paymentAmount, setPaymentAmount] = useState<string>("");
+  const [paymentInstallments, setPaymentInstallments] = useState<number>(1);
 
   // Auth PIN Modal State
   const [showPinModal, setShowPinModal] = useState(false);
@@ -45,6 +47,7 @@ export default function PDVPage() {
   const [pinError, setPinError] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [settings, setSettings] = useState<any>(null);
 
   useEffect(() => {
     if (activeProfile?.empresaId) {
@@ -54,6 +57,11 @@ export default function PDVPage() {
       });
       listPaymentMethodsAction(activeProfile.empresaId).then(res => {
         if (res.success) setPaymentMethods(res.paymentMethods || []);
+      });
+      getOperationalSettingsAction().then(res => {
+        if (res.success && res.data) {
+          setSettings(res.data);
+        }
       });
     }
   }, [activeProfile]);
@@ -158,10 +166,11 @@ export default function PDVPage() {
       paymentMethodId: pm.id,
       name: pm.name,
       amount,
-      installments: 1
+      installments: paymentInstallments
     }]);
     setPaymentAmount("");
     setSelectedPaymentMethod("");
+    setPaymentInstallments(1);
   };
 
   const removePayment = (idx: number) => {
@@ -171,6 +180,13 @@ export default function PDVPage() {
   const handleFinalize = async (pin?: string, reason?: string) => {
     if (cartItems.length === 0) return alert("Carrinho vazio!");
     if (!selectedSeller) return alert("Selecione um vendedor!");
+    
+    // Check if customer is required by operational settings
+    const blockNoCustomer = settings && (!settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale);
+    if (blockNoCustomer && !selectedCustomer) {
+      return alert("Operação não permitida: É obrigatório identificar o cliente para fechar a venda.");
+    }
+
     if (totalPaid < total - 0.01) return alert("O valor pago não cobre o total da venda!");
     if (!activeProfile?.empresaId) return;
 
@@ -408,22 +424,43 @@ export default function PDVPage() {
                   <span className="text-xs bg-slate-800 px-2 py-1 rounded">Restante: <span className="font-bold text-red-400">{formatCurrency(Math.max(0, remainingToPay))}</span></span>
                 </div>
                 
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
                   <select 
-                    className="flex-1 h-9 rounded bg-slate-800 border-slate-600 text-sm px-2"
+                    className="flex-1 min-w-[120px] h-9 rounded bg-slate-800 border-slate-600 text-sm px-2 text-white"
                     value={selectedPaymentMethod}
                     onChange={e => {
                       setSelectedPaymentMethod(e.target.value);
                       if (remainingToPay > 0) setPaymentAmount(remainingToPay.toFixed(2));
+                      setPaymentInstallments(1);
                     }}
                   >
                     <option value="">Selecione o Meio...</option>
                     {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
                   </select>
+
+                  {(() => {
+                    const pm = paymentMethods.find(m => m.id === selectedPaymentMethod);
+                    const maxInst = settings?.maxInstallments || 1;
+                    if (pm?.allowsInstallments && maxInst > 1) {
+                      return (
+                        <select
+                          className="w-20 h-9 rounded bg-slate-800 border-slate-600 text-sm px-2 text-white"
+                          value={paymentInstallments}
+                          onChange={e => setPaymentInstallments(Number(e.target.value))}
+                        >
+                          {Array.from({ length: maxInst }, (_, i) => i + 1).map(n => (
+                            <option key={n} value={n}>{n}x</option>
+                          ))}
+                        </select>
+                      );
+                    }
+                    return null;
+                  })()}
+
                   <Input 
                     type="number" 
                     placeholder="R$ 0,00"
-                    className="w-24 h-9 bg-slate-800 border-slate-600 text-right"
+                    className="w-24 h-9 bg-slate-800 border-slate-600 text-right text-white"
                     value={paymentAmount}
                     onChange={e => setPaymentAmount(e.target.value)}
                   />
@@ -433,7 +470,7 @@ export default function PDVPage() {
                 <div className="space-y-2 mt-2 max-h-24 overflow-y-auto">
                   {payments.map((p, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-slate-800 p-2 rounded text-sm">
-                      <span>{p.name}</span>
+                      <span>{p.name} {p.installments > 1 ? `(${p.installments}x)` : ''}</span>
                       <div className="flex items-center gap-3">
                         <span className="font-bold">{formatCurrency(p.amount)}</span>
                         <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:bg-slate-700" onClick={() => removePayment(idx)}><X className="w-4 h-4"/></Button>

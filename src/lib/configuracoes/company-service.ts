@@ -24,6 +24,15 @@ export interface CompanyDataInput {
   nomeExibido?: string | null;
   observacoes?: string | null;
   status?: string;
+  regimeApuracao?: string | null;
+  naturezaReceitaPadrao?: string | null;
+  naturezaDespesaPadrao?: string | null;
+  observacoesFiscais?: string | null;
+  pixChave?: string | null;
+  pixTipo?: string | null;
+  bancoPrincipal?: string | null;
+  agenciaPrincipal?: string | null;
+  contaPrincipal?: string | null;
 }
 
 /**
@@ -79,6 +88,15 @@ export const CompanyService = {
         nomeExibido: data.nomeExibido ?? null,
         observacoes: data.observacoes ?? null,
         status: data.status ?? 'ativo',
+        regimeApuracao: data.regimeApuracao ?? null,
+        naturezaReceitaPadrao: data.naturezaReceitaPadrao ?? null,
+        naturezaDespesaPadrao: data.naturezaDespesaPadrao ?? null,
+        observacoesFiscais: data.observacoesFiscais ?? null,
+        pixChave: data.pixChave ?? null,
+        pixTipo: data.pixTipo ?? null,
+        bancoPrincipal: data.bancoPrincipal ?? null,
+        agenciaPrincipal: data.agenciaPrincipal ?? null,
+        contaPrincipal: data.contaPrincipal ?? null,
       },
     });
 
@@ -118,6 +136,15 @@ export const CompanyService = {
         nomeExibido: data.nomeExibido ?? null,
         observacoes: data.observacoes ?? null,
         status: data.status ?? 'ativo',
+        regimeApuracao: data.regimeApuracao ?? null,
+        naturezaReceitaPadrao: data.naturezaReceitaPadrao ?? null,
+        naturezaDespesaPadrao: data.naturezaDespesaPadrao ?? null,
+        observacoesFiscais: data.observacoesFiscais ?? null,
+        pixChave: data.pixChave ?? null,
+        pixTipo: data.pixTipo ?? null,
+        bancoPrincipal: data.bancoPrincipal ?? null,
+        agenciaPrincipal: data.agenciaPrincipal ?? null,
+        contaPrincipal: data.contaPrincipal ?? null,
       },
       create: {
         id: companyId,
@@ -143,6 +170,15 @@ export const CompanyService = {
         nomeExibido: data.nomeExibido ?? null,
         observacoes: data.observacoes ?? null,
         status: data.status ?? 'ativo',
+        regimeApuracao: data.regimeApuracao ?? null,
+        naturezaReceitaPadrao: data.naturezaReceitaPadrao ?? null,
+        naturezaDespesaPadrao: data.naturezaDespesaPadrao ?? null,
+        observacoesFiscais: data.observacoesFiscais ?? null,
+        pixChave: data.pixChave ?? null,
+        pixTipo: data.pixTipo ?? null,
+        bancoPrincipal: data.bancoPrincipal ?? null,
+        agenciaPrincipal: data.agenciaPrincipal ?? null,
+        contaPrincipal: data.contaPrincipal ?? null,
       },
     });
 

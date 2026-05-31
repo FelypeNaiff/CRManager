@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Save, Store, Mail, Phone, Image as ImageIcon, Loader2 } from 'lucide-react';
+import { Save, Store, Mail, Phone, Image as ImageIcon, Loader2, Info } from 'lucide-react';
 import { ConfigPageHeader } from '@/components/configuracoes/config-ui';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
 import { useToast } from '@/hooks/use-toast';
@@ -21,6 +21,10 @@ export default function ConfiguracoesGeraisPage() {
     cnpj: '',
     emailSistema: '',
     whatsappEmpresa: '',
+    telefoneEmpresa: '',
+    cidadeUf: '',
+    regimeTributario: '',
+    status: '',
     timezone: 'America/Belem',
     tema: 'light',
     notificacaoEmail: true,
@@ -36,12 +40,17 @@ export default function ConfiguracoesGeraisPage() {
         if (res.success && res.data) {
           const comp = res.data;
           setCompany(comp);
+          const localidade = comp.cidade && comp.uf ? `${comp.cidade} / ${comp.uf}` : comp.cidade || comp.uf || 'Não informado';
           setForm((prev) => ({
             ...prev,
             nomeEmpresa: comp.nomeFantasia || comp.razaoSocial || '',
             cnpj: comp.cnpjCpf || '',
             emailSistema: comp.email || '',
-            whatsappEmpresa: comp.whatsapp || comp.telefone || '',
+            whatsappEmpresa: comp.whatsapp || '',
+            telefoneEmpresa: comp.telefone || '',
+            cidadeUf: localidade,
+            regimeTributario: comp.regimeTributario || 'Não informado',
+            status: comp.status === 'ativo' ? 'Ativa' : 'Inativa',
           }));
         } else {
           toast({
@@ -77,9 +86,10 @@ export default function ConfiguracoesGeraisPage() {
         cnpjCpf: form.cnpj,
         email: form.emailSistema,
         whatsapp: form.whatsappEmpresa,
+        telefone: form.telefoneEmpresa,
       };
 
-      const res = await updateCompanyAction(payload);
+      const res = await updateCompanyAction(payload, 'gerais');
       if (res.success) {
         toast({
           title: 'Sucesso',
@@ -117,7 +127,7 @@ export default function ConfiguracoesGeraisPage() {
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
         <ConfigPageHeader
           title="Configurações Gerais"
-          description="Dados da empresa, aparência, integrações e rotinas automáticas."
+          description="Resumo corporativo da empresa, aparência, segurança e rotinas de sistema."
           breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Gerais' }]}
         />
         <Button onClick={handleSave} disabled={isSaving} className="bg-primary text-white">
@@ -136,10 +146,12 @@ export default function ConfiguracoesGeraisPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
+        {/* Resumo Consolidado da Empresa */}
         <section className="rounded-2xl border bg-white p-6 shadow-sm">
           <h2 className="text-xl font-semibold mb-4 flex items-center gap-2">
             <Store className="h-5 w-5 text-primary" /> Dados da Empresa
           </h2>
+          
           <div className="space-y-4">
             <div className="grid gap-2">
               <Label>Nome / Razão Social</Label>
@@ -148,6 +160,7 @@ export default function ConfiguracoesGeraisPage() {
                 onChange={(e) => setForm({ ...form, nomeEmpresa: e.target.value })}
               />
             </div>
+            
             <div className="grid gap-2">
               <Label>CNPJ</Label>
               <Input
@@ -155,6 +168,7 @@ export default function ConfiguracoesGeraisPage() {
                 onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
               />
             </div>
+
             <div className="grid gap-2 md:grid-cols-2">
               <div className="grid gap-2">
                 <Label className="flex items-center gap-2">
@@ -167,7 +181,7 @@ export default function ConfiguracoesGeraisPage() {
               </div>
               <div className="grid gap-2">
                 <Label className="flex items-center gap-2">
-                  <Phone className="h-4 w-4 text-muted-foreground" /> WhatsApp Oficial
+                  <Phone className="h-4 w-4 text-muted-foreground" /> WhatsApp
                 </Label>
                 <Input
                   value={form.whatsappEmpresa}
@@ -175,16 +189,58 @@ export default function ConfiguracoesGeraisPage() {
                 />
               </div>
             </div>
-            <div className="pt-2">
-              <Label className="mb-2 block">Logo da Empresa</Label>
-              <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-muted-foreground hover:bg-slate-50 cursor-pointer transition-colors">
-                <ImageIcon className="h-8 w-8 mb-2" />
-                <span className="text-sm font-medium">Clique para fazer upload</span>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label className="flex items-center gap-2">
+                  <Phone className="h-4 w-4 text-muted-foreground" /> Telefone Fixo
+                </Label>
+                <Input
+                  value={form.telefoneEmpresa}
+                  onChange={(e) => setForm({ ...form, telefoneEmpresa: e.target.value })}
+                />
               </div>
+              <div className="grid gap-2">
+                <Label className="flex items-center gap-2">
+                  <Store className="h-4 w-4 text-muted-foreground" /> Cidade / UF
+                </Label>
+                <Input
+                  value={form.cidadeUf}
+                  disabled
+                  className="bg-slate-50 cursor-not-allowed"
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              <div className="grid gap-2">
+                <Label>Regime Tributário</Label>
+                <Input
+                  value={form.regimeTributario}
+                  disabled
+                  className="bg-slate-50 cursor-not-allowed"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label>Status da Empresa</Label>
+                <Input
+                  value={form.status}
+                  disabled
+                  className="bg-slate-50 cursor-not-allowed font-medium text-emerald-600"
+                />
+              </div>
+            </div>
+            
+            <div className="flex gap-2 items-center bg-blue-50 text-blue-800 p-3 rounded-lg border text-xs">
+              <Info className="h-4 w-4 text-blue-600 shrink-0" />
+              <span>
+                Cidade/UF, Regime e Status são atualizados através das abas de Endereço e Fiscal.
+              </span>
             </div>
           </div>
         </section>
 
+        {/* Sistema e Rotinas */}
         <div className="space-y-6">
           <section className="rounded-2xl border bg-white p-6 shadow-sm">
             <h2 className="text-xl font-semibold mb-4">Sistema e Segurança</h2>

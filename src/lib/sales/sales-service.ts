@@ -1,6 +1,8 @@
 import { PrismaClient } from "@prisma/client";
 import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
+import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
+import { authorizationService } from "../auth/authorization-service";
 
 import bcrypt from "bcryptjs";
 
@@ -21,58 +23,61 @@ export class SalesService {
         if (!customer) throw new Error("Cliente inválido.");
       }
 
-      // Validar Caixa Aberto
-      if (!data.cashRegisterId) {
-        const activeRegister = await tx.cashRegister.findFirst({
-          where: { companyId: data.companyId, openedByUserId: data.sellerId, status: "OPEN" }
-        });
-        if (!activeRegister) throw new Error("Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.");
-        data.cashRegisterId = activeRegister.id;
-      } else {
-        const register = await tx.cashRegister.findUnique({ where: { id: data.cashRegisterId } });
-        if (!register || register.status !== "OPEN") throw new Error("Caixa informado não está aberto.");
+      // Carregar configurações operacionais da empresa
+      const settings = await OperationalSettingsService.getOrCreateOperationalSettings(data.companyId, tx);
+
+      // Validar Caixa Aberto se exigido pelas configurações operacionais
+      if (settings.requireOpenCashRegister) {
+        if (!data.cashRegisterId) {
+          const activeRegister = await tx.cashRegister.findFirst({
+            where: { companyId: data.companyId, status: "OPEN" }
+          });
+          if (!activeRegister) throw new Error("Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.");
+          data.cashRegisterId = activeRegister.id;
+        } else {
+          const register = await tx.cashRegister.findUnique({ where: { id: data.cashRegisterId } });
+          if (!register || register.status !== "OPEN") throw new Error("Caixa informado não está aberto.");
+        }
       }
 
-      // Etapa 1.5: Validar Desconto (Fase 6F)
+      // Validar Cliente Obrigatório
+      const blockNoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
+      if (blockNoCustomer && !data.customerId) {
+        throw new Error("Cliente é obrigatório para finalizar a venda.");
+      }
+
+      // Etapa 1.5: Validar Desconto (Fase 6F e Sprint CONFIG-03)
       let authorizedByUserId: string | null = null;
       let maxAllowed = 0;
       const discountPercentage = data.subtotal > 0 ? (data.discountAmount / data.subtotal) * 100 : 0;
       
       if (data.discountAmount > 0 && data.subtotal > 0) {
-        if (seller.maxDiscountPercentage !== null) {
-          maxAllowed = Number(seller.maxDiscountPercentage);
-        } else if (seller.role?.maxDiscountPercentage !== null && seller.role?.maxDiscountPercentage !== undefined) {
-          maxAllowed = Number(seller.role.maxDiscountPercentage);
-        } else {
-          maxAllowed = Number(company.maxDiscountPercentage);
-        }
+        const policy = await OperationalSettingsService.validateDiscountPolicy({
+          companyId: data.companyId,
+          userId: data.sellerId,
+          discountPercent: discountPercentage,
+          saleTotal: data.totalAmount
+        }, tx);
 
-        if (discountPercentage > maxAllowed) {
-          if (!data.authPin) {
-            throw new Error(`Desconto solicitado (${discountPercentage.toFixed(2)}%) excede o limite permitido (${maxAllowed.toFixed(2)}%). Autorização de administrador é necessária.`);
-          }
+        maxAllowed = policy.limitApplied;
 
-          // Authorize using PIN
-          const possibleAdmins = await tx.user.findMany({
-            where: { companyId: data.companyId, status: "ACTIVE", pinAccessHash: { not: "" } },
-            include: { role: true }
-          });
-
-          let authorizer = null;
-          for (const admin of possibleAdmins) {
-            if (!admin.pinAccessHash) continue;
-            const isValid = await bcrypt.compare(data.authPin, admin.pinAccessHash);
-            if (isValid) {
-              authorizer = admin;
-              break;
+        if (!policy.allowed) {
+          if (policy.requiresAuthorization) {
+            if (!data.authPin) {
+              throw new Error(`Desconto solicitado (${discountPercentage.toFixed(2)}%) excede o limite permitido (${maxAllowed.toFixed(2)}%). Autorização de gerente/administrador é necessária.`);
             }
-          }
 
-          if (!authorizer) {
-            throw new Error("PIN de autorização inválido ou usuário sem permissão.");
+            // Validar PIN de autorização centralizado (exige permissão de edição no PDV para autorizar)
+            const authorizer = await authorizationService.validatePinAuthorization(
+              data.companyId,
+              data.authPin,
+              { module: 'PDV', action: 'editar' }
+            );
+
+            authorizedByUserId = authorizer.id;
+          } else {
+            throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
           }
-          
-          authorizedByUserId = authorizer.id;
         }
       }
 
@@ -81,7 +86,10 @@ export class SalesService {
         const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
         if (!variant) throw new Error(`Variante ${item.variantId} não encontrada.`);
 
-        if (!company.allowNegativeStockOnPDV && variant.availableStock.toNumber() < item.quantity) {
+        const hasNegativeStock = variant.availableStock.toNumber() < item.quantity;
+
+        // Verificar se estoque negativo é bloqueado pelas configurações operacionais
+        if (!settings.allowNegativeStock && hasNegativeStock) {
           throw new Error(`Estoque insuficiente para a variante ${variant.name}. Disponível: ${variant.availableStock.toNumber()}, Solicitado: ${item.quantity}`);
         }
       }
@@ -310,6 +318,37 @@ export class SalesService {
       });
       if (!sale) throw new Error("Venda não encontrada.");
       if (sale.status === "CANCELLED") throw new Error("Venda já está cancelada.");
+
+      const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
+
+      // Verificar se o cancelamento de venda é permitido globalmente
+      if (!settings.allowSaleCancellation) {
+        throw new Error("O cancelamento de vendas está desabilitado nas configurações operacionais.");
+      }
+
+      // Verificar tempo limite do cancelamento
+      const diffMs = new Date().getTime() - new Date(sale.createdAt).getTime();
+      const diffMin = diffMs / (1000 * 60);
+
+      // Se ultrapassar o tempo limite e o cancelamento exige autorização, ou se exige autorização globalmente
+      const canceller = await tx.user.findUnique({
+        where: { id: data.cancelledByUserId },
+        include: { role: { include: { permissions: true } } }
+      });
+
+      const isTimeLimitExceeded = diffMin > settings.cancellationTimeLimit;
+      const needsAuthorization = settings.requireAuthorizationToCancelSale || isTimeLimitExceeded;
+
+      if (needsAuthorization) {
+        // Se quem está cancelando não for admin e não tiver permissão de edição nas vendas, bloquear
+        const isAuthorized = canceller?.role?.isAdmin || canceller?.role?.permissions.some(
+          (p: any) => p.module.toLowerCase() === 'vendas' && p.action.toLowerCase() === 'editar' && p.allowed
+        );
+
+        if (!isAuthorized) {
+          throw new Error("Você não possui permissão ou tempo limite excedido para cancelar esta venda. É necessária autorização de um gerente/administrador.");
+        }
+      }
 
       // Marcar Sale como CANCELLED e preencher motivos
       const cancelledSale = await tx.sale.update({

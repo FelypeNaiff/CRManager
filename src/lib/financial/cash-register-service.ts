@@ -5,6 +5,7 @@ import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { Prisma } from '@prisma/client';
 import { CashRegisterOpenSchema, CashRegisterCloseSchema, CashMovementSchema } from './financial-schemas';
+import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
 
 // =============================================================================
 // CASH REGISTER SERVICE — Serviço de Caixa
@@ -215,6 +216,15 @@ export async function addCashMovement(input: any) {
 
       if (!register) throw new Error('Caixa não encontrado.');
       if (register.status !== 'OPEN') throw new Error('Operação não permitida: caixa não está aberto.');
+
+      // Validar políticas operacionais de sangria/reforço
+      const settings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId, tx);
+      if (parsed.data.type === 'SANGRIA' && !settings.allowCashWithdrawal) {
+        throw new Error('Operação de sangria desabilitada nas configurações operacionais.');
+      }
+      if (parsed.data.type === 'REFORCO' && !settings.allowCashSupply) {
+        throw new Error('Operação de reforço desabilitada nas configurações operacionais.');
+      }
 
       const mov = await tx.cashMovement.create({
         data: {

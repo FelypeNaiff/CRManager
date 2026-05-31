@@ -12,7 +12,8 @@ import {
   Store, 
   Receipt, 
   FileBadge, 
-  ScrollText 
+  ScrollText,
+  SlidersHorizontal
 } from "lucide-react"
 
 const configRoutes = [
@@ -42,9 +43,9 @@ const configRoutes = [
     icon: Settings,
   },
   {
-    title: "PDV / Vendas de Balcão",
-    href: "/configuracoes/pdv",
-    icon: Store,
+    title: "Configurações Operacionais",
+    href: "/configuracoes/configuracoes-operacionais",
+    icon: SlidersHorizontal,
   },
   {
     title: "Fiscal",
