@@ -10,7 +10,7 @@ import {
   InventoryMovementSchema,
 } from './products-schemas';
 import { InventoryMovementType, Prisma } from '@prisma/client';
-import { syncProductToFirestore, syncProductDeleteToFirestore } from './products-adapter';
+
 
 // =========================================================================
 // ProductCategory Actions
@@ -253,7 +253,7 @@ export async function createProduct(input: any) {
       details: `Produto "${result.product.name}" criado com código interno ${result.product.internalCode} e SKU ${result.variant.sku}.`,
     });
 
-    await syncProductToFirestore(result.product.id);
+    
 
     return { success: true, data: result.product };
   } catch (error: any) {
@@ -350,7 +350,7 @@ export async function updateProduct(id: string, input: any) {
       details: `Produto "${result.name}" atualizado. Alterações salvas no banco.`,
     });
 
-    await syncProductToFirestore(id);
+    
 
     return { success: true, data: result };
   } catch (error: any) {
@@ -392,7 +392,7 @@ export async function deleteProduct(id: string) {
       details: `Produto "${product.name}" inativado/arquivado (Soft Delete).`,
     });
 
-    await syncProductDeleteToFirestore(id, product.legacyFirebaseId);
+    
 
     return { success: true };
   } catch (error: any) {
@@ -535,7 +535,7 @@ export async function createInventoryMovement(input: any) {
       include: { variant: true }
     });
     if (movementWithVariant?.variant) {
-      await syncProductToFirestore(movementWithVariant.variant.productId);
+      
     }
 
     return { success: true, data: result.movement };
