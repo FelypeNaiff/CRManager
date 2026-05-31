@@ -10,8 +10,8 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Package, Save, X, Info, UploadCloud, RefreshCw, Plus } from "lucide-react"
-import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
-import { collection, query, orderBy } from "@/supabase-mocks/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/lib/legacy-stubs"
+import { collection, query, orderBy } from "@/lib/legacy-firestore-stubs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -215,7 +215,7 @@ export default function NovoProdutoPage() {
     }
     setIsCreatingGrade(true)
     try {
-      const { addDoc } = await import("@/supabase-mocks/firestore")
+      const { addDoc } = await import("@/lib/legacy-firestore-stubs")
       await addDoc(collection(db, "gradesVariacoes"), {
         nome: newGradeName,
         tipo: newGradeType,
@@ -242,7 +242,7 @@ export default function NovoProdutoPage() {
     }
     setIsCreatingUnidade(true)
     try {
-      const { addDoc } = await import("@/supabase-mocks/firestore")
+      const { addDoc } = await import("@/lib/legacy-firestore-stubs")
       await addDoc(collection(db, "unidadesProdutos"), {
         nome: newUnidadeName,
         sigla: newUnidadeSigla.toUpperCase(),

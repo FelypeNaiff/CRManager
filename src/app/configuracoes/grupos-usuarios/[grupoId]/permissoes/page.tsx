@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useFirestore, useDoc, useMemoFirebase } from "@/supabase-mocks"
-import { doc, setDoc, serverTimestamp, collection, addDoc } from "@/supabase-mocks/firestore"
+import { useFirestore, useDoc, useMemoFirebase } from "@/lib/legacy-stubs"
+import { doc, setDoc, serverTimestamp, collection, addDoc } from "@/lib/legacy-firestore-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { permissoesSchema } from "@/types/configuracoes"
 import { toast } from "@/hooks/use-toast"

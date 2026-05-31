@@ -11,7 +11,7 @@ import {
   getDoc,
   limit,
   deleteDoc
-} from "@/supabase-mocks/firestore";
+} from "@/lib/legacy-firestore-stubs";
 
 
 export interface CrmMetadata {

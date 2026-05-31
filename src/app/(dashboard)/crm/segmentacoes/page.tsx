@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection, query, where } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection, query, where } from "@/lib/legacy-firestore-stubs"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -67,7 +67,7 @@ export default function SegmentacoesPage() {
   const [filterTotalCompradoMin, setFilterTotalCompradoMin] = useState("")
   const [selectedTagsFilter, setSelectedTagsFilter] = useState<string[]>([])
 
-  // supabase-mocks Queries
+  // mock Queries
   const clientesQuery = useMemoFirebase(() => {
     if (!db) return null
     return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))

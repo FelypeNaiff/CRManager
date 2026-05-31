@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection } from "@/lib/legacy-firestore-stubs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"

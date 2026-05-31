@@ -47,8 +47,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/lib/legacy-firestore-stubs"
 import { toast } from "@/hooks/use-toast"
 
 const emptyForm = {

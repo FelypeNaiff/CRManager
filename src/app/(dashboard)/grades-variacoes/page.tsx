@@ -5,8 +5,8 @@ import { Layers, Plus, Search, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from "@/supabase-mocks/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/lib/legacy-stubs"
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from "@/lib/legacy-firestore-stubs"
 import { toast } from "@/hooks/use-toast"
 
 export default function GradesVariacoesPage() {

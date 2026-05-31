@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where } from "@/supabase-mocks/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/lib/legacy-stubs"
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where } from "@/lib/legacy-firestore-stubs"
 import { Shield, Save, CheckSquare, Square, Unlock, Lock, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"

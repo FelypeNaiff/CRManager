@@ -11,7 +11,7 @@ import {
 import { Bell, Search, User, LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { useUser, useAuth, useFirestore } from "@/supabase-mocks"
+import { useUser, useAuth, useFirestore } from "@/lib/legacy-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { logoutProfileSession } from "@/lib/auth/actions"
 import {
@@ -22,8 +22,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { signOut } from "@/supabase-mocks/auth"
-import { doc, updateDoc, serverTimestamp } from "@/supabase-mocks/firestore"
+import { signOut } from "@/lib/legacy-auth-stubs"
+import { doc, updateDoc, serverTimestamp } from "@/lib/legacy-firestore-stubs"
 
 export default function DashboardLayout({
   children,

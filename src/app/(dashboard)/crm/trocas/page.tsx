@@ -38,8 +38,8 @@ import {
   FileText,
   Clock
 } from "lucide-react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "@/lib/legacy-firestore-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { CrmService } from "@/lib/crm-service"
 import { toast } from "@/hooks/use-toast"

@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection, query, where } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection, query, where } from "@/lib/legacy-firestore-stubs"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, startOfMonth, endOfMonth, parseISO, isBefore, isSameMonth, subMonths, startOfDay, getMonth } from "date-fns"
 import { ptBR } from "date-fns/locale"

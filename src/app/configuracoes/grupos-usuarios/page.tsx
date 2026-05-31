@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
-import { collection, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc } from "@/supabase-mocks/firestore"
+import { useFirestore, useCollection, useMemoFirebase } from "@/lib/legacy-stubs"
+import { collection, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc } from "@/lib/legacy-firestore-stubs"
 import { Plus, Users, Search, KeyRound, Eye, Edit3, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"

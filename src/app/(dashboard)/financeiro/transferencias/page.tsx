@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
-import { collection, doc, writeBatch, serverTimestamp, query, where, orderBy } from "@/supabase-mocks/firestore"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
+import { collection, doc, writeBatch, serverTimestamp, query, where, orderBy } from "@/lib/legacy-firestore-stubs"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -65,7 +65,7 @@ export default function TransferenciasPage() {
     return query(
       collection(db, "financial_transactions"), 
       where("type", "==", "TRANSFER"),
-      // supabase-mocks needs a composite index if orderBy is used with where, 
+      // mock needs a composite index if orderBy is used with where, 
       // we will sort locally to avoid index creation requirements for the user right now.
     )
   }, [db])

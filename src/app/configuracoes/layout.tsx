@@ -6,7 +6,7 @@ import { AppSidebar } from "@/components/layout/app-sidebar"
 import { ConfigSidebar } from "@/components/layout/config-sidebar"
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar"
 import { RequirePermission } from "@/components/permissions/require-permission"
-import { useUser } from "@/supabase-mocks"
+import { useUser } from "@/lib/legacy-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
 
 export default function ConfiguracoesLayout({

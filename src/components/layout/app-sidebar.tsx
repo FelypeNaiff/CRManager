@@ -2,8 +2,8 @@
 
 import * as React from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useDoc, useMemoFirebase } from "@/supabase-mocks"
-import { doc } from "@/supabase-mocks/firestore"
+import { useFirestore, useDoc, useMemoFirebase } from "@/lib/legacy-stubs"
+import { doc } from "@/lib/legacy-firestore-stubs"
 import {
   LayoutDashboard,
   Users,

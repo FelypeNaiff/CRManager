@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
-import { useCollection, useFirestore, useMemoFirebase } from "@/supabase-mocks"
-import { collection, query, orderBy } from "@/supabase-mocks/firestore"
+import { useCollection, useFirestore, useMemoFirebase } from "@/lib/legacy-stubs"
+import { collection, query, orderBy } from "@/lib/legacy-firestore-stubs"
 import { toast } from "@/hooks/use-toast"
 import {
   DropdownMenu,

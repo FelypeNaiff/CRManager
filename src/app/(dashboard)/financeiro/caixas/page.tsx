@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/lib/legacy-stubs"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, limit, getDoc, setDoc } from "@/supabase-mocks/firestore"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, limit, getDoc, setDoc } from "@/lib/legacy-firestore-stubs"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
