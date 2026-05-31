@@ -21,40 +21,32 @@ export default function LoginPage() {
     setIsLoading(true)
 
     try {
-      // Step 1: In a real flow, a Server Action should fetch the email via username from Prisma.
-      // We will mock this API call here, or assume we have an endpoint for it.
-      const res = await fetch('/api/auth/get-email-by-username', {
+      const res = await fetch('/api/auth/login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username })
+        body: JSON.stringify({ username, password })
       })
 
-      const data = await res.json()
+      const contentType = res.headers.get("content-type")
+      if (contentType && contentType.indexOf("application/json") !== -1) {
+        const data = await res.json()
+        
+        if (!res.ok || !data.success) {
+          throw new Error(data.error || 'Credenciais inválidas.')
+        }
 
-      if (!res.ok || !data.email) {
-        throw new Error(data.error || 'Usuário inválido.')
+        toast({
+          title: "Bem-vindo!",
+          description: "Login efetuado com sucesso.",
+        })
+
+        router.push(data.redirectTo || "/dashboard")
+      } else {
+        const textError = await res.text()
+        console.error("Resposta não-JSON da API:", textError)
+        throw new Error('Erro de comunicação com o servidor.')
       }
 
-      // Step 2 & 3: Authenticate with Supabase using the retrieved email
-      const { error } = await supabase.auth.signInWithPassword({
-        email: data.email,
-        password: password
-      })
-
-      if (error) {
-        throw new Error('Credenciais inválidas.')
-      }
-
-      // Step 4: Populate SESSION_COOKIE (Done in backend typically or via another endpoint)
-      // For this migration, we assume the backend sets the cookie upon successful Supabase session via middleware or explicit call.
-      
-      toast({
-        title: "Bem-vindo!",
-        description: "Login efetuado com sucesso.",
-      })
-
-      // Step 5: Redirect to dashboard
-      router.push("/dashboard")
     } catch (error: any) {
       console.error(error)
       toast({
