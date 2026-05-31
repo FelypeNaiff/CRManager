@@ -25,7 +25,7 @@ export interface CrmMetadata {
 }
 
 /**
- * CRM TRUPE Base Service
+ * NEEX Base Service
  * Handles consistent data mutation, tenant segregation, auditing, and soft deletes.
  */
 export const CrmService = {

@@ -450,7 +450,7 @@ export default function ImportarPlanilhaPage() {
             <h2 className="text-xl font-headline font-semibold text-gray-800">Importação dos produtos</h2>
             
             <div className="space-y-4 text-gray-600 leading-relaxed">
-              <p>Selecione o arquivo Excel no formato .xlsx com os dados dos seus produtos e importe no TRUPE KIDS MODA INFANTIL.</p>
+              <p>Selecione o arquivo Excel no formato .xlsx com os dados dos seus produtos e importe no NEEX.</p>
               
               <p>Se preferir <button onClick={baixarPlanilhaPadrao} className="text-primary font-medium hover:underline">baixe nossa planilha padrão</button>, preencha com seus dados e envie para o sistema.</p>
               

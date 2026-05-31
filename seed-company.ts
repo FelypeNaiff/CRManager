@@ -11,8 +11,8 @@ async function main() {
     create: {
       id: companyId,
       cnpjCpf: '00000000000000',
-      razaoSocial: 'NEEX / CRM Trupe - Production',
-      nomeFantasia: 'CRM Trupe',
+      razaoSocial: 'NEEX - Sistema de Gestão de Vendas',
+      nomeFantasia: 'NEEX',
       tipoPessoa: 'PJ'
     }
   });

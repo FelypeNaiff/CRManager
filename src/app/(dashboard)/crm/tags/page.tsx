@@ -177,7 +177,7 @@ export default function TagsPage() {
       <div className="bg-indigo-50/40 border border-indigo-100 p-4 rounded-xl flex items-start gap-3">
         <Info className="h-5 w-5 text-indigo-500 shrink-0 mt-0.5" />
         <p className="text-xs text-indigo-950/80 leading-relaxed">
-          As tags no CRM Trupe Kids são utilizadas para segmentar clientes por padrões de compras, faixa etária dos filhos, ou datas comemorativas. 
+          As tags no NEEX são utilizadas para segmentar clientes por padrões de compras, faixa etária dos filhos, ou datas comemorativas. 
           Use nomes curtos e em caixa alta. Ex: <strong>CLIENTE_VIP</strong>, <strong>MÃE_DE_MENINO</strong>.
         </p>
       </div>

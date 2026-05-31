@@ -72,7 +72,7 @@ export default function SetupPage() {
       try {
         const empresaRef = doc(db, "empresa", "config_padrao")
         await setDoc(empresaRef, {
-          nome: "CRManager",
+          nome: "NEEX",
           setupConcluido: true,
           createdAt: serverTimestamp()
         }, { merge: true })

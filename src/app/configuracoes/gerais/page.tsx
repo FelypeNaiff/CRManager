@@ -10,9 +10,9 @@ import { ConfigPageHeader } from "@/components/configuracoes/config-ui"
 
 export default function ConfiguracoesGeraisPage() {
   const [form, setForm] = useState({
-    nomeEmpresa: "TRUPE KIDS MODA INFANTIL",
+    nomeEmpresa: "NEEX - Sistema de Gestão de Vendas",
     cnpj: "00.000.000/0001-00",
-    emailSistema: "contato@trupekids.com.br",
+    emailSistema: "contato@neex.com.br",
     whatsappEmpresa: "(96) 99999-9999",
     timezone: "America/Belem",
     tema: "light",

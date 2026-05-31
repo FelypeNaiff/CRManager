@@ -12,11 +12,11 @@ async function main() {
     update: {},
     create: {
       cnpjCpf: '12345678000199',
-      razaoSocial: 'Trupe Kids Ltda',
-      nomeFantasia: 'Trupe Kids',
+      razaoSocial: 'NEEX - Sistema de Gestão de Vendas',
+      nomeFantasia: 'NEEX',
       tipoPessoa: 'PJ',
       telefone: '96999999999',
-      email: 'trupekidsmcp@gmail.com',
+      email: 'contato@neex.com.br',
     },
   });
   console.log(`Company created/found: ${company.nomeFantasia} (${company.id})`);
@@ -116,7 +116,7 @@ async function main() {
 
   const hashedStaffPin = await bcrypt.hash('4321', 10);
   const staffUser = await prisma.user.upsert({
-    where: { email: 'trupekidsmcp@gmail.com' },
+    where: { email: 'caixa@neex.com.br' },
     update: {
       companyId: company.id,
       roleId: staffRole.id,
@@ -125,8 +125,8 @@ async function main() {
     create: {
       companyId: company.id,
       roleId: staffRole.id,
-      name: 'Caixa 01',
-      email: 'trupekidsmcp@gmail.com',
+      name: 'Caixa NEEX',
+      email: 'caixa@neex.com.br',
       pinAccessHash: hashedStaffPin,
       status: 'ACTIVE',
       cargo: 'Operador de Caixa',

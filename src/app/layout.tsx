@@ -6,8 +6,9 @@ import { ProfileProvider } from '@/lib/contexts/profile-context';
 import { PermissionsProvider } from '@/hooks/use-permissions';
 
 export const metadata: Metadata = {
-  title: 'CRManager - Gestão de Varejo',
-  description: 'Sistema completo de gestão para lojas de varejo e moda infantil.',
+  title: 'NEEX - Sistema de Gestão de Vendas',
+  description: 'Sistema de gestão completo para varejo.',
+  applicationName: 'NEEX',
 };
 
 export default function RootLayout({

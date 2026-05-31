@@ -118,7 +118,7 @@ export default function LoginPage() {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight">NEEX</CardTitle>
           <CardDescription>
-            Sistema de Gestão de Vendas
+            NEEX - Sistema de Gestão de Vendas
           </CardDescription>
         </CardHeader>
         <CardContent>

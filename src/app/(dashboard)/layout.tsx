@@ -142,7 +142,7 @@ export default function DashboardLayout({
             <div className="flex items-center gap-2">
               <div className="flex items-center gap-2 font-headline font-bold text-lg mr-6">
                 <Store className="h-5 w-5 text-primary" />
-                <span className="tracking-tight uppercase">TRUPE KIDS <span className="text-primary font-normal text-sm">MODA INFANTIL</span></span>
+                <span className="tracking-tight uppercase">NEEX <span className="text-primary font-normal text-sm">SISTEMA DE GESTÃO DE VENDAS</span></span>
               </div>
               <SidebarTrigger className="text-white hover:bg-white/10" />
             </div>

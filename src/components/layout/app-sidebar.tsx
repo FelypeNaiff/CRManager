@@ -225,7 +225,7 @@ export function AppSidebar() {
 
   const logoUrl = empresaConfig?.logo_url || empresaConfig?.logo_reduzida
   const smallLogoUrl = empresaConfig?.logo_reduzida || empresaConfig?.logo_url
-  const companyName = empresaConfig?.nome_fantasia || "CRManager"
+  const companyName = empresaConfig?.nome_fantasia || "NEEX"
 
   const { canAccessRoute, isLoading } = usePermissions()
 
@@ -253,18 +253,18 @@ export function AppSidebar() {
             <img src={logoUrl} alt="Logo da empresa" className="h-12 w-auto max-w-full object-contain" />
           ) : (
             <div className="h-12 w-12 text-primary font-bold text-2xl flex items-center justify-center">
-              Tk
+              NX
             </div>
           )}
           <span className="font-headline font-bold text-lg text-primary">{companyName}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">CRManager</span>
+          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">NEEX</span>
         </div>
         <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 items-center justify-center">
           {smallLogoUrl ? (
             <img src={smallLogoUrl} alt="Logo reduzida" className="h-8 w-auto object-contain" />
           ) : (
             <div className="h-8 w-8 text-primary font-bold text-xl flex items-center justify-center">
-              Tk
+              NX
             </div>
           )}
         </div>
