@@ -66,14 +66,19 @@ const ROUTE_PERMISSION_MAP: Array<{
 export function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // 1. Allow public paths
+  // 1. Read session cookie early
+  const sessionCookie = request.cookies.get(SESSION_COOKIE);
+
+  // 2. Handle public paths
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p) || pathname === p)) {
+    // se usuário autenticado acessar /login, redirecionar para /dashboard
+    if (sessionCookie?.value && pathname === '/login') {
+      return NextResponse.redirect(new URL('/dashboard', request.url));
+    }
     return NextResponse.next();
   }
 
-  // 2. Read session cookie
-  const sessionCookie = request.cookies.get(SESSION_COOKIE);
-
+  // 3. Read session cookie (if no session -> redirect to login)
   if (!sessionCookie?.value) {
     // No session → redirect to login
     const loginUrl = new URL('/login', request.url);

@@ -40,7 +40,14 @@ export default function LoginPage() {
           description: "Login efetuado com sucesso.",
         })
 
-        router.push(data.redirectTo || "/dashboard")
+        // Redirecionamento forçado para garantir refresh do cookie/sessão
+        const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl")
+        const targetUrl = (callbackUrl && callbackUrl !== '/') ? callbackUrl : "/dashboard"
+        window.location.replace(targetUrl)
+
+        // IMPORTANTE: Não colocamos setIsLoading(false) aqui porque o redirecionamento
+        // de página cheia assumirá a tela, deixando o loading spinner visível até o recarregamento.
+        return
       } else {
         const textError = await res.text()
         console.error("Resposta não-JSON da API:", textError)
@@ -54,7 +61,6 @@ export default function LoginPage() {
         title: "Acesso Negado",
         description: error.message || "Não foi possível autenticar.",
       })
-    } finally {
       setIsLoading(false)
     }
   }
