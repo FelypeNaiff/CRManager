@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Package, Save, X, Info, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { useFirestore } from "@/firebase"
-import { collection, getDocs, query, orderBy } from "firebase/firestore"
+import { useFirestore } from "@/supabase-mocks"
+import { collection, getDocs, query, orderBy } from "@/supabase-mocks/firestore"
 import {
   getProductById,
   updateProduct,

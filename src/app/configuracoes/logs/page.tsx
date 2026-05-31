@@ -2,8 +2,8 @@
 
 import { useState, useMemo } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, where, orderBy, limit } from "firebase/firestore"
+import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { collection, query, where, orderBy, limit } from "@/supabase-mocks/firestore"
 import { Search, Filter, History, Calendar, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -30,7 +30,7 @@ export default function LogsAtividadesPage() {
   const { activeProfile } = useProfile()
   
   // Queries
-  const logsQuery = useMemoFirebase(() => {
+  const logsQuery = useMemosupabase-mocks(() => {
     if (!db || !activeProfile?.empresaId) return null
     // Em produção, seria ideal limitar ou fazer paginação real com startAfter
     return query(

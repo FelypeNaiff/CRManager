@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, writeBatch, increment } from "firebase/firestore"
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy, writeBatch, increment } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -94,11 +94,11 @@ export default function ContasAReceberPage() {
   const { activeProfile } = useProfile()
 
   // Queries
-  const receivablesQuery = useMemoFirebase(() => collection(db, "accounts_receivable"), [db])
-  const clientsQuery = useMemoFirebase(() => collection(db, "clientes"), [db])
-  const chartQuery = useMemoFirebase(() => collection(db, "chart_of_accounts"), [db])
-  const costCentersQuery = useMemoFirebase(() => collection(db, "cost_centers"), [db])
-  const banksQuery = useMemoFirebase(() => collection(db, "bank_accounts"), [db])
+  const receivablesQuery = useMemosupabase-mocks(() => collection(db, "accounts_receivable"), [db])
+  const clientsQuery = useMemosupabase-mocks(() => collection(db, "clientes"), [db])
+  const chartQuery = useMemosupabase-mocks(() => collection(db, "chart_of_accounts"), [db])
+  const costCentersQuery = useMemosupabase-mocks(() => collection(db, "cost_centers"), [db])
+  const banksQuery = useMemosupabase-mocks(() => collection(db, "bank_accounts"), [db])
 
   // Data fetching
   const { data: rawReceivables, isLoading: loadingReceivables } = useCollection(receivablesQuery)

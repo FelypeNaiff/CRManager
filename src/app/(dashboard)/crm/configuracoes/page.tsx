@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Settings, Loader2, Sparkles, Shield, Info, HelpCircle, Save } from "lucide-react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore } from "@/firebase"
+import { useFirestore } from "@/supabase-mocks"
 import { seedCrmBasico } from "@/lib/seeds/crm"
 import { toast } from "@/hooks/use-toast"
 

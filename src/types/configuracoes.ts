@@ -6,7 +6,7 @@ import { z } from "zod";
 const baseConfigSchema = z.object({
   id: z.string().optional(),
   empresa_id: z.string().min(1, "Empresa ID é obrigatório"),
-  criado_em: z.any().optional(), // Aceita Timestamp do Firebase Firestore
+  criado_em: z.any().optional(), // Aceita Timestamp do Supabase Firestore
   atualizado_em: z.any().optional(),
   atualizado_por: z.string().optional(),
 });

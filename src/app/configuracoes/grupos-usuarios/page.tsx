@@ -2,8 +2,8 @@
 
 import { useState } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { collection, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc } from "firebase/firestore"
+import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { collection, query, where, doc, updateDoc, deleteDoc, serverTimestamp, addDoc } from "@/supabase-mocks/firestore"
 import { Plus, Users, Search, KeyRound, Eye, Edit3, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -48,13 +48,13 @@ export default function GruposUsuariosConfigPage() {
   const { activeProfile } = useProfile()
   
   // Queries
-  const gruposQuery = useMemoFirebase(() => {
+  const gruposQuery = useMemosupabase-mocks(() => {
     if (!db || !activeProfile?.empresaId) return null
     return query(collection(db, "grupos_usuarios"), where("empresa_id", "==", activeProfile.empresaId))
   }, [db, activeProfile?.empresaId])
 
   // Buscar usuários para contar a quantidade vinculada
-  const usuariosQuery = useMemoFirebase(() => {
+  const usuariosQuery = useMemosupabase-mocks(() => {
     if (!db || !activeProfile?.empresaId) return null
     return query(collection(db, "usuarios"), where("empresa_id", "==", activeProfile.empresaId))
   }, [db, activeProfile?.empresaId])

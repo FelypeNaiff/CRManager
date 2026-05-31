@@ -1,0 +1,1 @@
+export const useFirestore = () => null; export const useCollection = () => ({ data: [], isLoading: false, error: null }); export const useMemoFirebase = (fn: any) => null; export const useUser = () => ({ user: null, loading: false }); export const useAuth = () => ({ user: null, loading: false });

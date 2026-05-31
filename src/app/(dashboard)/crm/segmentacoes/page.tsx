@@ -2,8 +2,8 @@
 
 import React, { useState, useMemo } from "react"
 import { useRouter } from "next/navigation"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection, query, where } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -67,32 +67,32 @@ export default function SegmentacoesPage() {
   const [filterTotalCompradoMin, setFilterTotalCompradoMin] = useState("")
   const [selectedTagsFilter, setSelectedTagsFilter] = useState<string[]>([])
 
-  // Firebase Queries
-  const clientesQuery = useMemoFirebase(() => {
+  // supabase-mocks Queries
+  const clientesQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
   }, [db, tenantId])
   const { data: clientes, isLoading: loadingClientes } = useCollection(clientesQuery)
 
-  const filhosQuery = useMemoFirebase(() => {
+  const filhosQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "filhos"), where("tenant_id", "==", tenantId), where("status", "==", "ativo"))
   }, [db, tenantId])
   const { data: filhos } = useCollection(filhosQuery)
 
-  const carteirasQuery = useMemoFirebase(() => {
+  const carteirasQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "carteiras_clientes"), where("tenant_id", "==", tenantId))
   }, [db, tenantId])
   const { data: carteiras } = useCollection(carteirasQuery)
 
-  const vendasQuery = useMemoFirebase(() => {
+  const vendasQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "vendas"), where("tenant_id", "==", tenantId))
   }, [db, tenantId])
   const { data: vendas } = useCollection(vendasQuery)
 
-  const tagsQuery = useMemoFirebase(() => {
+  const tagsQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "tags"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
   }, [db, tenantId])

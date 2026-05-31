@@ -6,8 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { UserCog, Plus, Shield, Loader2, AlertCircle, Trash2, ShieldCheck, Pencil } from "lucide-react"
-import { useCollection, useFirestore, useMemoFirebase } from "@/firebase"
-import { collection, doc, setDoc, deleteDoc, serverTimestamp } from "firebase/firestore"
+import { useCollection, useFirestore, useMemosupabase-mocks } from "@/supabase-mocks"
+import { collection, doc, setDoc, deleteDoc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 
@@ -19,8 +19,8 @@ export default function UsuariosPage() {
   const [form, setForm] = useState({ uid: "", email: "", nome: "", role: "vendedor" })
   const [editingUid, setEditingUid] = useState<string | null>(null)
 
-  const adminQuery = useMemoFirebase(() => db ? collection(db, "roles_admin") : null, [db])
-  const vendQuery = useMemoFirebase(() => db ? collection(db, "vendedores") : null, [db])
+  const adminQuery = useMemosupabase-mocks(() => db ? collection(db, "roles_admin") : null, [db])
+  const vendQuery = useMemosupabase-mocks(() => db ? collection(db, "vendedores") : null, [db])
 
   const { data: admins, isLoading: isLoadAdmin, error: errorAdmin } = useCollection(adminQuery)
   const { data: vendedores, isLoading: isLoadVend, error: errorVend } = useCollection(vendQuery)
@@ -123,7 +123,7 @@ export default function UsuariosPage() {
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0" />
           <div className="space-y-1 text-sm flex-1">
             <h3 className="font-semibold text-base">Acesso Negado</h3>
-            <p>Você precisa ser um Administrador para visualizar e editar os usuários. Se você acabou de criar o banco, siga o passo a passo de liberação inicial do primeiro admin via Console do Firebase.</p>
+            <p>Você precisa ser um Administrador para visualizar e editar os usuários. Se você acabou de criar o banco, siga o passo a passo de liberação inicial do primeiro admin via Console do supabase-mocks.</p>
           </div>
         </div>
       )}
@@ -139,7 +139,7 @@ export default function UsuariosPage() {
           <CardContent>
             <form onSubmit={handleAddUser} className="grid sm:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>UID do Usuário (Firebase Auth) *</Label>
+                <Label>UID do Usuário (supabase-mocks Auth) *</Label>
                 <Input value={form.uid} onChange={e => setForm(p => ({...p, uid: e.target.value}))} placeholder="ex: aX1b...29C" required disabled={!!editingUid} />
               </div>
               <div className="space-y-2">

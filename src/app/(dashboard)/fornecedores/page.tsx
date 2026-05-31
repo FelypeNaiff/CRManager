@@ -47,8 +47,8 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 
 const emptyForm = {
@@ -79,7 +79,7 @@ export default function FornecedoresPage() {
   const [isSaving, setIsSaving] = useState(false)
   const db = useFirestore()
 
-  const fornecedoresQuery = useMemoFirebase(() => {
+  const fornecedoresQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return collection(db, "fornecedores")
   }, [db])

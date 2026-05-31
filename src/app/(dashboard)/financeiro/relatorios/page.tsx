@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, query, where, orderBy } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection, query, where, orderBy } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
@@ -18,9 +18,9 @@ export default function RelatoriosPage() {
   const db = useFirestore()
 
   // Queries
-  const payablesQuery = useMemoFirebase(() => db ? collection(db, "accounts_payable") : null, [db])
-  const receivablesQuery = useMemoFirebase(() => db ? collection(db, "accounts_receivable") : null, [db])
-  const chartQuery = useMemoFirebase(() => db ? collection(db, "chart_of_accounts") : null, [db])
+  const payablesQuery = useMemosupabase-mocks(() => db ? collection(db, "accounts_payable") : null, [db])
+  const receivablesQuery = useMemosupabase-mocks(() => db ? collection(db, "accounts_receivable") : null, [db])
+  const chartQuery = useMemosupabase-mocks(() => db ? collection(db, "chart_of_accounts") : null, [db])
 
   // Data fetching
   const { data: payables, isLoading: loadingPay } = useCollection(payablesQuery)

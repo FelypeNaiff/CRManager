@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth, useFirestore } from "@/firebase"
-import { doc, setDoc, serverTimestamp } from "firebase/firestore"
+import { useAuth, useFirestore } from "@/supabase-mocks"
+import { doc, setDoc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Loader2, Database, CheckCircle, AlertCircle } from "lucide-react"

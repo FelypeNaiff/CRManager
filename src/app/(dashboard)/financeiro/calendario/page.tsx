@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -36,12 +36,12 @@ export default function CalendarioFinanceiroPage() {
   const db = useFirestore()
 
   // Queries
-  const payablesQuery = useMemoFirebase(() => {
+  const payablesQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return collection(db, "accounts_payable")
   }, [db])
   
-  const receivablesQuery = useMemoFirebase(() => {
+  const receivablesQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return collection(db, "accounts_receivable")
   }, [db])

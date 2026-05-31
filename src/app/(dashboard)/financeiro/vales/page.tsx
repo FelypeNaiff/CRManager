@@ -1,8 +1,8 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, addDoc, updateDoc, doc, serverTimestamp, writeBatch } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, writeBatch } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -62,8 +62,8 @@ export default function ValesPage() {
   const db = useFirestore()
 
   // Queries
-  const valesQuery = useMemoFirebase(() => db ? collection(db, "employee_advances") : null, [db])
-  const banksQuery = useMemoFirebase(() => db ? collection(db, "bank_accounts") : null, [db])
+  const valesQuery = useMemosupabase-mocks(() => db ? collection(db, "employee_advances") : null, [db])
+  const banksQuery = useMemosupabase-mocks(() => db ? collection(db, "bank_accounts") : null, [db])
 
   // Fetching
   const { data: valesRaw, isLoading: loadingVales } = useCollection(valesQuery)

@@ -1,9 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, limit, getDoc, setDoc } from "firebase/firestore"
+import { collection, addDoc, updateDoc, doc, serverTimestamp, query, orderBy, limit, getDoc, setDoc } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -40,7 +40,7 @@ export default function CaixasPage() {
   const { activeProfile } = useProfile()
 
   // Queries
-  const caixasQuery = useMemoFirebase(() => {
+  const caixasQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return query(collection(db, "cash_registers"), orderBy("createdAt", "desc"))
   }, [db])

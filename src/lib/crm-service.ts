@@ -11,7 +11,7 @@ import {
   getDoc,
   limit,
   deleteDoc
-} from "firebase/firestore";
+} from "@/supabase-mocks/firestore";
 import { seedCrmBasico } from "./seeds/crm";
 
 export interface CrmMetadata {

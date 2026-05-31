@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { useCollection, useMemoFirebase, useFirestore } from "@/firebase"
-import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "firebase/firestore"
+import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
@@ -72,7 +72,7 @@ export default function ContasBancariasPage() {
 
   const db = useFirestore()
 
-  const contasQuery = useMemoFirebase(() => {
+  const contasQuery = useMemosupabase-mocks(() => {
     if (!db) return null
     return collection(db, "bank_accounts")
   }, [db])

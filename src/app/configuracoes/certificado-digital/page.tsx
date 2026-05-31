@@ -1,8 +1,8 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useFirestore, useDoc, useMemoFirebase } from "@/firebase"
-import { doc, setDoc, serverTimestamp, collection, addDoc } from "firebase/firestore"
+import { useFirestore, useDoc, useMemosupabase-mocks } from "@/supabase-mocks"
+import { doc, setDoc, serverTimestamp, collection, addDoc } from "@/supabase-mocks/firestore"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { certificadoDigitalSchema } from "@/types/configuracoes"
 import { toast } from "@/hooks/use-toast"
@@ -38,7 +38,7 @@ export default function CertificadoDigitalPage() {
   const db = useFirestore()
   const { activeProfile } = useProfile()
 
-  const configRef = useMemoFirebase(() => {
+  const configRef = useMemosupabase-mocks(() => {
     return db && activeProfile?.empresaId ? doc(db, "certificados_digitais", activeProfile.empresaId) : null
   }, [db, activeProfile?.empresaId])
   

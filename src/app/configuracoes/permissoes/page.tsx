@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useCollection, useMemoFirebase } from "@/firebase"
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where } from "firebase/firestore"
+import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { doc, getDoc, setDoc, serverTimestamp, collection, query, where } from "@/supabase-mocks/firestore"
 import { Shield, Save, CheckSquare, Square, Unlock, Lock, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -40,7 +40,7 @@ export default function PermissoesConfigPage() {
   const db = useFirestore()
   const { activeProfile } = useProfile()
 
-  const gruposQuery = useMemoFirebase(() => {
+  const gruposQuery = useMemosupabase-mocks(() => {
     if (!db || !activeProfile?.empresaId) return null
     return query(collection(db, "grupos_usuarios"), where("empresa_id", "==", activeProfile.empresaId))
   }, [db, activeProfile?.empresaId])
