@@ -15,7 +15,24 @@ model Company {
   nomeFantasia                         String                 @map("nome_fantasia")
   tipoPessoa                           String                 @default("PJ") @map("tipo_pessoa")
   telefone                             String?
+  whatsapp                             String?
   email                                String?
+  site                                 String?
+  inscricaoEstadual                    String?                @map("inscricao_estadual")
+  inscricaoMunicipal                    String?                @map("inscricao_municipal")
+  regimeTributario                     String?                @map("regime_tributario")
+  crt                                  String?
+  cnae                                 String?
+  cep                                  String?
+  logradouro                           String?
+  numero                               String?
+  complemento                          String?
+  bairro                               String?
+  cidade                               String?
+  uf                                   String?
+  nomeExibido                          String?                @map("nome_exibido")
+  observacoes                          String?                @db.Text
+  status                               String                 @default("ativo")
   createdAt                            DateTime               @default(now()) @map("created_at")
   updatedAt                            DateTime               @updatedAt @map("updated_at")
   allowNegativeStockOnManualAdjustment Boolean                @default(true) @map("allow_negative_stock_on_manual_adjustment")
