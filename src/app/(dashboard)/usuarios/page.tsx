@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { UserCog, Plus, Shield, Loader2, AlertCircle, Trash2, ShieldCheck, Pencil } from "lucide-react"
-import { useCollection, useFirestore, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useCollection, useFirestore, useMemoFirebase } from "@/supabase-mocks"
 import { collection, doc, setDoc, deleteDoc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
@@ -19,8 +19,8 @@ export default function UsuariosPage() {
   const [form, setForm] = useState({ uid: "", email: "", nome: "", role: "vendedor" })
   const [editingUid, setEditingUid] = useState<string | null>(null)
 
-  const adminQuery = useMemosupabase-mocks(() => db ? collection(db, "roles_admin") : null, [db])
-  const vendQuery = useMemosupabase-mocks(() => db ? collection(db, "vendedores") : null, [db])
+  const adminQuery = useMemoFirebase(() => db ? collection(db, "roles_admin") : null, [db])
+  const vendQuery = useMemoFirebase(() => db ? collection(db, "vendedores") : null, [db])
 
   const { data: admins, isLoading: isLoadAdmin, error: errorAdmin } = useCollection(adminQuery)
   const { data: vendedores, isLoading: isLoadVend, error: errorVend } = useCollection(vendQuery)

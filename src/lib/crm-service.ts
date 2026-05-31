@@ -12,7 +12,7 @@ import {
   limit,
   deleteDoc
 } from "@/supabase-mocks/firestore";
-import { seedCrmBasico } from "./seeds/crm";
+
 
 export interface CrmMetadata {
   tenant_id: string;

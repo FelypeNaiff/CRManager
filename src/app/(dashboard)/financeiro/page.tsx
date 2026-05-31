@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
 import { collection, query, where } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { format, startOfMonth, endOfMonth, parseISO, isBefore, isSameMonth, subMonths, startOfDay, getMonth } from "date-fns"
@@ -22,10 +22,10 @@ export default function FinanceiroDashboardPage() {
   const currentMonthEnd = endOfMonth(today)
 
   // Queries
-  const banksQuery = useMemosupabase-mocks(() => db ? collection(db, "bank_accounts") : null, [db])
-  const payablesQuery = useMemosupabase-mocks(() => db ? collection(db, "accounts_payable") : null, [db])
-  const receivablesQuery = useMemosupabase-mocks(() => db ? collection(db, "accounts_receivable") : null, [db])
-  const chartQuery = useMemosupabase-mocks(() => db ? collection(db, "chart_of_accounts") : null, [db])
+  const banksQuery = useMemoFirebase(() => db ? collection(db, "bank_accounts") : null, [db])
+  const payablesQuery = useMemoFirebase(() => db ? collection(db, "accounts_payable") : null, [db])
+  const receivablesQuery = useMemoFirebase(() => db ? collection(db, "accounts_receivable") : null, [db])
+  const chartQuery = useMemoFirebase(() => db ? collection(db, "chart_of_accounts") : null, [db])
 
   // Data fetching
   const { data: bankAccounts, isLoading: loadingBanks } = useCollection(banksQuery)

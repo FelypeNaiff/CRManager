@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
 import { collection, doc, writeBatch, serverTimestamp, query, where, orderBy } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -55,12 +55,12 @@ export default function TransferenciasPage() {
   const db = useFirestore()
 
   // Queries
-  const banksQuery = useMemosupabase-mocks(() => {
+  const banksQuery = useMemoFirebase(() => {
     if (!db) return null
     return collection(db, "bank_accounts")
   }, [db])
 
-  const transfersQuery = useMemosupabase-mocks(() => {
+  const transfersQuery = useMemoFirebase(() => {
     if (!db) return null
     return query(
       collection(db, "financial_transactions"), 

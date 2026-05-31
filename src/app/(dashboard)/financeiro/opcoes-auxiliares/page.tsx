@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -71,7 +71,7 @@ function PaymentMethodsTab({ db }: { db: any }) {
     receiptDays: 0,
   })
 
-  const colQuery = useMemosupabase-mocks(() => collection(db, "payment_methods"), [db])
+  const colQuery = useMemoFirebase(() => collection(db, "payment_methods"), [db])
   const { data, isLoading } = useCollection(colQuery)
 
   const filteredData = (data || []).filter((item: any) =>
@@ -260,7 +260,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
     parentId: "",
   })
 
-  const colQuery = useMemosupabase-mocks(() => collection(db, "chart_of_accounts"), [db])
+  const colQuery = useMemoFirebase(() => collection(db, "chart_of_accounts"), [db])
   const { data, isLoading } = useCollection(colQuery)
 
   const filteredData = (data || []).filter((item: any) =>
@@ -461,7 +461,7 @@ function CostCentersTab({ db }: { db: any }) {
 
   const [form, setForm] = useState({ name: "", description: "" })
 
-  const colQuery = useMemosupabase-mocks(() => collection(db, "cost_centers"), [db])
+  const colQuery = useMemoFirebase(() => collection(db, "cost_centers"), [db])
   const { data, isLoading } = useCollection(colQuery)
 
   const filteredData = (data || []).filter((item: any) =>

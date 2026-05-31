@@ -10,7 +10,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Package, Save, X, Info, UploadCloud, RefreshCw, Plus } from "lucide-react"
-import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
 import { collection, query, orderBy } from "@/supabase-mocks/firestore"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { toast } from "@/hooks/use-toast"
@@ -100,12 +100,12 @@ export default function NovoProdutoPage() {
     loadDependencies();
   }, [loadDependencies]);
 
-  const gradesQuery = useMemosupabase-mocks(() => {
+  const gradesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")) : null;
   }, [db]);
   const { data: grades } = useCollection(gradesQuery);
 
-  const unidadesQuery = useMemosupabase-mocks(() => {
+  const unidadesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")) : null;
   }, [db]);
   const { data: unidades } = useCollection(unidadesQuery);

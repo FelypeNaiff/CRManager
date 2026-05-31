@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
-import { useFirestore, useDoc, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useDoc, useMemoFirebase } from "@/supabase-mocks"
 import { doc, setDoc, serverTimestamp, collection, addDoc } from "@/supabase-mocks/firestore"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { permissoesSchema } from "@/types/configuracoes"
@@ -63,13 +63,13 @@ export default function PermissoesGrupoPage() {
   const { activeProfile } = useProfile()
 
   // Buscar Nome do Grupo
-  const grupoRef = useMemosupabase-mocks(() => {
+  const grupoRef = useMemoFirebase(() => {
     return db && activeProfile?.empresaId && grupoId ? doc(db, "grupos_usuarios", grupoId) : null
   }, [db, activeProfile?.empresaId, grupoId])
   const { data: grupoData } = useDoc(grupoRef)
 
   // Buscar Permissões atuais
-  const permRef = useMemosupabase-mocks(() => {
+  const permRef = useMemoFirebase(() => {
     return db && activeProfile?.empresaId && grupoId ? doc(db, "permissoes_grupo", grupoId) : null
   }, [db, activeProfile?.empresaId, grupoId])
   const { data: permData } = useDoc(permRef)

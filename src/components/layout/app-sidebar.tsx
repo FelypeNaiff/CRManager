@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useDoc, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useDoc, useMemoFirebase } from "@/supabase-mocks"
 import { doc } from "@/supabase-mocks/firestore"
 import {
   LayoutDashboard,
@@ -218,7 +218,7 @@ export function AppSidebar() {
   const pathname = usePathname()
   const { activeProfile, logoutProfile } = useProfile()
   const db = useFirestore()
-  const configRef = useMemosupabase-mocks(() => {
+  const configRef = useMemoFirebase(() => {
     return db && activeProfile?.empresaId ? doc(db, "configuracoes_empresa", activeProfile.empresaId) : null
   }, [db, activeProfile?.empresaId])
   const { data: empresaConfig } = useDoc(configRef)

@@ -47,7 +47,7 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu"
-import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 
@@ -79,7 +79,7 @@ export default function FornecedoresPage() {
   const [isSaving, setIsSaving] = useState(false)
   const db = useFirestore()
 
-  const fornecedoresQuery = useMemosupabase-mocks(() => {
+  const fornecedoresQuery = useMemoFirebase(() => {
     if (!db) return null
     return collection(db, "fornecedores")
   }, [db])

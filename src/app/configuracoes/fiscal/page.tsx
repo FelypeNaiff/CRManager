@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useFirestore, useDoc, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useDoc, useMemoFirebase } from "@/supabase-mocks"
 import { doc, setDoc, serverTimestamp, collection, addDoc } from "@/supabase-mocks/firestore"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { configuracoesFiscalSchema } from "@/types/configuracoes"
@@ -44,7 +44,7 @@ export default function FiscalConfigPage() {
   const db = useFirestore()
   const { activeProfile } = useProfile()
 
-  const configRef = useMemosupabase-mocks(() => {
+  const configRef = useMemoFirebase(() => {
     return db && activeProfile?.empresaId ? doc(db, "configuracoes_fiscal", activeProfile.empresaId) : null
   }, [db, activeProfile?.empresaId])
   

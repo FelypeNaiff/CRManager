@@ -5,7 +5,7 @@ import { FolderTree, Plus, Search, Pencil, Trash2, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 
@@ -17,7 +17,7 @@ export default function GruposProdutosPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ nome: "", descricao: "" })
 
-  const gruposQuery = useMemosupabase-mocks(() => {
+  const gruposQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "gruposProdutos"), orderBy("nome", "asc")) : null
   }, [db])
   const { data: grupos } = useCollection(gruposQuery)

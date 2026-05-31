@@ -38,7 +38,7 @@ import {
   FileText,
   Clock
 } from "lucide-react"
-import { useCollection, useMemosupabase-mocks, useFirestore } from "@/supabase-mocks"
+import { useCollection, useMemoFirebase, useFirestore } from "@/supabase-mocks"
 import { collection, query, where, getDocs, doc, getDoc, updateDoc } from "@/supabase-mocks/firestore"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { CrmService } from "@/lib/crm-service"
@@ -82,19 +82,19 @@ export default function TrocasDevolucoesPage() {
   const [useCatalogProduct, setUseCatalogProduct] = useState(false)
 
   // 1. Fetch Trocas & Devoluções
-  const returnsQuery = useMemosupabase-mocks(() => {
+  const returnsQuery = useMemoFirebase(() => {
     if (!db) return null
     return query(collection(db, "trocas_devolucoes"), where("tenant_id", "==", tenantId))
   }, [db, tenantId])
 
   // 2. Fetch Clients
-  const clientsQuery = useMemosupabase-mocks(() => {
+  const clientsQuery = useMemoFirebase(() => {
     if (!db) return null
     return query(collection(db, "clientes"), where("tenant_id", "==", tenantId), where("deleted_at", "==", null))
   }, [db, tenantId])
 
   // 3. Fetch Global Products (Catalogue fallback)
-  const productsQuery = useMemosupabase-mocks(() => {
+  const productsQuery = useMemoFirebase(() => {
     if (!db) return null
     return query(collection(db, "produtos"))
   }, [db])

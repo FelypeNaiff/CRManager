@@ -5,7 +5,7 @@ import { Layers, Plus, Search, Pencil, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
-import { useFirestore, useCollection, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useFirestore, useCollection, useMemoFirebase } from "@/supabase-mocks"
 import { collection, addDoc, updateDoc, deleteDoc, doc, serverTimestamp, query, orderBy } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 
@@ -17,7 +17,7 @@ export default function GradesVariacoesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [form, setForm] = useState({ nome: "", valores: "" })
 
-  const gradesQuery = useMemosupabase-mocks(() => {
+  const gradesQuery = useMemoFirebase(() => {
     return db ? query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")) : null
   }, [db])
   const { data: grades } = useCollection(gradesQuery)

@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
-import { useCollection, useFirestore, useMemosupabase-mocks } from "@/supabase-mocks"
+import { useCollection, useFirestore, useMemoFirebase } from "@/supabase-mocks"
 import { collection, query, orderBy } from "@/supabase-mocks/firestore"
 import { toast } from "@/hooks/use-toast"
 import {
@@ -90,7 +90,7 @@ export default function ProdutosPage() {
             imageUrl: p.imageUrl || "",
             thumbnailUrl: p.thumbnailUrl || "",
             galleryUrls: p.galleryUrls || [],
-            legacysupabase-mocksId: p.legacysupabase-mocksId,
+            legacyFirebaseId: p.legacyFirebaseId,
             createdAt: p.createdAt ? {
               toMillis: () => new Date(p.createdAt).getTime(),
               seconds: Math.floor(new Date(p.createdAt).getTime() / 1000)
