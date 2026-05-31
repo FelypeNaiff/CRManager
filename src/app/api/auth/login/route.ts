@@ -69,11 +69,11 @@ export async function POST(req: NextRequest) {
 
     const sessionData = {
       userId: user.id,
-      companyId: user.companyId,
-      name: user.nome,
+      companyId: user.companyId ?? '',
+      name: user.name,              // Prisma field is 'name', not 'nome'
       email: user.email,
       role: user.role?.name || 'USER',
-      isAdmin: user.role?.name === 'ADMIN',
+      isAdmin: user.role?.isAdmin === true || user.role?.name === 'ADMIN',
       permissions: permissionsMap,
     }
 
