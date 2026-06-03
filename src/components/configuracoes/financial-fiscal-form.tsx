@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -18,6 +19,7 @@ export default function FinancialFiscalForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [company, setCompany] = useState<any>(null);
+  const [initialData, setInitialData] = useState<any>(null);
 
   const [form, setForm] = useState({
     regimeApuracao: 'Competência',
@@ -38,7 +40,7 @@ export default function FinancialFiscalForm() {
         if (response.success && response.data) {
           const comp = response.data;
           setCompany(comp);
-          setForm({
+          const initialFormState = {
             regimeApuracao: comp.regimeApuracao || 'Competência',
             naturezaReceitaPadrao: comp.naturezaReceitaPadrao || '',
             naturezaDespesaPadrao: comp.naturezaDespesaPadrao || '',
@@ -48,7 +50,9 @@ export default function FinancialFiscalForm() {
             bancoPrincipal: comp.bancoPrincipal || '',
             agenciaPrincipal: comp.agenciaPrincipal || '',
             contaPrincipal: comp.contaPrincipal || '',
-          });
+          };
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -70,8 +74,14 @@ export default function FinancialFiscalForm() {
     loadCompanyData();
   }, [toast]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSaving(true);
     try {
       const payload = {
@@ -81,6 +91,8 @@ export default function FinancialFiscalForm() {
 
       const res = await updateCompanyAction(payload, 'financeiro-fiscal');
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setCompany(res.data);
         toast({
           title: 'Sucesso',
           description: 'Parâmetros financeiro-fiscais atualizados com sucesso.',
@@ -102,6 +114,8 @@ export default function FinancialFiscalForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -237,8 +251,17 @@ export default function FinancialFiscalForm() {
           </div>
         </ConfigCardSection>
 
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Configurações Financeiras" />
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 p-4 mt-6 bg-slate-50/90 backdrop-blur border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <ConfigFormActions 
+            isSaving={isSaving} 
+            isDirty={isDirty} 
+            onCancel={handleCancel} 
+            onSave={handleSave} 
+            saveLabel="Salvar Configurações Financeiras" 
+            updatedAt={company?.updatedAt}
+            updatedBy={company?.updatedBy}
+          />
         </div>
       </form>
     </div>

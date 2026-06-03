@@ -2,6 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { usePermissions } from "@/hooks/use-permissions"
 import { cn } from "@/lib/utils"
 import { 
   Building2, 
@@ -66,6 +67,9 @@ const configRoutes = [
 
 export function ConfigSidebar() {
   const pathname = usePathname()
+  const { canAccessRoute, isLoading } = usePermissions()
+
+  if (isLoading) return <div className="w-64 border-r bg-muted/10 h-full flex flex-col p-6 animate-pulse"><div className="h-4 bg-muted rounded w-3/4 mb-4"></div><div className="h-4 bg-muted rounded w-1/2"></div></div>
 
   return (
     <div className="w-64 border-r bg-muted/10 h-full flex flex-col">
@@ -75,6 +79,7 @@ export function ConfigSidebar() {
       </div>
       <div className="flex-1 overflow-y-auto px-4 space-y-1">
         {configRoutes.map((route) => {
+          if (!canAccessRoute(route.href)) return null;
           const isActive = pathname === route.href || pathname.startsWith(`${route.href}/`)
           return (
             <Link

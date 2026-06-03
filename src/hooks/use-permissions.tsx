@@ -1,141 +1,137 @@
-"use client"
+'use client';
 
-import { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from "react"
-import { useProfile } from "@/lib/contexts/profile-context"
-
-type PermissoesMatriz = Record<string, Record<string, boolean>>
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
+import { useProfile } from '@/lib/contexts/profile-context';
+import { PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
+import { usePathname } from 'next/navigation';
 
 interface PermissionsContextType {
-  matriz: PermissoesMatriz
-  isAdminRoot: boolean
-  isLoading: boolean
-  hasPermission: (modulo: string, acao: string) => boolean
-  canAccessRoute: (pathname: string) => boolean
-  hasRole: (role: string) => boolean
+  isAdmin: () => boolean;
+  isLoading: boolean;
+  can: (module: PermissionModule, action: PermissionAction) => boolean;
+  canAccessRoute: (pathname: string) => boolean;
+  canPerformAction: (permissionKey: string) => boolean;
+  hasAnyPermission: (permissions: { module: PermissionModule; action: PermissionAction }[]) => boolean;
+  hasAllPermissions: (permissions: { module: PermissionModule; action: PermissionAction }[]) => boolean;
 }
 
 const PermissionsContext = createContext<PermissionsContextType>({
-  matriz: {},
-  isAdminRoot: false,
+  isAdmin: () => false,
   isLoading: true,
-  hasPermission: () => false,
+  can: () => false,
   canAccessRoute: () => false,
-  hasRole: () => false,
-})
+  canPerformAction: () => false,
+  hasAnyPermission: () => false,
+  hasAllPermissions: () => false,
+});
 
 export function PermissionsProvider({ children }: { children: ReactNode }) {
-  const { activeProfile, isLoadingProfile } = useProfile()
+  const { activeProfile, isLoadingProfile } = useProfile();
   
-  const [matriz, setMatriz] = useState<PermissoesMatriz>({})
-  const [isAdminRoot, setIsAdminRoot] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
+  const [permissionsMap, setPermissionsMap] = useState<Record<string, boolean>>({});
+  const [isAdminRoot, setIsAdminRoot] = useState(false);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    if (isLoadingProfile) return
+    if (isLoadingProfile) return;
 
     if (!activeProfile) {
-      setMatriz({})
-      setIsAdminRoot(false)
-      setIsLoading(false)
-      return
+      setPermissionsMap({});
+      setIsAdminRoot(false);
+      setIsLoading(false);
+      return;
     }
 
-    setIsLoading(true)
+    setIsLoading(true);
     
-    // Define se é Admin Root com base no banco de dados (Prisma)
-    const isAdmin = !!activeProfile.isAdmin
-    setIsAdminRoot(isAdmin)
+    // Define se é Admin Root
+    const admin = !!activeProfile.isAdmin || !!activeProfile.isOwner;
+    setIsAdminRoot(admin);
 
-    // Reconstrói a matriz Record<Modulo, Record<Acao, Boolean>> a partir do dicionário de permissões
-    const newMatriz: PermissoesMatriz = {}
     if (activeProfile && activeProfile.permissions) {
-      const perms = activeProfile.permissions as Record<string, boolean>
-      Object.keys(perms).forEach((key) => {
-        const [module, action] = key.split(':')
-        if (module && action) {
-          if (!newMatriz[module]) {
-            newMatriz[module] = {}
-          }
-          newMatriz[module][action] = !!perms[key]
-        }
-      })
+      setPermissionsMap(activeProfile.permissions as Record<string, boolean>);
+    } else {
+      setPermissionsMap({});
     }
 
+    setIsLoading(false);
+  }, [activeProfile, isLoadingProfile]);
 
+  const can = useCallback((module: PermissionModule, action: PermissionAction) => {
+    if (isAdminRoot) return true;
+    const key = `${module}:${action}`;
+    return !!permissionsMap[key];
+  }, [isAdminRoot, permissionsMap]);
 
-    setMatriz(newMatriz)
-    setIsLoading(false)
-  }, [activeProfile, isLoadingProfile])
+  const canPerformAction = useCallback((permissionKey: string) => {
+    if (isAdminRoot) return true;
+    return !!permissionsMap[permissionKey];
+  }, [isAdminRoot, permissionsMap]);
 
-  const hasPermission = useCallback((modulo: string, acao: string) => {
-    if (isAdminRoot) return true
-    if (!matriz[modulo]) return false
-    return !!matriz[modulo][acao]
-  }, [isAdminRoot, matriz])
+  const canAccessRoute = useCallback((routePathname: string) => {
+    if (isAdminRoot) return true;
+    
+    const PUBLIC_PATHS = ['/login', '/selecionar-perfil', '/setup'];
+    const FREE_AUTH_PATHS = ['/dashboard', '/inbox', '/agenda'];
+    if (routePathname === '/') return true;
+    if (PUBLIC_PATHS.some(p => routePathname.startsWith(p))) return true;
+    if (FREE_AUTH_PATHS.some(p => routePathname.startsWith(p))) return true;
 
-  const canAccessRoute = useCallback((pathname: string) => {
-    if (isAdminRoot) return true
-    
-    // Mapeamento de Rotas Livres
-    if (pathname === "/" || pathname.startsWith("/dashboard")) return true
-    if (pathname.startsWith("/inbox") || pathname.startsWith("/agenda")) return true
-    if (pathname.startsWith("/selecionar-perfil")) return true
+    // Based on the middleware mapping:
+    if (routePathname.startsWith('/configuracoes/usuarios')) return can('USUARIOS', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/grupos-usuarios')) return can('GRUPOS_USUARIOS', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/permissoes')) return can('PERMISSOES', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/empresa') || routePathname.startsWith('/configuracoes/dados-empresa') || routePathname.startsWith('/configuracoes/minha-empresa')) return can('CONFIGURACOES_EMPRESA', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/configuracoes-operacionais')) return can('CONFIGURACOES_OPERACIONAIS', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/logs')) return can('LOGS', 'VIEW');
+    if (routePathname.startsWith('/configuracoes')) return can('CONFIGURACOES', 'VIEW');
 
-    // Mapeamento de Rotas para Módulos Oficiais
-    if (pathname.startsWith("/configuracoes/usuarios")) return hasPermission("Usuários", "visualizar")
-    if (pathname.startsWith("/configuracoes/grupos-usuarios")) return hasPermission("Grupos usuários", "visualizar")
-    if (pathname.startsWith("/configuracoes/permissoes")) return hasPermission("Permissões", "visualizar")
-    if (pathname.startsWith("/configuracoes/gerais")) return hasPermission("Configurações gerais", "visualizar")
-    if (pathname.startsWith("/configuracoes/pdv")) return hasPermission("Configurações PDV", "visualizar")
-    if (pathname.startsWith("/configuracoes/logs")) return hasPermission("Logs", "visualizar")
-    
-    // Rota Base Configurações (Fallback)
-    if (pathname.startsWith("/configuracoes")) return hasPermission("Configurações gerais", "visualizar") || hasPermission("Sistema", "visualizar")
-    
-    if (pathname.startsWith("/contas-a-pagar")) return hasPermission("Contas a pagar", "visualizar")
-    if (pathname.startsWith("/contas-a-receber")) return hasPermission("Contas a receber", "visualizar")
-    if (pathname.startsWith("/financeiro")) return hasPermission("Financeiro", "acessar")
-    
-    if (pathname.startsWith("/categorias")) return hasPermission("Categorias", "visualizar")
-    if (pathname.startsWith("/marcas")) return hasPermission("Marcas", "visualizar")
-    if (pathname.startsWith("/produtos")) return hasPermission("Produtos", "visualizar")
-    if (pathname.startsWith("/estoque")) return hasPermission("Estoque", "visualizar")
-    if (pathname.startsWith("/compras")) return hasPermission("Compras", "visualizar")
-    
-    if (pathname.startsWith("/fornecedores")) return hasPermission("Fornecedores", "visualizar")
-    if (pathname.startsWith("/clientes")) return hasPermission("Clientes", "visualizar")
-    if (pathname.startsWith("/filhos")) return hasPermission("Filhos", "visualizar") || hasPermission("Clientes", "visualizar")
-    
-    if (pathname.startsWith("/pdv")) return hasPermission("PDV", "visualizar")
-    if (pathname.startsWith("/caixa")) return hasPermission("Caixa", "visualizar")
-    if (pathname.startsWith("/vendas")) return hasPermission("Vendas", "visualizar")
-    if (pathname.startsWith("/orcamentos")) return hasPermission("Orçamentos", "visualizar")
-    if (pathname.startsWith("/trocas")) return hasPermission("Trocas", "visualizar")
-    if (pathname.startsWith("/devolucoes")) return hasPermission("Devoluções", "visualizar")
-    
-    if (pathname.startsWith("/relatorios")) return hasPermission("Relatórios", "visualizar")
-    if (pathname.startsWith("/crm")) return hasPermission("CRM", "visualizar")
+    if (routePathname.startsWith('/financeiro') || routePathname.startsWith('/carteira-saldos') || routePathname.startsWith('/contas-a-pagar') || routePathname.startsWith('/contas-a-receber')) return can('FINANCEIRO', 'VIEW');
+    if (routePathname.startsWith('/produtos')) return can('PRODUTOS', 'VIEW');
+    if (routePathname.startsWith('/estoque') || routePathname.startsWith('/movimentacoes')) return can('ESTOQUE', 'VIEW');
 
-    // Por segurança, se não caiu em nada e não é livre, oculta
-    return false
-  }, [isAdminRoot, hasPermission])
+    if (routePathname.startsWith('/clientes') || routePathname.startsWith('/aniversariantes') || routePathname.startsWith('/clientes-com-saldo')) return can('CLIENTES', 'VIEW');
+    if (routePathname.startsWith('/filhos')) return can('FILHOS', 'VIEW');
+    if (routePathname.startsWith('/crm/carteira') || routePathname.startsWith('/wallet')) return can('CARTEIRA', 'VIEW');
+    if (routePathname.startsWith('/crm')) return can('CRM', 'VIEW');
 
-  const hasRole = useCallback((role: string) => {
-    if (isAdminRoot) return role === "admin";
-    return false; // Roles are managed by isAdmin flag and permissions
-  }, [isAdminRoot])
+    if (routePathname.startsWith('/pdv')) return can('PDV', 'VIEW');
+    if (routePathname.startsWith('/caixa') || routePathname.startsWith('/financeiro/caixas')) return can('CAIXA', 'VIEW');
+    if (routePathname.startsWith('/vendas') || routePathname.startsWith('/comercial/vendas') || routePathname.startsWith('/comercial')) return can('VENDAS', 'VIEW');
+
+    if (routePathname.startsWith('/trocas') || routePathname.startsWith('/comercial/trocas')) return can('TROCAS', 'VIEW');
+    if (routePathname.startsWith('/devolucoes') || routePathname.startsWith('/returns') || routePathname.startsWith('/vendas/devolucoes')) return can('DEVOLUCOES', 'VIEW');
+
+    if (routePathname.startsWith('/relatorios') || routePathname.startsWith('/comercial/relatorios')) return can('RELATORIOS', 'VIEW');
+
+    return false;
+  }, [isAdminRoot, can]);
+
+  const hasAnyPermission = useCallback((permissions: { module: PermissionModule; action: PermissionAction }[]) => {
+    if (isAdminRoot) return true;
+    return permissions.some(p => can(p.module, p.action));
+  }, [isAdminRoot, can]);
+
+  const hasAllPermissions = useCallback((permissions: { module: PermissionModule; action: PermissionAction }[]) => {
+    if (isAdminRoot) return true;
+    return permissions.every(p => can(p.module, p.action));
+  }, [isAdminRoot, can]);
+
+  const isAdmin = useCallback(() => {
+    return isAdminRoot;
+  }, [isAdminRoot]);
 
   const contextValue = useMemo(() => ({
-    matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute, hasRole
-  }), [matriz, isAdminRoot, isLoading, hasPermission, canAccessRoute, hasRole])
+    isAdmin, isLoading, can, canAccessRoute, canPerformAction, hasAnyPermission, hasAllPermissions
+  }), [isAdmin, isLoading, can, canAccessRoute, canPerformAction, hasAnyPermission, hasAllPermissions]);
 
   return (
     <PermissionsContext.Provider value={contextValue}>
       {children}
     </PermissionsContext.Provider>
-  )
+  );
 }
 
 export function usePermissions() {
-  return useContext(PermissionsContext)
+  return useContext(PermissionsContext);
 }

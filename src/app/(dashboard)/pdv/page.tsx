@@ -14,6 +14,8 @@ import { Input } from "@/components/ui/input";
 import { Search, Plus, Trash2, ShoppingCart, User, CreditCard, X } from "lucide-react";
 import Link from "next/link";
 
+import { AuthorizationDialog } from "@/components/authorization/authorization-dialog";
+
 export default function PDVPage() {
   const router = useRouter();
   const { activeProfile } = useProfile();
@@ -155,10 +157,23 @@ export default function PDVPage() {
         alert("Selecione o cliente para usar a carteira digital.");
         return;
       }
+      if (settings && !settings.enableCustomerWallet) {
+        alert("Carteira digital do cliente desativada nas configurações operacionais.");
+        return;
+      }
       const balance = Number(selectedCustomer.wallet?.balance || 0);
       if (balance < amount) {
         alert(`Saldo insuficiente na carteira (Saldo: R$ ${balance.toFixed(2)}).`);
         return;
+      }
+
+      // Validar saldo parcial
+      if (settings && !settings.allowPartialWalletUsage) {
+        const requiredAmount = Math.min(balance, remainingToPay);
+        if (Math.abs(amount - requiredAmount) > 0.01) {
+          alert(`Uso de saldo parcial desativado. Você deve utilizar o saldo integral (R$ ${requiredAmount.toFixed(2)}).`);
+          return;
+        }
       }
     }
 
@@ -209,8 +224,8 @@ export default function PDVPage() {
         amount: p.amount,
         installments: p.installments
       })),
-      authPin: pin,
-      authReason: reason
+      authReason: reason,
+      authorizationId: pin
     });
 
     setLoading(false);
@@ -226,10 +241,9 @@ export default function PDVPage() {
       setAuthReason("");
       router.push(`/comercial/vendas/${res.sale!.id}`);
     } else {
-      if (res.error?.includes("excede o limite permitido")) {
+      if (res.requireAuthorization) {
+        setAuthPin(res.authorizationId);
         setShowPinModal(true);
-      } else if (res.error?.includes("PIN de autorização inválido") && showPinModal) {
-        setPinError(res.error);
       } else {
         alert("Erro ao finalizar venda:\n" + res.error);
       }
@@ -467,6 +481,45 @@ export default function PDVPage() {
                   <Button onClick={addPayment} className="h-9 px-3 bg-green-600 hover:bg-green-500"><Plus className="w-4 h-4"/></Button>
                 </div>
 
+                {(() => {
+                  const pm = paymentMethods.find(m => m.id === selectedPaymentMethod);
+                  if (pm?.type === "CUSTOMER_WALLET" && selectedCustomer) {
+                    const walletBalance = Number(selectedCustomer.wallet?.balance || 0);
+                    const maxUse = Math.min(walletBalance, remainingToPay);
+                    return (
+                      <div className="w-full flex justify-between items-center gap-2 mt-2 bg-slate-800 p-2 rounded border border-slate-700 text-xs">
+                        <span className="text-slate-300 font-semibold">Disponível: {formatCurrency(walletBalance)}</span>
+                        <div className="flex gap-1.5">
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="bg-indigo-600 hover:bg-indigo-500 h-7 text-[10px]"
+                            onClick={() => {
+                              setPaymentAmount(maxUse.toFixed(2));
+                            }}
+                          >
+                            Usar Saldo Total
+                          </Button>
+                          {settings?.allowPartialWalletUsage !== false && (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="h-7 text-[10px] text-white border-slate-600 hover:bg-slate-700"
+                              onClick={() => {
+                                setPaymentAmount((maxUse / 2).toFixed(2));
+                              }}
+                            >
+                              Usar Parcial (50%)
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 <div className="space-y-2 mt-2 max-h-24 overflow-y-auto">
                   {payments.map((p, idx) => (
                     <div key={idx} className="flex justify-between items-center bg-slate-800 p-2 rounded text-sm">
@@ -500,47 +553,25 @@ export default function PDVPage() {
         </div>
       </div>
 
-      {/* Auth PIN Modal */}
       {showPinModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-          <Card className="w-full max-w-sm">
-            <CardHeader>
-              <CardTitle>Autorização Necessária</CardTitle>
-            </CardHeader>
-            <CardContent className="flex flex-col gap-4">
-              <p className="text-sm text-slate-600">O desconto aplicado excede o seu limite. Solicite a autorização de um administrador.</p>
-              
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500">PIN do Administrador</label>
-                <Input 
-                  type="password" 
-                  value={authPin} 
-                  onChange={e => setAuthPin(e.target.value)} 
-                  placeholder="******" 
-                  autoFocus 
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-xs font-bold text-slate-500">Motivo (Opcional)</label>
-                <Input 
-                  value={authReason} 
-                  onChange={e => setAuthReason(e.target.value)} 
-                  placeholder="Ex: Cliente VIP..." 
-                />
-              </div>
-
-              {pinError && <p className="text-sm text-red-500 font-bold">{pinError}</p>}
-
-              <div className="flex justify-end gap-2 mt-4">
-                <Button variant="outline" onClick={() => { setShowPinModal(false); setPinError(""); }}>Cancelar</Button>
-                <Button onClick={() => handleFinalize(authPin, authReason)} disabled={loading || !authPin}>
-                  {loading ? "Validando..." : "Autorizar"}
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        <AuthorizationDialog
+          open={showPinModal}
+          onOpenChange={setShowPinModal}
+          authorizationId={authPin} // Note: state variable is named authPin, but it holds the authorizationId
+          authorizationType="DISCOUNT"
+          title="Desconto acima do limite"
+          description="O desconto aplicado excede o seu limite de alçada. Solicite a aprovação gerencial."
+          amount={globalDiscount + itemsDiscount}
+          percentage={subtotal > 0 ? ((globalDiscount + itemsDiscount) / subtotal) * 100 : 0}
+          onAuthorized={(authRecord) => {
+            handleFinalize(authRecord.id);
+          }}
+          onRejected={() => {
+            alert('A autorização de desconto foi rejeitada.');
+            setGlobalDiscount(0);
+            setShowPinModal(false);
+          }}
+        />
       )}
     </div>
   );

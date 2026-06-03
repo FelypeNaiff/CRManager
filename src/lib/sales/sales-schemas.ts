@@ -32,14 +32,15 @@ export const createSaleSchema = z.object({
     amount: z.number().min(0.01),
     installments: z.number().int().min(1).optional().default(1)
   })).min(1),
-  authPin: z.string().optional(),
+  authorizationId: z.string().optional(),
   authReason: z.string().optional()
 });
 
 export const cancelSaleSchema = z.object({
   saleId: z.string(),
   cancelReason: z.string().min(3),
-  cancelledByUserId: z.string()
+  cancelledByUserId: z.string(),
+  authorizationId: z.string().optional()
 });
 
 export const exchangeReturnSchema = z.object({

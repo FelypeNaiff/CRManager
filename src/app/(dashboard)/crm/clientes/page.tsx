@@ -66,6 +66,7 @@ import {
 } from "lucide-react"
 
 import { toast } from "@/hooks/use-toast"
+import { AuthorizationDialog } from "@/components/authorization/authorization-dialog"
 import { useProfile } from "@/lib/contexts/profile-context"
 import {
   getCustomers,
@@ -83,6 +84,7 @@ import {
   getWalletHistory,
   getCustomerExchangeReturns
 } from "@/lib/crm/actions"
+import { getCustomerWalletAction, createManualAdjustmentAction } from "@/lib/wallet/wallet-actions"
 
 // Standard Brazilian phone mask helper
 function formatPhone(v: string): string {
@@ -176,15 +178,41 @@ export default function ClientesPage() {
   const [walletInfo, setWalletInfo] = useState<any>(null)
   const [walletHistory, setWalletHistory] = useState<any[]>([])
 
-  // Dynamic ledger-calculated wallet balance
-  const computedBalanceFromExtrato = useMemo(() => {
-    if (!walletHistory || walletHistory.length === 0) return 0
-    return walletHistory.reduce((acc, move) => {
-      const val = move.valor || 0
-      const isPositive = move.tipo_movimentacao === "ENTRADA"
-      return isPositive ? acc + val : acc - val
-    }, 0)
-  }, [walletHistory])
+  // Wallet filter states
+  const [walletFilterStartDate, setWalletFilterStartDate] = useState("")
+  const [walletFilterEndDate, setWalletFilterEndDate] = useState("")
+  const [walletFilterType, setWalletFilterType] = useState("ALL")
+  const [walletFilterOrigin, setWalletFilterOrigin] = useState("ALL")
+
+  const loadWalletData = useCallback(async (customerId: string) => {
+    if (!customerId) return
+    const filters: any = {}
+    if (walletFilterStartDate) filters.startDate = new Date(walletFilterStartDate + "T00:00:00")
+    if (walletFilterEndDate) filters.endDate = new Date(walletFilterEndDate + "T23:59:59")
+    if (walletFilterType !== "ALL") filters.type = walletFilterType
+    if (walletFilterOrigin !== "ALL") filters.origin = walletFilterOrigin
+
+    const res = await getCustomerWalletAction(customerId, filters)
+    if (res.success && res.wallet) {
+      setWalletInfo({
+        id: res.wallet.id,
+        saldo_atual: res.wallet.balance,
+        total_creditos: res.totalCredits || 0,
+        total_debitos: res.totalDebits || 0
+      })
+      setWalletHistory(res.transactions || [])
+    } else {
+      setWalletInfo(null)
+      setWalletHistory([])
+    }
+  }, [walletFilterStartDate, walletFilterEndDate, walletFilterType, walletFilterOrigin])
+
+  // Trigger reload when filters change
+  useEffect(() => {
+    if (selectedCustomer?.id && isDetailsOpen) {
+      loadWalletData(selectedCustomer.id)
+    }
+  }, [selectedCustomer?.id, isDetailsOpen, loadWalletData])
 
   const [returnsHistory, setReturnsHistory] = useState<any[]>([])
   const [availableTags, setAvailableTags] = useState<any[]>([])
@@ -196,6 +224,8 @@ export default function ClientesPage() {
   const [adjustType, setAdjustType] = useState<"ENTRADA" | "SAIDA">("ENTRADA")
   const [adjustReason, setAdjustReason] = useState("")
   const [isSavingWallet, setIsSavingWallet] = useState(false)
+  const [authorizationId, setAuthorizationId] = useState("")
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
 
   // Quick Child Addition inside details abas
   const [isQuickAddFilhoOpen, setIsQuickAddFilhoOpen] = useState(false)
@@ -433,39 +463,19 @@ export default function ClientesPage() {
       }
 
       // 3. Wallet details
-      if (customer.wallet) {
-        const wInfo = {
-          id: customer.wallet.id,
-          saldo_atual: Number(customer.wallet.balance)
-        }
-        setWalletInfo(wInfo)
+      await loadWalletData(customer.id)
 
-        // 4. Wallet movements
-        const walletMoves = await getWalletHistory(customer.wallet.id)
-        if (walletMoves.success && walletMoves.data) {
-          setWalletHistory(walletMoves.data.map((m: any) => ({
-            id: m.id,
-            tipo_movimentacao: m.type === 'credit' ? 'ENTRADA' : 'SAIDA',
-            origem: m.reason?.includes('AJUSTE') ? 'AJUSTE_MANUAL' : 'SISTEMA',
-            valor: Number(m.amount),
-            observacao: m.reason || "",
-            usuario_responsavel: "Operador",
-            created_at: { seconds: new Date(m.createdAt).getTime() / 1000 }
-          })))
-        }
-      } else {
-        setWalletInfo(null)
-        setWalletHistory([])
-      }
-
-      // 5. Returns (Prisma server action instead of Firebase Firestore)
+      // 5. Returns & Exchanges — using new SaleExchange + SaleReturn tables (Fase 1 migration)
       const returnsRes = await getCustomerExchangeReturns(customer.id)
       if (returnsRes.success && returnsRes.data) {
         setReturnsHistory(returnsRes.data.map((r: any) => ({
           id: r.id,
+          type: r.type, // 'EXCHANGE' | 'RETURN'
           venda_id: r.originalSaleId,
           vendedor_nome: "Sistema",
           valor_credito: Number(r.totalCredit),
+          refundMethod: r.refundMethod,
+          financialProcessed: r.financialProcessed,
           created_at: { seconds: new Date(r.createdAt).getTime() / 1000 }
         })))
       }
@@ -635,8 +645,7 @@ export default function ClientesPage() {
     }
   }
 
-  // Manual adjustment wallet balance
-  const handleSaveWalletAdjustment = async () => {
+  const handleSaveWalletAdjustment = async (authId?: string) => {
     if (!adjustAmount || Number(adjustAmount) <= 0) {
       return toast({ variant: "destructive", title: "Valor inv├ílido" })
     }
@@ -647,11 +656,12 @@ export default function ClientesPage() {
 
     setIsSavingWallet(true)
     try {
-      const res = await adjustWalletBalance({
+      const res = await createManualAdjustmentAction({
         customerId: selectedCustomer.id,
         amount: Number(adjustAmount),
         type: adjustType === "ENTRADA" ? "credit" : "debit",
-        reason: adjustReason
+        reason: adjustReason,
+        authorizationId: authId
       })
 
       if (res.success) {
@@ -665,8 +675,15 @@ export default function ClientesPage() {
         setIsAdjustingWallet(false)
         setAdjustAmount("")
         setAdjustReason("")
+        setAuthorizationId("")
+        setShowAuthDialog(false)
       } else {
-        toast({ variant: "destructive", title: "Erro ao processar ajuste", description: res.error })
+        if (res.requireAuthorization) {
+          setAuthorizationId(res.authorizationId)
+          setShowAuthDialog(true)
+        } else {
+          toast({ variant: "destructive", title: "Erro ao processar ajuste", description: res.error })
+        }
       }
     } catch (e) {
       console.error(e)
@@ -1124,8 +1141,7 @@ export default function ClientesPage() {
                           </div>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-1.5 flex-wrap mt-3">
+                          <div className="flex items-center gap-1.5 flex-wrap mt-3">
                         <Badge variant="outline" className={`text-[8px] h-4 ${filho.sexo === "M" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-pink-50 text-pink-700 border-pink-200"}`}>
                           {filho.sexo === "M" ? "Menino" : "Menina"}
                         </Badge>
@@ -1134,7 +1150,7 @@ export default function ClientesPage() {
                         </Badge>
                         {filho.tamanho_calcado && (
                           <Badge variant="outline" className="text-[8px] h-4 bg-indigo-50 text-indigo-700 border-indigo-100">
-                            Cal├ºado: {filho.tamanho_calcado}
+                            Calçado: {filho.tamanho_calcado}
                           </Badge>
                         )}
                       </div>
@@ -1143,53 +1159,129 @@ export default function ClientesPage() {
                 </div>
               )}
             </TabsContent>
-
-            {/* TAB: Carteira de Cr├®ditos */}
+            
+            {/* TAB: Carteira de Créditos */}
             <TabsContent value="carteira" className="space-y-4 pt-4 text-xs">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-indigo-50/50 p-4 border rounded-xl">
-                <div>
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo Dispon├¡vel</span>
-                  <strong className="text-2xl text-indigo-600 block mt-1">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</strong>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="bg-indigo-50/50 p-4 border border-indigo-100 rounded-xl flex flex-col justify-between">
+                  <div>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo Disponível</span>
+                    <strong className="text-2xl text-indigo-600 block mt-1">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</strong>
+                  </div>
+                  <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 mt-3 w-full" onClick={() => setIsAdjustingWallet(true)}>
+                    <PlusCircle className="h-4 w-4" /> Ajuste Manual
+                  </Button>
                 </div>
 
-                <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 self-start sm:self-auto" onClick={() => setIsAdjustingWallet(true)}>
-                  <PlusCircle className="h-4 w-4" /> Ajuste Manual de Saldo
-                </Button>
+                <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-xl">
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Créditos (Filtro)</span>
+                  <strong className="text-2xl text-emerald-600 block mt-1">R$ {walletInfo?.total_creditos?.toFixed(2) || "0.00"}</strong>
+                </div>
+
+                <div className="bg-rose-50/50 p-4 border border-rose-100 rounded-xl">
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Débitos (Filtro)</span>
+                  <strong className="text-2xl text-rose-600 block mt-1">R$ {walletInfo?.total_debitos?.toFixed(2) || "0.00"}</strong>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <h4 className="font-bold text-slate-800 text-sm">Hist├│rico do Extrato</h4>
+              {/* Filtros */}
+              <div className="bg-slate-50 p-3 rounded-xl border grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Início</label>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs bg-white"
+                    value={walletFilterStartDate}
+                    onChange={e => setWalletFilterStartDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Fim</label>
+                  <Input
+                    type="date"
+                    className="h-8 text-xs bg-white"
+                    value={walletFilterEndDate}
+                    onChange={e => setWalletFilterEndDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Tipo</label>
+                  <select
+                    className="w-full border rounded h-8 px-2 text-xs bg-white"
+                    value={walletFilterType}
+                    onChange={e => setWalletFilterType(e.target.value)}
+                  >
+                    <option value="ALL">Todos os Tipos</option>
+                    <option value="CREDIT">Crédito (Manual)</option>
+                    <option value="DEBIT">Débito</option>
+                    <option value="BONUS">Bônus</option>
+                    <option value="ADJUSTMENT">Ajuste</option>
+                    <option value="REFUND">Reembolso</option>
+                    <option value="EXCHANGE">Troca</option>
+                    <option value="EXPIRATION">Expiração</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Origem</label>
+                  <select
+                    className="w-full border rounded h-8 px-2 text-xs bg-white"
+                    value={walletFilterOrigin}
+                    onChange={e => setWalletFilterOrigin(e.target.value)}
+                  >
+                    <option value="ALL">Todas as Origens</option>
+                    <option value="sale">Vendas</option>
+                    <option value="exchange">Trocas</option>
+                    <option value="return">Devoluções</option>
+                    <option value="manual">Ajustes Manuais</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="space-y-2 mt-4">
+                <h4 className="font-bold text-slate-800 text-sm">Histórico do Extrato</h4>
                 {walletHistory.length === 0 ? (
-                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimenta├º├úo registrada.</p>
+                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentação registrada.</p>
                 ) : (
-                  <div className="border rounded-xl divide-y bg-white">
-                    {walletHistory.map((move, idx) => (
-                      <div key={idx} className="p-3 flex items-center justify-between">
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <span className={`font-bold uppercase ${move.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}`}>
-                              {move.tipo_movimentacao}
+                  <div className="border rounded-xl divide-y bg-white max-h-64 overflow-y-auto">
+                    {walletHistory.map((tx, idx) => {
+                      const isNegative = tx.type === "DEBIT" || tx.type === "EXPIRATION";
+                      const colorClass = isNegative ? "text-rose-600" : "text-emerald-600";
+                      
+                      return (
+                        <div key={tx.id || idx} className="p-3 flex items-center justify-between hover:bg-slate-50 transition-colors">
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <Badge variant="outline" className={`text-[8px] font-bold h-4 ${isNegative ? "bg-rose-50 border-rose-200 text-rose-700" : "bg-emerald-50 border-emerald-200 text-emerald-700"}`}>
+                                {tx.type}
+                              </Badge>
+                              {tx.expiresAt && !isNegative && (
+                                <span className="text-[9px] text-amber-600 font-semibold bg-amber-50 px-1 rounded border border-amber-100">
+                                  Validade: {new Date(tx.expiresAt).toLocaleDateString("pt-BR")}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-[10px] font-medium text-slate-800 mt-1">{tx.description || "Sem descrição"}</p>
+                            <span className="text-[9px] text-slate-400 block mt-0.5">
+                              Saldos: R$ {tx.balanceBefore?.toFixed(2)} &rarr; R$ {tx.balanceAfter?.toFixed(2)}
                             </span>
-                            <Badge variant="outline" className="text-[8px] font-normal h-4">{move.origem}</Badge>
                           </div>
-                          <p className="text-[10px] text-muted-foreground mt-0.5">Motivo: {move.observacao}</p>
+                          <div className="text-right">
+                            <strong className={`text-sm ${colorClass}`}>
+                              {isNegative ? "-" : "+"} R$ {tx.amount?.toFixed(2)}
+                            </strong>
+                            <p className="text-[9px] text-slate-400 mt-0.5">
+                              {new Date(tx.createdAt).toLocaleString("pt-BR")}
+                            </p>
+                          </div>
                         </div>
-                        <div className="text-right">
-                          <strong className={move.tipo_movimentacao === 'ENTRADA' ? 'text-emerald-600' : 'text-rose-600'}>
-                            {move.tipo_movimentacao === 'ENTRADA' ? '+' : '-'} R$ {move.valor?.toFixed(2)}
-                          </strong>
-                          <p className="text-[9px] text-slate-400 mt-0.5">
-                            {move.created_at ? new Date(move.created_at.seconds * 1000).toLocaleString("pt-BR") : ""}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>
             </TabsContent>
 
-            {/* TAB: Trocas e Devolu├º├Áes */}
+            {/* TAB: Trocas e Devoluções */}
             <TabsContent value="trocas" className="space-y-4 pt-4 text-xs">
               <h3 className="font-bold text-slate-800 text-sm">Hist├│rico de Trocas (PDV)</h3>
               {returnsHistory.length === 0 ? (
@@ -1327,16 +1419,28 @@ export default function ClientesPage() {
               <Label>Justificativa Obrigat├│ria</Label>
               <Input placeholder="Ex: Ajuste manual" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} />
             </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" size="sm" onClick={() => setIsAdjustingWallet(false)}>
+                Cancelar
+              </Button>
+              <Button size="sm" className="bg-indigo-600 hover:bg-indigo-500" onClick={() => handleSaveWalletAdjustment()} disabled={isSavingWallet}>
+                {isSavingWallet ? <Loader2 className="h-4 w-4 animate-spin" /> : "Confirmar Ajuste"}
+              </Button>
+            </div>
           </div>
-          <DialogFooter className="border-t pt-3">
-            <Button variant="outline" onClick={() => setIsAdjustingWallet(false)}>Cancelar</Button>
-            <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSaveWalletAdjustment} disabled={isSavingWallet}>
-              {isSavingWallet && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              Aplicar
-            </Button>
-          </DialogFooter>
         </DialogContent>
       </Dialog>
+      <AuthorizationDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        authorizationId={authorizationId}
+        authorizationType={adjustType === "ENTRADA" ? "WALLET_CREDIT" : "WALLET_DEBIT"}
+        title="Autorização de Ajuste"
+        description="Este ajuste manual de saldo exige aprovação de um gerente."
+        amount={Number(adjustAmount)}
+        onAuthorized={(auth) => handleSaveWalletAdjustment(auth.id)}
+      />
+
     </div>
   )
 }

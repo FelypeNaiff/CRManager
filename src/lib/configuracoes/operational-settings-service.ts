@@ -118,6 +118,11 @@ export const OperationalSettingsService = {
         enableCustomerWallet: data.enableCustomerWallet,
         walletExpirationDays: data.walletExpirationDays ? Number(data.walletExpirationDays) : null,
         allowPartialWalletUsage: data.allowPartialWalletUsage,
+        walletDefaultRefundMethod: data.walletDefaultRefundMethod,
+        walletAllowManualCredit: data.walletAllowManualCredit,
+        walletAllowManualDebit: data.walletAllowManualDebit,
+        returnRequireAuthorization: data.returnRequireAuthorization,
+        exchangeRequireAuthorization: data.exchangeRequireAuthorization,
       },
       create: {
         companyId,
@@ -149,6 +154,11 @@ export const OperationalSettingsService = {
         enableCustomerWallet: data.enableCustomerWallet,
         walletExpirationDays: data.walletExpirationDays ? Number(data.walletExpirationDays) : null,
         allowPartialWalletUsage: data.allowPartialWalletUsage,
+        walletDefaultRefundMethod: data.walletDefaultRefundMethod,
+        walletAllowManualCredit: data.walletAllowManualCredit,
+        walletAllowManualDebit: data.walletAllowManualDebit,
+        returnRequireAuthorization: data.returnRequireAuthorization,
+        exchangeRequireAuthorization: data.exchangeRequireAuthorization,
       },
     });
   },

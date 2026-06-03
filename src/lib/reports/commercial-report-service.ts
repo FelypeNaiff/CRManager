@@ -65,18 +65,21 @@ export class CommercialReportService {
       }
     }
 
-    const returns = await prisma.exchangeReturn.findMany({
+    const salesForMetrics = await prisma.sale.findMany({
       where: { companyId: filters.companyId, ...dateFilter },
-      include: { items: true }
+      select: { id: true }
+    });
+    const saleIdsForMetrics = salesForMetrics.map(s => s.id);
+
+    const exchangesCount = await prisma.saleExchange.count({
+      where: { originalSaleId: { in: saleIdsForMetrics } }
+    });
+    const returnsCount = await prisma.saleReturn.count({
+      where: { originalSaleId: { in: saleIdsForMetrics } }
     });
 
-    let totalReturns = 0;
-    let totalExchanges = 0;
-
-    for (const r of returns) {
-      if (r.type === "RETURN") totalReturns++;
-      if (r.type === "EXCHANGE") totalExchanges++;
-    }
+    const totalReturns = returnsCount;
+    const totalExchanges = exchangesCount;
 
     const ticketMedio = totalSalesCount > 0 ? netRevenue / totalSalesCount : 0;
     const margemBruta = netRevenue - totalCost;
@@ -263,14 +266,19 @@ export class CommercialReportService {
   async getReturnsReport(filters: ReportFilters) {
     const dateFilter = this.getDateFilter(filters);
     
-    const returns = await prisma.exchangeReturn.findMany({
-      where: {
-        companyId: filters.companyId,
-        ...dateFilter
-      },
-      include: {
-        items: true
-      },
+    const sales = await prisma.sale.findMany({
+      where: { companyId: filters.companyId, ...dateFilter },
+      select: { id: true }
+    });
+    const saleIds = sales.map(s => s.id);
+
+    const exchanges = await prisma.saleExchange.findMany({
+      where: { originalSaleId: { in: saleIds } },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    const returns = await prisma.saleReturn.findMany({
+      where: { originalSaleId: { in: saleIds } },
       orderBy: { createdAt: 'desc' }
     });
 
@@ -278,28 +286,53 @@ export class CommercialReportService {
     const reasonsMap = new Map<string, number>();
     const itemsMap = new Map<string, number>();
 
-    for (const r of returns) {
-      totalReturned += r.totalCredit.toNumber();
-      const reason = r.exchangeReason || "Não informado";
+    const parseNotesAndItems = (notes: string | null, type: "EXCHANGE" | "RETURN", date: Date, id: string, amount: number) => {
+      let reason = "Não informado";
+      let itemsList: any[] = [];
+      try {
+        if (notes) {
+          const parsed = JSON.parse(notes);
+          reason = parsed.reason || "Não informado";
+          itemsList = parsed.items || [];
+        }
+      } catch {
+        reason = notes || "Não informado";
+      }
+
+      totalReturned += amount;
       reasonsMap.set(reason, (reasonsMap.get(reason) || 0) + 1);
 
-      for (const item of r.items) {
-        itemsMap.set(item.variantId, (itemsMap.get(item.variantId) || 0) + item.quantity.toNumber());
+      for (const item of itemsList) {
+        itemsMap.set(item.variantId, (itemsMap.get(item.variantId) || 0) + Number(item.quantity));
       }
-    }
+
+      return {
+        id,
+        date,
+        type,
+        reason,
+        creditGenerated: amount,
+        status: notes?.startsWith("[CANCELADO]") ? "CANCELLED" : "COMPLETED"
+      };
+    };
+
+    const mappedExchanges = exchanges.map(ex => 
+      parseNotesAndItems(ex.notes, "EXCHANGE", ex.createdAt, ex.id, Number(ex.creditGenerated))
+    );
+
+    const mappedReturns = returns.map(ret => 
+      parseNotesAndItems(ret.notes, "RETURN", ret.createdAt, ret.id, Number(ret.totalAmount))
+    );
+
+    const combinedList = [...mappedExchanges, ...mappedReturns].sort((a, b) => 
+      b.date.getTime() - a.date.getTime()
+    );
 
     return {
-      returnsList: returns.map(r => ({
-        id: r.id,
-        date: r.createdAt,
-        type: r.type,
-        reason: r.exchangeReason,
-        creditGenerated: r.totalCredit.toNumber(),
-        status: r.status
-      })),
+      returnsList: combinedList,
       totalReturned,
       reasonsMap: Object.fromEntries(reasonsMap),
-      itemsCountMap: Object.fromEntries(itemsMap) // Will need product info for UI
+      itemsCountMap: Object.fromEntries(itemsMap)
     };
   }
 

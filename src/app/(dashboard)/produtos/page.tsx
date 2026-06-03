@@ -21,6 +21,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { MovimentacoesModal } from "@/components/produtos/MovimentacoesModal"
+import { AuthorizationDialog } from "@/components/authorization/authorization-dialog"
 import {
   getProducts,
   getProductCategories,
@@ -56,6 +57,10 @@ export default function ProdutosPage() {
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [viewingProduto, setViewingProduto] = useState<any>(null)
   const [historicoValores, setHistoricoValores] = useState<any[]>([])
+
+  const [authorizationId, setAuthorizationId] = useState("")
+  const [showAuthDialog, setShowAuthDialog] = useState(false)
+  const [authType, setAuthType] = useState<"STOCK_ADJUST" | "NEGATIVE_STOCK">("STOCK_ADJUST")
 
   const [produtos, setProdutos] = useState<any[] | null>(null)
   const [grupos, setGrupos] = useState<any[] | null>(null)
@@ -254,7 +259,7 @@ export default function ProdutosPage() {
     setIsStockModalOpen(true)
   }
 
-  const handleSaveStock = async () => {
+  const handleSaveStock = async (authId?: string) => {
     if (!stockProduto) return
     setIsSaving(true)
     try {
@@ -269,15 +274,24 @@ export default function ProdutosPage() {
           quantity: diff,
           type: 'MANUAL_ADJUSTMENT',
           reason: 'Ajuste manual de estoque pelo usuário',
-          warehouseId: 'LOJA_PRINCIPAL'
+          warehouseId: 'LOJA_PRINCIPAL',
+          authorizationId: authId
         })
 
-        if (res.success) {
+        if ('success' in res && res.success) {
           toast({ title: "Estoque atualizado com sucesso!" })
           setIsStockModalOpen(false)
+          setAuthorizationId("")
+          setShowAuthDialog(false)
           await loadData()
         } else {
-          toast({ variant: "destructive", title: res.error || "Erro ao atualizar estoque." })
+          if ('requireAuthorization' in res && res.requireAuthorization) {
+            setAuthorizationId(res.authorizationId as string)
+            setAuthType(newStock < 0 ? "NEGATIVE_STOCK" : "STOCK_ADJUST")
+            setShowAuthDialog(true)
+          } else {
+            toast({ variant: "destructive", title: ('error' in res ? res.error : "Erro ao atualizar estoque.") as string })
+          }
         }
       } else {
         setIsStockModalOpen(false)
@@ -615,7 +629,7 @@ export default function ProdutosPage() {
               </div>
               <div className="flex gap-2 justify-end mt-6 pt-4 border-t">
                 <Button variant="outline" onClick={() => setIsStockModalOpen(false)}>Cancelar</Button>
-                <Button onClick={handleSaveStock} disabled={isSaving}>
+                <Button onClick={() => handleSaveStock()} disabled={isSaving}>
                   {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
                   Salvar estoque
                 </Button>
@@ -714,6 +728,17 @@ export default function ProdutosPage() {
           )}
         </DialogContent>
       </Dialog>
+      <AuthorizationDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        authorizationId={authorizationId}
+        authorizationType={authType}
+        title={authType === "NEGATIVE_STOCK" ? "Autorização de Estoque Negativo" : "Autorização de Ajuste de Estoque"}
+        description={authType === "NEGATIVE_STOCK" ? "Esta operação resultará em estoque negativo e exige autorização de um gerente." : "Este ajuste manual de estoque exige aprovação de um gerente."}
+        amount={0}
+        onAuthorized={(auth) => handleSaveStock(auth.id)}
+      />
+
     </div>
   )
 }

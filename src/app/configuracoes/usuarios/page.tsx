@@ -1,67 +1,181 @@
-"use client"
-import React, { useState } from 'react'
+'use client';
+
+import React, { useEffect, useState } from 'react';
+import { useToast } from '@/hooks/use-toast';
+import { getUsersAction } from '@/lib/users/user-actions';
+import { ConfigPageHeader, ConfigStatusBadge, ConfigDataTable, ConfigDataTableHeader, ConfigDataTableBody, ConfigDataTableRow, ConfigDataTableHead, ConfigDataTableCell } from '@/components/configuracoes/config-ui';
+import { Button } from '@/components/ui/button';
+import { Plus, Search, Edit2, KeyRound } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import UserFormModal from '@/components/users/user-form-modal';
+import ResetPinDialog from '@/components/users/reset-pin-dialog';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 
 export default function UsuariosPage() {
-  const [formData, setFormData] = useState({
-    nome: '',
-    username: '',
-    email: '',
-    senhaInicial: '',
-    perfil: 'VENDEDOR',
-    status: 'ACTIVE'
-  })
+  const { toast } = useToast();
+  const [users, setUsers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+  
+  // Modals state
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  
+  const [isResetPinOpen, setIsResetPinOpen] = useState(false);
+  const [resetUserId, setResetUserId] = useState<string | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    // Simulated submission flow
-    // 1. Create in Supabase Auth
-    // 2. Create in Prisma
-    // 3. Link Role and Permissions
-    console.log("Submitting user creation:", formData)
-    alert("Usuário criado com sucesso no Supabase e Prisma!")
-  }
+  const loadUsers = async () => {
+    setLoading(true);
+    try {
+      const res = await getUsersAction();
+      if (res.success && res.data) {
+        setUsers(res.data);
+      } else {
+        toast({
+          title: 'Erro',
+          description: res.error || 'Erro ao carregar usuários',
+          variant: 'destructive'
+        });
+      }
+    } catch (err) {
+      toast({
+        title: 'Erro',
+        description: 'Erro de comunicação',
+        variant: 'destructive'
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+  }, []);
+
+  const handleOpenCreate = () => {
+    setSelectedUserId(null);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenEdit = (id: string) => {
+    setSelectedUserId(id);
+    setIsFormOpen(true);
+  };
+
+  const handleOpenResetPin = (id: string) => {
+    setResetUserId(id);
+    setIsResetPinOpen(true);
+  };
+
+  const filteredUsers = users.filter(user => 
+    user.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    user.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
-    <div className="p-8">
-      <h1 className="text-2xl font-bold mb-6">Gestão de Usuários</h1>
-      <form onSubmit={handleSubmit} className="space-y-4 max-w-xl">
-        <div>
-          <label className="block mb-1">Nome</label>
-          <input className="border p-2 w-full" value={formData.nome} onChange={e => setFormData({...formData, nome: e.target.value})} required />
+    <div className="max-w-6xl space-y-6 pb-20">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <ConfigPageHeader
+          title="Gestão de Usuários"
+          description="Gerencie os acessos, permissões, limites e PINs de autorização da sua equipe."
+          breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Usuários' }]}
+        />
+        <Button onClick={handleOpenCreate} className="self-start sm:self-auto">
+          <Plus className="mr-2 h-4 w-4" /> Novo Usuário
+        </Button>
+      </div>
+
+      <div className="bg-white p-4 rounded-xl border shadow-sm space-y-4">
+        <div className="flex items-center gap-2 max-w-sm">
+          <Search className="w-4 h-4 text-muted-foreground" />
+          <Input 
+            placeholder="Buscar por nome ou e-mail..." 
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="h-9"
+          />
         </div>
-        <div>
-          <label className="block mb-1">Username</label>
-          <input className="border p-2 w-full" value={formData.username} onChange={e => setFormData({...formData, username: e.target.value})} required />
+
+        <div className="rounded-md border overflow-hidden">
+          <ConfigDataTable>
+            <ConfigDataTableHeader className="bg-slate-50">
+              <ConfigDataTableRow>
+                <ConfigDataTableHead>Nome & E-mail</ConfigDataTableHead>
+                <ConfigDataTableHead>Cargo / Grupo</ConfigDataTableHead>
+                <ConfigDataTableHead>Comissão</ConfigDataTableHead>
+                <ConfigDataTableHead>Limite Desc.</ConfigDataTableHead>
+                <ConfigDataTableHead>Status</ConfigDataTableHead>
+                <ConfigDataTableHead>Última Att.</ConfigDataTableHead>
+                <ConfigDataTableHead className="text-right">Ações</ConfigDataTableHead>
+              </ConfigDataTableRow>
+            </ConfigDataTableHeader>
+            <ConfigDataTableBody>
+              {loading ? (
+                <ConfigDataTableRow>
+                  <ConfigDataTableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Carregando usuários...
+                  </ConfigDataTableCell>
+                </ConfigDataTableRow>
+              ) : filteredUsers.length === 0 ? (
+                <ConfigDataTableRow>
+                  <ConfigDataTableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    Nenhum usuário encontrado.
+                  </ConfigDataTableCell>
+                </ConfigDataTableRow>
+              ) : (
+                filteredUsers.map(user => (
+                  <ConfigDataTableRow key={user.id}>
+                    <ConfigDataTableCell>
+                      <div className="font-medium text-slate-900">{user.name}</div>
+                      <div className="text-xs text-muted-foreground">{user.email}</div>
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell>
+                      <div className="text-sm">{user.cargo || '-'}</div>
+                      <div className="text-xs text-muted-foreground">{user.role?.name || 'Sem grupo'}</div>
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell>
+                      {user.commissionRate ? `${Number(user.commissionRate)}%` : '-'}
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell>
+                      {user.maxDiscountPercentage !== null ? `${Number(user.maxDiscountPercentage)}%` : '-'}
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell>
+                      <ConfigStatusBadge status={user.status === 'ACTIVE' ? 'ativo' : 'inativo'} />
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell className="text-xs text-muted-foreground">
+                      {user.updatedAt ? format(new Date(user.updatedAt), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '-'}
+                    </ConfigDataTableCell>
+                    <ConfigDataTableCell className="text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenResetPin(user.id)} title="Resetar PIN de Autorização">
+                          <KeyRound className="h-4 w-4 text-orange-600" />
+                        </Button>
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">
+                          <Edit2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </ConfigDataTableCell>
+                  </ConfigDataTableRow>
+                ))
+              )}
+            </ConfigDataTableBody>
+          </ConfigDataTable>
         </div>
-        <div>
-          <label className="block mb-1">Email</label>
-          <input type="email" className="border p-2 w-full" value={formData.email} onChange={e => setFormData({...formData, email: e.target.value})} required />
-        </div>
-        <div>
-          <label className="block mb-1">Senha Inicial</label>
-          <input type="password" className="border p-2 w-full" value={formData.senhaInicial} onChange={e => setFormData({...formData, senhaInicial: e.target.value})} required />
-        </div>
-        <div>
-          <label className="block mb-1">Perfil</label>
-          <select className="border p-2 w-full" value={formData.perfil} onChange={e => setFormData({...formData, perfil: e.target.value})}>
-            <option>ADMIN</option>
-            <option>GERENTE</option>
-            <option>VENDEDOR</option>
-            <option>CAIXA</option>
-            <option>ESTOQUE</option>
-          </select>
-        </div>
-        <div>
-          <label className="block mb-1">Status</label>
-          <select className="border p-2 w-full" value={formData.status} onChange={e => setFormData({...formData, status: e.target.value})}>
-            <option value="ACTIVE">Ativo</option>
-            <option value="INACTIVE">Inativo</option>
-          </select>
-        </div>
-        <button type="submit" className="bg-blue-600 text-white px-4 py-2 rounded">
-          Criar Usuário
-        </button>
-      </form>
+      </div>
+
+      <UserFormModal 
+        isOpen={isFormOpen} 
+        onClose={() => setIsFormOpen(false)} 
+        userId={selectedUserId} 
+        onSuccess={loadUsers} 
+      />
+      
+      <ResetPinDialog 
+        isOpen={isResetPinOpen}
+        onClose={() => setIsResetPinOpen(false)}
+        userId={resetUserId}
+      />
     </div>
-  )
+  );
 }

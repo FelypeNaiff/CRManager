@@ -22,45 +22,56 @@ const ROUTE_PERMISSION_MAP: Array<{
   module: string;
   action: string;
 }> = [
-  { prefix: '/configuracoes/usuarios',        module: 'Usuários',               action: 'visualizar' },
-  { prefix: '/configuracoes/grupos-usuarios', module: 'Grupos usuários',         action: 'visualizar' },
-  { prefix: '/configuracoes/permissoes',      module: 'Permissões',              action: 'visualizar' },
-  { prefix: '/configuracoes/gerais',          module: 'Configurações gerais',    action: 'visualizar' },
-  { prefix: '/configuracoes/pdv',             module: 'Configurações PDV',       action: 'visualizar' },
-  { prefix: '/configuracoes/logs',            module: 'Logs',                    action: 'visualizar' },
-  { prefix: '/financeiro',                    module: 'Financeiro',              action: 'acessar'    },
-  { prefix: '/carteira-saldos',               module: 'Financeiro',              action: 'acessar'    },
-  { prefix: '/contas-a-pagar',                module: 'Contas a pagar',          action: 'visualizar' },
-  { prefix: '/contas-a-receber',              module: 'Contas a receber',        action: 'visualizar' },
-  { prefix: '/produtos',                      module: 'Produtos',                action: 'visualizar' },
-  { prefix: '/estoque',                       module: 'Estoque',                 action: 'visualizar' },
-  { prefix: '/categorias',                    module: 'Categorias',              action: 'visualizar' },
-  { prefix: '/marcas',                        module: 'Marcas',                  action: 'visualizar' },
-  { prefix: '/compras',                       module: 'Compras',                 action: 'visualizar' },
-  { prefix: '/fornecedores',                  module: 'Fornecedores',            action: 'visualizar' },
-  { prefix: '/clientes',                      module: 'Clientes',                action: 'visualizar' },
-  { prefix: '/aniversariantes',               module: 'Clientes',                action: 'visualizar' },
-  { prefix: '/clientes-com-saldo',            module: 'Clientes',                action: 'visualizar' },
-  { prefix: '/filhos',                        module: 'Filhos',                  action: 'visualizar' },
-  { prefix: '/pdv',                           module: 'PDV',                     action: 'visualizar' },
-  { prefix: '/caixa',                         module: 'Caixa',                   action: 'visualizar' },
-  { prefix: '/vendas',                        module: 'Vendas',                  action: 'visualizar' },
-  { prefix: '/orcamentos',                    module: 'Orçamentos',              action: 'visualizar' },
-  { prefix: '/trocas',                        module: 'Trocas',                  action: 'visualizar' },
-  { prefix: '/trocas-devolucoes',             module: 'Trocas',                  action: 'visualizar' },
-  { prefix: '/devolucoes',                    module: 'Devoluções',              action: 'visualizar' },
-  { prefix: '/relatorios',                    module: 'Relatórios',              action: 'visualizar' },
-  { prefix: '/crm',                           module: 'CRM',                     action: 'visualizar' },
-  { prefix: '/campanhas',                     module: 'CRM',                     action: 'visualizar' },
-  { prefix: '/campanhas-whatsapp',            module: 'CRM',                     action: 'visualizar' },
-  // Comercial module routes
-  { prefix: '/comercial/vendas',              module: 'Vendas',                  action: 'visualizar' },
-  { prefix: '/comercial/trocas',              module: 'Trocas',                  action: 'visualizar' },
-  { prefix: '/comercial/metas',               module: 'Vendas',                  action: 'visualizar' },
-  { prefix: '/comercial/comissoes',           module: 'Vendas',                  action: 'visualizar' },
-  { prefix: '/comercial/relatorios',          module: 'Relatórios',              action: 'visualizar' },
-  { prefix: '/comercial',                     module: 'Vendas',                  action: 'visualizar' },
-  // /configuracoes is a catch-all — handled separately below
+  // Segurança / Configurações
+  { prefix: '/configuracoes/usuarios',        module: 'USUARIOS',               action: 'VIEW' },
+  { prefix: '/configuracoes/grupos-usuarios', module: 'GRUPOS_USUARIOS',         action: 'VIEW' },
+  { prefix: '/configuracoes/permissoes',      module: 'PERMISSOES',              action: 'VIEW' },
+  { prefix: '/configuracoes/empresa',         module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
+  { prefix: '/configuracoes/dados-empresa',   module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
+  { prefix: '/configuracoes/minha-empresa',   module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
+  { prefix: '/configuracoes/configuracoes-operacionais', module: 'CONFIGURACOES_OPERACIONAIS', action: 'VIEW' },
+  { prefix: '/configuracoes/logs',            module: 'LOGS',                    action: 'VIEW' },
+
+  // Financeiro
+  { prefix: '/financeiro',                    module: 'FINANCEIRO',              action: 'VIEW' },
+  { prefix: '/carteira-saldos',               module: 'FINANCEIRO',              action: 'VIEW' },
+  { prefix: '/contas-a-pagar',                module: 'FINANCEIRO',          action: 'VIEW' },
+  { prefix: '/contas-a-receber',              module: 'FINANCEIRO',        action: 'VIEW' },
+
+  // Estoque & Produtos
+  { prefix: '/produtos',                      module: 'PRODUTOS',                action: 'VIEW' },
+  { prefix: '/estoque',                       module: 'ESTOQUE',                 action: 'VIEW' },
+  { prefix: '/movimentacoes',                 module: 'ESTOQUE',                 action: 'VIEW' },
+
+  // CRM
+  { prefix: '/clientes',                      module: 'CLIENTES',                action: 'VIEW' },
+  { prefix: '/aniversariantes',               module: 'CLIENTES',                action: 'VIEW' },
+  { prefix: '/clientes-com-saldo',            module: 'CLIENTES',                action: 'VIEW' },
+  { prefix: '/filhos',                        module: 'FILHOS',                  action: 'VIEW' },
+  { prefix: '/crm/carteira',                  module: 'CARTEIRA',                action: 'VIEW' },
+  { prefix: '/wallet',                        module: 'CARTEIRA',                action: 'VIEW' },
+  { prefix: '/crm',                           module: 'CRM',                     action: 'VIEW' },
+
+  // Vendas / PDV
+  { prefix: '/pdv',                           module: 'PDV',                     action: 'VIEW' },
+  { prefix: '/caixa',                         module: 'CAIXA',                   action: 'VIEW' },
+  { prefix: '/financeiro/caixas',             module: 'CAIXA',                   action: 'VIEW' },
+  { prefix: '/vendas',                        module: 'VENDAS',                  action: 'VIEW' },
+  { prefix: '/comercial/vendas',              module: 'VENDAS',                  action: 'VIEW' },
+  
+  // Trocas & Devoluções
+  { prefix: '/trocas',                        module: 'TROCAS',                  action: 'VIEW' },
+  { prefix: '/comercial/trocas',              module: 'TROCAS',                  action: 'VIEW' },
+  { prefix: '/devolucoes',                    module: 'DEVOLUCOES',              action: 'VIEW' },
+  { prefix: '/returns',                       module: 'DEVOLUCOES',              action: 'VIEW' },
+  { prefix: '/vendas/devolucoes',             module: 'DEVOLUCOES',              action: 'VIEW' },
+
+  // Relatórios
+  { prefix: '/relatorios',                    module: 'RELATORIOS',              action: 'VIEW' },
+  { prefix: '/comercial/relatorios',          module: 'RELATORIOS',              action: 'VIEW' },
+
+  // Generic /comercial matches
+  { prefix: '/comercial',                     module: 'VENDAS',                  action: 'VIEW' },
 ];
 
 export function middleware(request: NextRequest) {
@@ -137,11 +148,10 @@ export function middleware(request: NextRequest) {
 
   // 7. /configuracoes catch-all
   if (pathname.startsWith('/configuracoes')) {
-    const hasGerais = !!session.permissions['Configurações gerais:visualizar'];
-    const hasSistema = !!session.permissions['Sistema:visualizar'];
-    const hasUsuarios = !!session.permissions['Usuários:visualizar'];
-
-    if (hasGerais || hasSistema || hasUsuarios) {
+    const hasConfig = !!session.permissions['CONFIGURACOES:VIEW'];
+    
+    // As long as the user has some sort of configuration view, they can see the layout
+    if (hasConfig) {
       return NextResponse.next();
     }
 

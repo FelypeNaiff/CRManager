@@ -43,7 +43,7 @@ const CompanyFormSchema = z.object({
  * Action to fetch the active company data.
  */
 export async function getCompanyAction() {
-  const session = await requirePermission('Configurações gerais', 'visualizar');
+  const session = await requirePermission('CONFIGURACOES_EMPRESA', 'VIEW');
   try {
     const company = await CompanyService.getActiveCompany();
     return { success: true, data: company };
@@ -57,7 +57,7 @@ export async function getCompanyAction() {
  * Action to update company data and log activity.
  */
 export async function updateCompanyAction(rawData: any, updateType?: 'contatos' | 'enderecos' | 'fiscal' | 'financeiro-fiscal' | 'gerais') {
-  const session = await requirePermission('Configurações gerais', 'editar');
+  const session = await requirePermission('CONFIGURACOES_EMPRESA', 'UPDATE');
   try {
     const validatedData = CompanyFormSchema.parse(rawData);
 

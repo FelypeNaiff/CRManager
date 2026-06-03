@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -17,6 +18,8 @@ export default function AddressForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
   const [company, setCompany] = useState<any>(null);
+  const [initialData, setInitialData] = useState<any>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
 
   const [form, setForm] = useState({
     cep: '',
@@ -35,7 +38,7 @@ export default function AddressForm() {
         if (response.success && response.data) {
           const comp = response.data;
           setCompany(comp);
-          setForm({
+          const initialFormState = {
             cep: comp.cep || '',
             logradouro: comp.logradouro || '',
             numero: comp.numero || '',
@@ -43,7 +46,9 @@ export default function AddressForm() {
             bairro: comp.bairro || '',
             cidade: comp.cidade || '',
             uf: comp.uf || '',
-          });
+          };
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -111,8 +116,36 @@ export default function AddressForm() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const validate = () => {
+    const newErrors: Record<string, string> = {};
+    const cleanCep = form.cep.replace(/\D/g, '');
+    if (form.cep && cleanCep.length !== 8) {
+      newErrors.cep = 'CEP deve conter 8 dígitos';
+    }
+    if (form.uf && form.uf.length !== 2) {
+      newErrors.uf = 'UF deve ter 2 letras';
+    }
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+      setErrors({});
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (!validate()) {
+      toast({
+        title: 'Erro de Validação',
+        description: 'Verifique os campos obrigatórios e tente novamente.',
+        variant: 'destructive',
+      });
+      return;
+    }
     setIsSaving(true);
     try {
       const payload = {
@@ -122,6 +155,8 @@ export default function AddressForm() {
 
       const res = await updateCompanyAction(payload, 'enderecos');
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setCompany(res.data);
         toast({
           title: 'Sucesso',
           description: 'Endereço atualizado com sucesso.',
@@ -143,6 +178,8 @@ export default function AddressForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -178,6 +215,9 @@ export default function AddressForm() {
                     onChange={(e) => setForm({ ...form, cep: e.target.value })}
                     placeholder="00000-000"
                   />
+                  {errors.cep && (
+                    <p className="text-xs text-red-500 font-medium">{errors.cep}</p>
+                  )}
                 </div>
                 <button
                   type="button"
@@ -238,19 +278,33 @@ export default function AddressForm() {
               />
             </div>
 
-            <ConfigInputField
-              label="UF"
-              id="uf"
-              value={form.uf}
-              onChange={(e) => setForm({ ...form, uf: e.target.value })}
-              placeholder="SP"
-              maxLength={2}
-            />
+            <div>
+              <ConfigInputField
+                label="UF"
+                id="uf"
+                value={form.uf}
+                onChange={(e) => setForm({ ...form, uf: e.target.value.toUpperCase() })}
+                placeholder="SP"
+                maxLength={2}
+              />
+              {errors.uf && (
+                <p className="text-xs text-red-500 font-medium">{errors.uf}</p>
+              )}
+            </div>
           </div>
         </ConfigCardSection>
 
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Endereço" />
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 p-4 mt-6 bg-slate-50/90 backdrop-blur border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <ConfigFormActions 
+            isSaving={isSaving} 
+            isDirty={isDirty} 
+            onCancel={handleCancel} 
+            onSave={handleSave} 
+            saveLabel="Salvar Endereço" 
+            updatedAt={company?.updatedAt}
+            updatedBy={company?.updatedBy}
+          />
         </div>
       </form>
     </div>

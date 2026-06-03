@@ -3,6 +3,7 @@
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
+import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 
 // ─── Zod Schemas ───
@@ -40,7 +41,7 @@ export const WalletAdjustmentSchema = z.object({
 // ─── Customer Actions ───
 
 export async function getCustomers() {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.customer.findMany({
       where: {
@@ -64,7 +65,7 @@ export async function getCustomers() {
 }
 
 export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
-  const session = await requirePermission('Clientes', 'criar');
+  const session = await requirePermission('CLIENTES', 'CREATE');
   try {
     const data = CustomerSchema.parse(rawData);
 
@@ -124,7 +125,7 @@ export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
 }
 
 export async function updateCustomer(id: string, rawData: z.infer<typeof CustomerSchema>) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const data = CustomerSchema.parse(rawData);
 
@@ -182,7 +183,7 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
 }
 
 export async function deleteCustomer(id: string) {
-  const session = await requirePermission('Clientes', 'excluir');
+  const session = await requirePermission('CLIENTES', 'DELETE');
   try {
     const customer = await prisma.customer.update({
       where: { id },
@@ -216,7 +217,7 @@ export async function deleteCustomer(id: string) {
 // ─── Child Actions ───
 
 export async function createChild(rawData: z.infer<typeof ChildSchema>) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const data = ChildSchema.parse(rawData);
 
@@ -248,7 +249,7 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
 }
 
 export async function deleteChild(id: string) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const child = await prisma.customerChild.delete({
       where: { id },
@@ -272,7 +273,7 @@ export async function deleteChild(id: string) {
 // ─── Tag Actions ───
 
 export async function getTags() {
-  const session = await requirePermission('CRM', 'visualizar');
+  const session = await requirePermission('CRM', 'VIEW');
   try {
     const tags = await prisma.customerTag.findMany({
       where: { companyId: session.companyId },
@@ -286,7 +287,7 @@ export async function getTags() {
 }
 
 export async function createTag(name: string, color?: string) {
-  const session = await requirePermission('CRM', 'visualizar');
+  const session = await requirePermission('CRM', 'VIEW');
   try {
     const tag = await prisma.customerTag.upsert({
       where: {
@@ -310,7 +311,7 @@ export async function createTag(name: string, color?: string) {
 }
 
 export async function addTagToCustomer(customerId: string, tagId: string) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const relation = await prisma.customerTagRelation.upsert({
       where: {
@@ -337,7 +338,7 @@ export async function addTagToCustomer(customerId: string, tagId: string) {
 }
 
 export async function removeTagFromCustomer(customerId: string, tagId: string) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const relation = await prisma.customerTagRelation.delete({
       where: {
@@ -364,57 +365,18 @@ export async function removeTagFromCustomer(customerId: string, tagId: string) {
 // ─── Wallet Actions (Transactional) ───
 
 export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustmentSchema>) {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const data = WalletAdjustmentSchema.parse(rawData);
 
-    // Run within transactional context
-    const result = await prisma.$transaction(async (tx) => {
-      // Find wallet
-      let wallet = await tx.customerWallet.findUnique({
-        where: { customerId: data.customerId },
-      });
-
-      if (!wallet) {
-        wallet = await tx.customerWallet.create({
-          data: { customerId: data.customerId, balance: 0.0 },
-        });
-      }
-
-      const balanceNum = Number(wallet.balance);
-      const adjustmentNum = data.amount;
-      const newBalance = data.type === 'credit' ? balanceNum + adjustmentNum : balanceNum - adjustmentNum;
-
-      if (newBalance < 0) {
-        throw new Error('Saldo insuficiente na carteira do cliente.');
-      }
-
-      // Create movement
-      const movement = await tx.customerWalletMovement.create({
-        data: {
-          walletId: wallet.id,
-          amount: adjustmentNum,
-          type: data.type,
-          reason: data.reason,
-        },
-      });
-
-      // Update balance
-      const updatedWallet = await tx.customerWallet.update({
-        where: { id: wallet.id },
-        data: { balance: newBalance },
-      });
-
-      // Log to customer history
-      await tx.customerHistory.create({
-        data: {
-          customerId: data.customerId,
-          actionType: data.type === 'credit' ? 'SALDO_CREDITO' : 'SALDO_DEBITO',
-          description: `${data.type === 'credit' ? 'Crédito' : 'Débito'} de R$ ${adjustmentNum.toFixed(2)} lançado. Motivo: ${data.reason}. Novo Saldo: R$ ${newBalance.toFixed(2)}`,
-        },
-      });
-
-      return { wallet: updatedWallet, movement };
+    // Delegate to customerWalletService which implements the full ledger logic
+    // (balanceBefore/balanceAfter tracking, expiresAt, activity log)
+    const result = await customerWalletService.createManualAdjustment({
+      customerId: data.customerId,
+      amount: data.amount,
+      type: data.type,
+      reason: data.reason,
+      createdById: session.userId,
     });
 
     await writeActivityLog({
@@ -436,7 +398,7 @@ export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustme
 // ─── History and Interaction ───
 
 export async function getCustomerHistory(customerId: string) {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.customerHistory.findMany({
       where: { customerId },
@@ -452,7 +414,7 @@ export async function getCustomerHistory(customerId: string) {
 // ─── Birthdays Query ───
 
 export async function getBirthdayList(month: number) {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     // 1. Fetch customers with birthday in month
     const customers = await prisma.customer.findMany({
@@ -508,7 +470,7 @@ export async function getBirthdayList(month: number) {
 // ─── Additional CRM Actions for Frontend Compatibility ───
 
 export async function getChildren(customerId?: string) {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.customerChild.findMany({
       where: customerId ? {
@@ -528,7 +490,7 @@ export async function getChildren(customerId?: string) {
 }
 
 export async function updateChild(id: string, rawData: Partial<z.infer<typeof ChildSchema>> & { name?: string; birthDate?: string | null; gender?: string | null; shoeSize?: string | null; clothingSize?: string | null; notes?: string | null; preferenciaEstilo?: string | null; coresPreferidas?: string | null; personagensPreferidos?: string | null }) {
-  const session = await requirePermission('Clientes', 'editar');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     // Custom partial parsing
     const child = await prisma.customerChild.update({
@@ -560,7 +522,7 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
 }
 
 export async function deleteTag(id: string) {
-  const session = await requirePermission('CRM', 'visualizar');
+  const session = await requirePermission('CRM', 'VIEW');
   try {
     // Check if tag is used, if so delete relationships first (Prisma handles Cascade if config allows)
     await prisma.customerTag.delete({
@@ -574,7 +536,7 @@ export async function deleteTag(id: string) {
 }
 
 export async function getWallets() {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.customerWallet.findMany({
       where: {
@@ -582,8 +544,10 @@ export async function getWallets() {
       },
       include: {
         customer: true,
-        movements: {
-          orderBy: { createdAt: 'desc' }
+        // Use new WalletTransaction ledger instead of legacy movements
+        transactions: {
+          orderBy: { createdAt: 'desc' },
+          take: 10
         }
       }
     });
@@ -594,10 +558,15 @@ export async function getWallets() {
   }
 }
 
+/**
+ * Returns ledger transactions for a wallet using the new WalletTransaction model.
+ * Falls back to legacy movements if needed during transition period.
+ */
 export async function getWalletHistory(walletId: string) {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
-    const list = await prisma.customerWalletMovement.findMany({
+    // Read from new WalletTransaction ledger (FASE 1 tables)
+    const list = await prisma.walletTransaction.findMany({
       where: {
         walletId,
         wallet: { customer: { companyId: session.companyId } }
@@ -612,7 +581,7 @@ export async function getWalletHistory(walletId: string) {
 }
 
 export async function getActivityLogs() {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.activityLog.findMany({
       where: { companyId: session.companyId },
@@ -627,17 +596,54 @@ export async function getActivityLogs() {
   }
 }
 
+/**
+ * Returns all exchanges and returns for a customer using the new SaleExchange and SaleReturn models.
+ * These replace the legacy ExchangeReturn model (Fase 3 removal is deferred until full validation).
+ */
 export async function getCustomerExchangeReturns(customerId: string) {
-  const session = await requirePermission('Clientes', 'visualizar');
+  const session = await requirePermission('CLIENTES', 'VIEW');
   try {
-    const list = await prisma.exchangeReturn.findMany({
-      where: {
-        customerId,
-        companyId: session.companyId,
-      },
-      orderBy: { createdAt: 'desc' },
-    });
-    return { success: true, data: list };
+    // Fetch from new FASE 1 tables
+    const [exchanges, returns] = await Promise.all([
+      prisma.saleExchange.findMany({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+      }),
+      prisma.saleReturn.findMany({
+        where: { customerId },
+        orderBy: { createdAt: 'desc' },
+      }),
+    ]);
+
+    // Normalize to a unified shape expected by the frontend
+    const unified = [
+      ...exchanges.map(e => ({
+        id: e.id,
+        type: 'EXCHANGE' as const,
+        originalSaleId: e.originalSaleId,
+        customerId: e.customerId,
+        totalCredit: Number(e.creditGenerated),
+        totalAmount: Number(e.totalAmount),
+        refundMethod: 'WALLET',
+        financialProcessed: e.financialProcessed,
+        notes: e.notes,
+        createdAt: e.createdAt,
+      })),
+      ...returns.map(r => ({
+        id: r.id,
+        type: 'RETURN' as const,
+        originalSaleId: r.originalSaleId,
+        customerId: r.customerId,
+        totalCredit: Number(r.totalAmount),
+        totalAmount: Number(r.totalAmount),
+        refundMethod: r.refundMethod,
+        financialProcessed: r.financialProcessed,
+        notes: r.notes,
+        createdAt: r.createdAt,
+      })),
+    ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+
+    return { success: true, data: unified };
   } catch (error: any) {
     console.error('Error fetching customer exchange returns:', error);
     return { success: false, error: 'Erro ao buscar trocas e devoluções.' };

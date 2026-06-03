@@ -12,12 +12,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Ban } from "lucide-react";
 import Link from "next/link";
+import { AuthorizationDialog } from "@/components/authorization/authorization-dialog";
 
 export default function DetalheVendaPage() {
   const { id } = useParams() as { id: string };
   const router = useRouter();
   const { activeProfile } = useProfile();
-  const { hasRole } = usePermissions();
+  const { isAdmin } = usePermissions();
   
   const [sale, setSale] = useState<any>(null);
   const [movements, setMovements] = useState<any[]>([]);
@@ -26,6 +27,8 @@ export default function DetalheVendaPage() {
   // Modal Cancelamento (simples mock para fluxo)
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+  const [authorizationId, setAuthorizationId] = useState("");
 
   const loadSale = async () => {
     setLoading(true);
@@ -46,24 +49,32 @@ export default function DetalheVendaPage() {
     if (id) loadSale();
   }, [id]);
 
-  const handleCancelSale = async () => {
+  const handleCancelSale = async (authId?: string) => {
     if (!activeProfile?.userId || !cancelReason) return;
-    if (!confirm("Tem certeza que deseja cancelar esta venda? Esta ação é irreversível e irá estornar estoque, metas e comissões.")) return;
+    if (!authId && !confirm("Tem certeza que deseja cancelar esta venda? Esta ação é irreversível e irá estornar estoque, metas e comissões.")) return;
     
     setIsCancelling(true);
     const res = await cancelSaleAction({
       saleId: id,
       cancelReason,
-      cancelledByUserId: activeProfile.userId
+      cancelledByUserId: activeProfile.userId,
+      authorizationId: authId
     });
     
     setIsCancelling(false);
     if (res.success) {
       alert("Venda cancelada com sucesso!");
+      setShowAuthDialog(false);
+      setAuthorizationId("");
       loadSale();
       setCancelReason("");
     } else {
-      alert("Erro ao cancelar: " + res.error);
+      if (res.requireAuthorization) {
+        setAuthorizationId(res.authorizationId);
+        setShowAuthDialog(true);
+      } else {
+        alert("Erro ao cancelar: " + res.error);
+      }
     }
   };
 
@@ -72,7 +83,7 @@ export default function DetalheVendaPage() {
   if (loading) return <div className="p-6">Carregando...</div>;
   if (!sale) return <div className="p-6">Venda não encontrada.</div>;
 
-  const canCancel = hasRole("admin") || hasRole("gerente");
+  const canCancel = isAdmin();
 
   return (
     <div className="max-w-5xl mx-auto p-6 space-y-6">
@@ -121,7 +132,7 @@ export default function DetalheVendaPage() {
                 />
                 <Button 
                   variant="destructive" 
-                  onClick={handleCancelSale} 
+                  onClick={() => handleCancelSale()} 
                   disabled={isCancelling || !cancelReason}
                   className="w-full"
                 >
@@ -207,6 +218,17 @@ export default function DetalheVendaPage() {
           </CardContent>
         </Card>
       </div>
+
+      <AuthorizationDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        authorizationId={authorizationId}
+        authorizationType="SALE_CANCEL"
+        title="Autorização de Cancelamento"
+        description={`O cancelamento da venda #${sale?.id.slice(0, 8).toUpperCase()} exige aprovação gerencial.`}
+        amount={Number(sale?.totalAmount)}
+        onAuthorized={(auth) => handleCancelSale(auth.id)}
+      />
 
     </div>
   );

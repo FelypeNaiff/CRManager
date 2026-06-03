@@ -1,27 +1,48 @@
-"use client"
+'use client';
 
-import { ReactNode } from "react"
-import { usePermissions } from "@/hooks/use-permissions"
+import React from 'react';
+import { usePermissions } from '@/hooks/use-permissions';
+import { PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
 
 interface PermissionGateProps {
-  modulo: string
-  acao: string
-  children: ReactNode
-  fallback?: ReactNode
+  module?: PermissionModule;
+  action?: PermissionAction;
+  permissions?: { module: PermissionModule; action: PermissionAction }[];
+  requireAll?: boolean;
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
 }
 
-/**
- * Envolve botões ou partes da tela que exigem permissão.
- * Se o usuário não tiver a permissão (ou não for admin root), renderiza nulo (ou fallback).
- */
-export function PermissionGate({ modulo, acao, children, fallback = null }: PermissionGateProps) {
-  const { hasPermission, isLoading } = usePermissions()
+export function PermissionGate({
+  module,
+  action,
+  permissions,
+  requireAll = false,
+  children,
+  fallback = null,
+}: PermissionGateProps) {
+  const { can, hasAnyPermission, hasAllPermissions, isLoading, isAdmin } = usePermissions();
 
-  if (isLoading) return null // Evita piscar a UI enquanto checa
-
-  if (hasPermission(modulo, acao)) {
-    return <>{children}</>
+  if (isLoading) {
+    // Return empty fallback while loading to avoid layout shifts or exposing protected content
+    return fallback;
   }
 
-  return <>{fallback}</>
+  if (isAdmin()) {
+    return <>{children}</>;
+  }
+
+  let hasAccess = false;
+
+  if (module && action) {
+    hasAccess = can(module, action);
+  } else if (permissions && permissions.length > 0) {
+    hasAccess = requireAll ? hasAllPermissions(permissions) : hasAnyPermission(permissions);
+  }
+
+  if (!hasAccess) {
+    return <>{fallback}</>;
+  }
+
+  return <>{children}</>;
 }

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -19,6 +20,7 @@ export default function FiscalForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [company, setCompany] = useState<any>(null);
+  const [initialData, setInitialData] = useState<any>(null);
 
   const [form, setForm] = useState({
     cnpjCpf: '',
@@ -44,7 +46,7 @@ export default function FiscalForm() {
         if (response.success && response.data) {
           const comp = response.data;
           setCompany(comp);
-          setForm({
+          const initialFormState = {
             cnpjCpf: comp.cnpjCpf || '',
             razaoSocial: comp.razaoSocial || '',
             nomeFantasia: comp.nomeFantasia || '',
@@ -53,7 +55,9 @@ export default function FiscalForm() {
             regimeTributario: comp.regimeTributario || 'Simples Nacional',
             crt: comp.crt || '1',
             cnae: comp.cnae || '',
-          });
+          };
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -158,13 +162,20 @@ export default function FiscalForm() {
 
     toast({
       title: 'Sucesso',
-      description: 'Dados cadastrais do CNPJ preenchidos nos campos disponíveis.',
+      description: 'Dados cadastrais do CNPJ preenchidos nos campos disponíveis. Salve para persistir as alterações.',
     });
     setShowConfirmLookup(false);
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+      setErrors({});
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!validate()) {
       toast({
         title: 'Erro de Validação',
@@ -183,6 +194,8 @@ export default function FiscalForm() {
 
       const res = await updateCompanyAction(payload, 'fiscal');
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setCompany(res.data);
         toast({
           title: 'Sucesso',
           description: 'Dados fiscais atualizados com sucesso.',
@@ -204,6 +217,8 @@ export default function FiscalForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -335,8 +350,17 @@ export default function FiscalForm() {
           </div>
         </ConfigCardSection>
 
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Dados Fiscais" />
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 p-4 mt-6 bg-slate-50/90 backdrop-blur border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <ConfigFormActions 
+            isSaving={isSaving} 
+            isDirty={isDirty} 
+            onCancel={handleCancel} 
+            onSave={handleSave} 
+            saveLabel="Salvar Dados Fiscais" 
+            updatedAt={company?.updatedAt}
+            updatedBy={company?.updatedBy}
+          />
         </div>
       </form>
 

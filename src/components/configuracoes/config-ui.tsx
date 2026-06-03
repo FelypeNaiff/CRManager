@@ -71,23 +71,9 @@ export function ConfigCardSection({ title, description, icon: Icon, children, fo
   )
 }
 
-// 4. ConfigFormActions
-export function ConfigFormActions({ onCancel, onSave, isSaving, saveLabel = "Atualizar", cancelLabel = "Cancelar" }: { onCancel?: () => void, onSave?: () => void, isSaving?: boolean, saveLabel?: string, cancelLabel?: string }) {
-  return (
-    <div className="flex items-center justify-end gap-3 w-full">
-      {onCancel && (
-        <Button variant="outline" type="button" onClick={onCancel} disabled={isSaving}>
-          {cancelLabel}
-        </Button>
-      )}
-      {onSave && (
-        <Button type="submit" onClick={onSave} disabled={isSaving} className="bg-primary text-primary-foreground">
-          {isSaving ? "Salvando..." : saveLabel}
-        </Button>
-      )}
-    </div>
-  )
-}
+// 4. ConfigFormActions (Re-exported from separate file)
+export { ConfigFormActions } from './config-form-actions';
+export type { ConfigFormActionsProps } from './config-form-actions';
 
 // 5. ConfigInputField
 export function ConfigInputField({ label, id, description, ...props }: React.ComponentProps<typeof Input> & { label: string, description?: string }) {

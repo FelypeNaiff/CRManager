@@ -9,7 +9,8 @@ import {
   ProductSchema,
   InventoryMovementSchema,
 } from './products-schemas';
-import { InventoryMovementType, Prisma } from '@prisma/client';
+import { InventoryMovementType, Prisma, AuthorizationType } from '@prisma/client';
+import { authorizationService } from '../auth/authorization-service';
 
 
 // =========================================================================
@@ -17,7 +18,7 @@ import { InventoryMovementType, Prisma } from '@prisma/client';
 // =========================================================================
 
 export async function getProductCategories() {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const categories = await prisma.productCategory.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -31,7 +32,7 @@ export async function getProductCategories() {
 }
 
 export async function createProductCategory(input: any) {
-  const session = await requirePermission('Produtos', 'criar');
+  const session = await requirePermission('PRODUTOS', 'CREATE');
   const parsed = ProductCategorySchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -50,7 +51,7 @@ export async function createProductCategory(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Produtos',
+      module: 'PRODUTOS',
       recordId: newCategory.id,
       details: `Categoria "${newCategory.name}" criada.`,
     });
@@ -70,7 +71,7 @@ export async function createProductCategory(input: any) {
 // =========================================================================
 
 export async function getSuppliers() {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const suppliers = await prisma.supplier.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -84,7 +85,7 @@ export async function getSuppliers() {
 }
 
 export async function createSupplier(input: any) {
-  const session = await requirePermission('Produtos', 'criar');
+  const session = await requirePermission('PRODUTOS', 'CREATE');
   const parsed = SupplierSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -105,7 +106,7 @@ export async function createSupplier(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Produtos',
+      module: 'PRODUTOS',
       recordId: newSupplier.id,
       details: `Fornecedor "${newSupplier.name}" criado.`,
     });
@@ -122,7 +123,7 @@ export async function createSupplier(input: any) {
 // =========================================================================
 
 export async function getProducts(filters?: { categoryId?: string; search?: string }) {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const whereClause: Prisma.ProductWhereInput = {
       companyId: session.companyId,
@@ -161,7 +162,7 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
 }
 
 export async function getProductById(id: string) {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const product = await prisma.product.findFirst({
       where: { id, companyId: session.companyId, isActive: true },
@@ -183,7 +184,7 @@ export async function getProductById(id: string) {
 }
 
 export async function createProduct(input: any) {
-  const session = await requirePermission('Produtos', 'criar');
+  const session = await requirePermission('PRODUTOS', 'CREATE');
   const parsed = ProductSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -248,7 +249,7 @@ export async function createProduct(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Produtos',
+      module: 'PRODUTOS',
       recordId: result.product.id,
       details: `Produto "${result.product.name}" criado com código interno ${result.product.internalCode} e SKU ${result.variant.sku}.`,
     });
@@ -266,7 +267,7 @@ export async function createProduct(input: any) {
 }
 
 export async function updateProduct(id: string, input: any) {
-  const session = await requirePermission('Produtos', 'editar');
+  const session = await requirePermission('PRODUTOS', 'UPDATE');
   const parsed = ProductSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -345,7 +346,7 @@ export async function updateProduct(id: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EDITAR',
-      module: 'Produtos',
+      module: 'PRODUTOS',
       recordId: id,
       details: `Produto "${result.name}" atualizado. Alterações salvas no banco.`,
     });
@@ -360,7 +361,7 @@ export async function updateProduct(id: string, input: any) {
 }
 
 export async function deleteProduct(id: string) {
-  const session = await requirePermission('Produtos', 'excluir');
+  const session = await requirePermission('PRODUTOS', 'DELETE');
   try {
     const product = await prisma.product.findFirst({
       where: { id, companyId: session.companyId, isActive: true },
@@ -387,7 +388,7 @@ export async function deleteProduct(id: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'DELETAR',
-      module: 'Produtos',
+      module: 'PRODUTOS',
       recordId: id,
       details: `Produto "${product.name}" inativado/arquivado (Soft Delete).`,
     });
@@ -406,7 +407,7 @@ export async function deleteProduct(id: string) {
 // =========================================================================
 
 export async function getInventoryMovements(variantId?: string) {
-  const session = await requirePermission('Estoque', 'visualizar');
+  const session = await requirePermission('ESTOQUE', 'VIEW');
   try {
     const movements = await prisma.inventoryMovement.findMany({
       where: {
@@ -434,7 +435,7 @@ export async function getInventoryMovements(variantId?: string) {
 }
 
 export async function createInventoryMovement(input: any) {
-  const session = await requirePermission('Estoque', 'criar');
+  const session = await requirePermission('ESTOQUE', 'CREATE');
   const parsed = InventoryMovementSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -481,17 +482,58 @@ export async function createInventoryMovement(input: any) {
 
       const newAvailableStock = newCurrentStock - newReservedStock;
 
-      // 4. Aplicar regras de bloqueio de estoque negativo
-      if (newAvailableStock < 0) {
-        const isPDV = type === 'SALE' || type === 'EXCHANGE';
-        const isManual = type === 'MANUAL_ADJUSTMENT' || type === 'DAMAGE' || type === 'LOSS';
+      // 4. Aplicar regras de bloqueio de estoque negativo e autorização
+      const isPDV = type === 'SALE' || type === 'EXCHANGE';
+      const isManual = type === 'MANUAL_ADJUSTMENT' || type === 'DAMAGE' || type === 'LOSS';
 
+      if (newAvailableStock < 0) {
         if (isPDV && !company.allowNegativeStockOnPDV) {
           throw new Error('Estoque insuficiente para esta venda (Operação PDV bloqueada).');
         }
 
         if (isManual && !company.allowNegativeStockOnManualAdjustment) {
-          throw new Error('Estoque insuficiente para este ajuste manual (Operação bloqueada).');
+          if (input.authorizationId) {
+            const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+            if (!auth || auth.status !== 'APPROVED') {
+              throw new Error('Autorização de estoque negativo inválida ou não aprovada.');
+            }
+          } else {
+            const authReq = await authorizationService.createAuthorizationRequest({
+              companyId: session.companyId,
+              type: AuthorizationType.NEGATIVE_STOCK,
+              module: 'ESTOQUE',
+              requestedByUserId: session.userId,
+              referenceId: variantId,
+              referenceModule: 'PRODUCT_VARIANT',
+              amount: quantity,
+              reason: reason || 'Estoque Negativo',
+              financialImpact: false,
+            });
+            return { requireAuthorization: true, authorizationId: authReq.id };
+          }
+        }
+      }
+
+      if (isManual && newAvailableStock >= 0) {
+        // Correção manual de quantidade normal
+        if (input.authorizationId) {
+          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+          if (!auth || auth.status !== 'APPROVED') {
+            throw new Error('Autorização de ajuste de estoque inválida ou não aprovada.');
+          }
+        } else {
+          const authReq = await authorizationService.createAuthorizationRequest({
+            companyId: session.companyId,
+            type: AuthorizationType.STOCK_ADJUST,
+            module: 'ESTOQUE',
+            requestedByUserId: session.userId,
+            referenceId: variantId,
+            referenceModule: 'PRODUCT_VARIANT',
+            amount: quantity,
+            reason: reason || 'Ajuste de Estoque Manual',
+            financialImpact: false,
+          });
+          return { requireAuthorization: true, authorizationId: authReq.id };
         }
       }
 
@@ -517,28 +559,33 @@ export async function createInventoryMovement(input: any) {
         },
       });
 
-      return { movement, product: variant.product, newAvailableStock };
+      return { successResult: { movement, product: variant.product, newAvailableStock } };
     });
+
+    if (result && 'requireAuthorization' in result) {
+      return result;
+    }
+
+    const { movement, product, newAvailableStock } = result.successResult;
 
     await writeActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Estoque',
-      recordId: result.movement.id,
-      details: `Movimentação de estoque (${type}) de ${quantity} unidades criada para o produto "${result.product.name}". Novo saldo disponível: ${result.newAvailableStock}.`,
+      module: 'ESTOQUE',
+      recordId: movement.id,
+      details: `Movimentação de estoque (${type}) de ${quantity} unidades criada para o produto "${product.name}". Novo saldo disponível: ${newAvailableStock}.`,
     });
 
-    // Obtain productId from the variant we fetched (which is inside result or we can query it)
     const movementWithVariant = await prisma.inventoryMovement.findUnique({
-      where: { id: result.movement.id },
+      where: { id: movement.id },
       include: { variant: true }
     });
     if (movementWithVariant?.variant) {
       
     }
 
-    return { success: true, data: result.movement };
+    return { success: true, data: movement };
   } catch (error: any) {
     console.error('Error creating inventory movement:', error);
     return { success: false, error: error.message };
@@ -546,7 +593,7 @@ export async function createInventoryMovement(input: any) {
 }
 
 export async function getProductPriceHistory(productId: string) {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const history = await prisma.productPriceHistory.findMany({
       where: {
@@ -564,7 +611,7 @@ export async function getProductPriceHistory(productId: string) {
 
 
 export async function getProductInventoryMovements(productId: string) {
-  const session = await requirePermission('Produtos', 'visualizar');
+  const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
     const movements = await prisma.inventoryMovement.findMany({
       where: {

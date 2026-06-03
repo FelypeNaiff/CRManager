@@ -6,6 +6,8 @@ import { writeActivityLog } from '@/lib/auth/activity-log';
 import { Prisma } from '@prisma/client';
 import { CashRegisterOpenSchema, CashRegisterCloseSchema, CashMovementSchema } from './financial-schemas';
 import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
+import { AuthorizationType } from '@prisma/client';
+import { authorizationService } from '../auth/authorization-service';
 
 // =============================================================================
 // CASH REGISTER SERVICE — Serviço de Caixa
@@ -17,7 +19,7 @@ import { OperationalSettingsService } from '../configuracoes/operational-setting
 // =============================================================================
 
 export async function getCurrentOpenRegister() {
-  const session = await requirePermission('Caixa', 'visualizar');
+  const session = await requirePermission('CAIXA', 'VIEW');
   try {
     const register = await prisma.cashRegister.findFirst({
       where: { companyId: session.companyId, status: 'OPEN' },
@@ -34,7 +36,7 @@ export async function getCurrentOpenRegister() {
 }
 
 export async function getCashRegisters(limit = 30) {
-  const session = await requirePermission('Caixa', 'visualizar');
+  const session = await requirePermission('CAIXA', 'VIEW');
   try {
     const registers = await prisma.cashRegister.findMany({
       where: { companyId: session.companyId },
@@ -54,7 +56,7 @@ export async function getCashRegisters(limit = 30) {
 }
 
 export async function openCashRegister(input: any) {
-  const session = await requirePermission('Caixa', 'criar');
+  const session = await requirePermission('CAIXA', 'CREATE');
   const parsed = CashRegisterOpenSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -107,7 +109,7 @@ export async function openCashRegister(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Caixa',
+      module: 'CAIXA',
       recordId: result.id,
       details: `Caixa aberto com saldo inicial de R$ ${result.openingBalance}.`,
     });
@@ -120,7 +122,7 @@ export async function openCashRegister(input: any) {
 }
 
 export async function closeCashRegister(registerId: string, input: any) {
-  const session = await requirePermission('Caixa', 'editar');
+  const session = await requirePermission('CAIXA', 'UPDATE');
   const parsed = CashRegisterCloseSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -189,7 +191,7 @@ export async function closeCashRegister(registerId: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'FECHAR',
-      module: 'Caixa',
+      module: 'CAIXA',
       recordId: registerId,
       details: `Caixa fechado. Saldo real: R$ ${result.closingBalance} | Esperado: R$ ${result.expectedBalance} | Diferença: R$ ${result.difference}.`,
     });
@@ -202,7 +204,7 @@ export async function closeCashRegister(registerId: string, input: any) {
 }
 
 export async function addCashMovement(input: any) {
-  const session = await requirePermission('Caixa', 'editar');
+  const session = await requirePermission('CAIXA', 'UPDATE');
   const parsed = CashMovementSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -220,10 +222,46 @@ export async function addCashMovement(input: any) {
       // Validar políticas operacionais de sangria/reforço
       const settings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId, tx);
       if (parsed.data.type === 'SANGRIA' && !settings.allowCashWithdrawal) {
-        throw new Error('Operação de sangria desabilitada nas configurações operacionais.');
+        if (input.authorizationId) {
+          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+          if (!auth || auth.status !== 'APPROVED') {
+            throw new Error('Autorização de sangria inválida ou não aprovada.');
+          }
+        } else {
+          const authReq = await authorizationService.createAuthorizationRequest({
+            companyId: session.companyId,
+            type: AuthorizationType.CASH_WITHDRAWAL,
+            module: 'CAIXA',
+            requestedByUserId: session.userId,
+            referenceId: register.id,
+            referenceModule: 'CASH_REGISTER',
+            amount: parsed.data.amount,
+            reason: parsed.data.description || 'Sangria de Caixa',
+            financialImpact: true,
+          });
+          return { requireAuthorization: true, authorizationId: authReq.id };
+        }
       }
       if (parsed.data.type === 'REFORCO' && !settings.allowCashSupply) {
-        throw new Error('Operação de reforço desabilitada nas configurações operacionais.');
+        if (input.authorizationId) {
+          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+          if (!auth || auth.status !== 'APPROVED') {
+            throw new Error('Autorização de reforço inválida ou não aprovada.');
+          }
+        } else {
+          const authReq = await authorizationService.createAuthorizationRequest({
+            companyId: session.companyId,
+            type: AuthorizationType.CASH_SUPPLY,
+            module: 'CAIXA',
+            requestedByUserId: session.userId,
+            referenceId: register.id,
+            referenceModule: 'CASH_REGISTER',
+            amount: parsed.data.amount,
+            reason: parsed.data.description || 'Reforço de Caixa',
+            financialImpact: true,
+          });
+          return { requireAuthorization: true, authorizationId: authReq.id };
+        }
       }
 
       const mov = await tx.cashMovement.create({
@@ -247,11 +285,16 @@ export async function addCashMovement(input: any) {
       return mov;
     });
 
+    // if inner transaction returns an object with requireAuthorization, return it directly
+    if (movement && 'requireAuthorization' in movement) {
+      return movement;
+    }
+
     await writeActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: parsed.data.type,
-      module: 'Caixa',
+      module: 'CAIXA',
       recordId: parsed.data.cashRegisterId,
       details: `${typeLabel} de R$ ${parsed.data.amount} realizado no caixa.`,
     });
@@ -264,7 +307,7 @@ export async function addCashMovement(input: any) {
 }
 
 export async function getCashRegisterMovements(cashRegisterId: string) {
-  const session = await requirePermission('Caixa', 'visualizar');
+  const session = await requirePermission('CAIXA', 'VIEW');
   try {
     const movements = await prisma.cashMovement.findMany({
       where: { cashRegisterId, companyId: session.companyId },

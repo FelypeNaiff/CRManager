@@ -24,7 +24,7 @@ export async function getAccountsReceivable(filters?: {
   startDueDate?: string;
   endDueDate?: string;
 }) {
-  const session = await requirePermission('Contas a receber', 'visualizar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const where: any = { companyId: session.companyId };
     if (filters?.status) where.status = filters.status;
@@ -53,7 +53,7 @@ export async function getAccountsReceivable(filters?: {
 }
 
 export async function createAccountsReceivable(input: any) {
-  const session = await requirePermission('Contas a receber', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = AccountsReceivableSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -94,7 +94,7 @@ export async function createAccountsReceivable(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Contas a receber',
+      module: 'FINANCEIRO',
       recordId: installments[0]?.id,
       details: `${totalInstallments}x parcela(s) de R$ ${installmentAmount.toFixed(2)} criadas. Total: R$ ${totalAmount}. Descrição: ${description}`,
     });
@@ -112,7 +112,7 @@ export async function payInstallment(
   bankAccountId?: string,
   paymentMethodId?: string
 ) {
-  const session = await requirePermission('Contas a receber', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   const parsed = PayInstallmentSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -159,7 +159,7 @@ export async function payInstallment(
             customerId: receivable.customerId || null,
             referenceType: 'AccountsReceivable',
             referenceId: id,
-            sourceModule: 'Contas a receber',
+            sourceModule: 'FINANCEIRO',
             description: `Recebimento parcela ${receivable.installmentNumber}/${receivable.totalInstallments}`,
             amount: new Prisma.Decimal(amount),
             paidAt: paidAt ? new Date(paidAt) : new Date(),
@@ -186,7 +186,7 @@ export async function payInstallment(
       companyId: session.companyId,
       userId: session.userId,
       action: result.status === 'PAID' ? 'BAIXA_TOTAL' : 'BAIXA_PARCIAL',
-      module: 'Contas a receber',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Pagamento de R$ ${amount} registrado na parcela ${result.installmentNumber}/${result.totalInstallments}. Status: ${result.status}. Restante: R$ ${result.remainingAmount}.`,
     });
@@ -199,7 +199,7 @@ export async function payInstallment(
 }
 
 export async function cancelReceivable(id: string, reason?: string) {
-  const session = await requirePermission('Contas a receber', 'excluir');
+  const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     const receivable = await prisma.accountsReceivable.findFirst({
       where: { id, companyId: session.companyId },
@@ -218,7 +218,7 @@ export async function cancelReceivable(id: string, reason?: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CANCELAR',
-      module: 'Contas a receber',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Parcela ${receivable.installmentNumber}/${receivable.totalInstallments} de R$ ${receivable.originalAmount} cancelada.${reason ? ` Motivo: ${reason}` : ''}`,
     });
@@ -230,7 +230,7 @@ export async function cancelReceivable(id: string, reason?: string) {
 }
 
 export async function renegotiateReceivable(id: string, newDueDate: string, notes?: string) {
-  const session = await requirePermission('Contas a receber', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   try {
     const receivable = await prisma.accountsReceivable.findFirst({
       where: { id, companyId: session.companyId },
@@ -253,7 +253,7 @@ export async function renegotiateReceivable(id: string, newDueDate: string, note
       companyId: session.companyId,
       userId: session.userId,
       action: 'RENEGOCIAR',
-      module: 'Contas a receber',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Parcela ${receivable.installmentNumber}/${receivable.totalInstallments} renegociada para ${newDueDate}.${notes ? ` Obs: ${notes}` : ''}`,
     });

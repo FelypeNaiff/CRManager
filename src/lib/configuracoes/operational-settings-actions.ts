@@ -40,6 +40,11 @@ const OperationalSettingsFormSchema = z.object({
   enableCustomerWallet: z.boolean().default(true),
   walletExpirationDays: z.preprocess((val) => val === '' || val === null || val === undefined ? null : Number(val), z.number().int().min(1).nullable().optional()),
   allowPartialWalletUsage: z.boolean().default(true),
+  walletDefaultRefundMethod: z.string().default('WALLET'),
+  walletAllowManualCredit: z.boolean().default(true),
+  walletAllowManualDebit: z.boolean().default(true),
+  returnRequireAuthorization: z.boolean().default(true),
+  exchangeRequireAuthorization: z.boolean().default(true),
 });
 
 /**
@@ -63,7 +68,7 @@ export async function getOperationalSettingsAction() {
  * Action to update operational settings.
  */
 export async function updateOperationalSettingsAction(rawData: any) {
-  const session = await requirePermission('Configurações gerais', 'editar');
+  const session = await requirePermission('CONFIGURACOES_EMPRESA', 'UPDATE');
   try {
     const validatedData = OperationalSettingsFormSchema.parse(rawData);
     const updated = await OperationalSettingsService.updateOperationalSettings(

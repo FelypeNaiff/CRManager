@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import { PrismaClient, AuthorizationType } from "@prisma/client";
 import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
@@ -63,18 +63,27 @@ export class SalesService {
 
         if (!policy.allowed) {
           if (policy.requiresAuthorization) {
-            if (!data.authPin) {
-              throw new Error(`Desconto solicitado (${discountPercentage.toFixed(2)}%) excede o limite permitido (${maxAllowed.toFixed(2)}%). Autorização de gerente/administrador é necessária.`);
+            if (data.authorizationId) {
+              const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+              if (!auth || auth.status !== 'APPROVED') {
+                throw new Error('Autorização de desconto inválida ou não aprovada.');
+              }
+              authorizedByUserId = auth.authorizedByUserId;
+            } else {
+              const authReq = await authorizationService.createAuthorizationRequest({
+                companyId: data.companyId,
+                type: AuthorizationType.DISCOUNT,
+                module: 'PDV',
+                requestedByUserId: data.sellerId,
+                percentage: discountPercentage,
+                amount: data.discountAmount,
+                reason: data.authReason || 'Desconto excede o limite',
+                financialImpact: true,
+              });
+              
+              // Interrompe o fluxo retornando a necessidade de autorização
+              return { requireAuthorization: true, authorizationId: authReq.id };
             }
-
-            // Validar PIN de autorização centralizado (exige permissão de edição no PDV para autorizar)
-            const authorizer = await authorizationService.validatePinAuthorization(
-              data.companyId,
-              data.authPin,
-              { module: 'PDV', action: 'editar' }
-            );
-
-            authorizedByUserId = authorizer.id;
           } else {
             throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
           }
@@ -208,16 +217,34 @@ export class SalesService {
           // Carteira Digital
           if (!data.customerId) throw new Error("Cliente obrigatório para usar carteira digital.");
           const wallet = await tx.customerWallet.findUnique({ where: { customerId: data.customerId } });
-          if (!wallet || wallet.balance.toNumber() < payment.amount) {
+          if (!wallet || Number(wallet.balance) < payment.amount) {
             throw new Error(`Saldo insuficiente na carteira do cliente.`);
           }
 
           // Debitar da carteira
+          const balanceBefore = wallet.balance;
+          const balanceAfter = balanceBefore.sub(payment.amount);
+
           await tx.customerWallet.update({
             where: { id: wallet.id },
-            data: { balance: { decrement: payment.amount } }
+            data: { balance: balanceAfter }
           });
 
+          // Novo ledger WalletTransaction
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              customerId: data.customerId,
+              type: "DEBIT",
+              amount: payment.amount,
+              balanceBefore,
+              balanceAfter,
+              description: `Pagamento Venda #${sale.id.slice(0, 8)}`,
+              saleId: sale.id
+            }
+          });
+
+          // Legado
           await tx.customerWalletMovement.create({
             data: {
               walletId: wallet.id,
@@ -340,13 +367,26 @@ export class SalesService {
       const needsAuthorization = settings.requireAuthorizationToCancelSale || isTimeLimitExceeded;
 
       if (needsAuthorization) {
-        // Se quem está cancelando não for admin e não tiver permissão de edição nas vendas, bloquear
-        const isAuthorized = canceller?.role?.isAdmin || canceller?.role?.permissions.some(
-          (p: any) => p.module.toLowerCase() === 'vendas' && p.action.toLowerCase() === 'editar' && p.allowed
-        );
-
-        if (!isAuthorized) {
-          throw new Error("Você não possui permissão ou tempo limite excedido para cancelar esta venda. É necessária autorização de um gerente/administrador.");
+        if (data.authorizationId) {
+          const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+          if (!auth || auth.status !== 'APPROVED') {
+            throw new Error('Autorização de cancelamento inválida ou não aprovada.');
+          }
+          // Here we could register the authorizer in the sale or keep it in ActionAuthorization
+        } else {
+          const authReq = await authorizationService.createAuthorizationRequest({
+            companyId: sale.companyId,
+            type: AuthorizationType.SALE_CANCEL,
+            module: 'VENDAS',
+            requestedByUserId: data.cancelledByUserId,
+            referenceId: sale.id,
+            referenceModule: 'SALE',
+            amount: Number(sale.totalAmount),
+            reason: data.cancelReason,
+            financialImpact: true,
+          });
+          
+          return { requireAuthorization: true, authorizationId: authReq.id };
         }
       }
 

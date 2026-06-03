@@ -17,7 +17,7 @@ import {
 // =============================================================================
 
 export async function getBankAccounts() {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const accounts = await prisma.bankAccount.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -30,7 +30,7 @@ export async function getBankAccounts() {
 }
 
 export async function getBankAccountById(id: string) {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const account = await prisma.bankAccount.findFirst({
       where: { id, companyId: session.companyId },
@@ -43,7 +43,7 @@ export async function getBankAccountById(id: string) {
 }
 
 export async function createBankAccount(input: any) {
-  const session = await requirePermission('Financeiro', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = BankAccountSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -69,7 +69,7 @@ export async function createBankAccount(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: account.id,
       details: `Conta bancária "${account.name}" criada com saldo inicial de R$ ${account.initialBalance}.`,
     });
@@ -81,7 +81,7 @@ export async function createBankAccount(input: any) {
 }
 
 export async function updateBankAccount(id: string, input: any) {
-  const session = await requirePermission('Financeiro', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   const parsed = BankAccountSchema.partial().safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -95,7 +95,7 @@ export async function updateBankAccount(id: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EDITAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Conta bancária "${parsed.data.name ?? id}" atualizada.`,
     });
@@ -107,7 +107,7 @@ export async function updateBankAccount(id: string, input: any) {
 }
 
 export async function deleteBankAccount(id: string) {
-  const session = await requirePermission('Financeiro', 'excluir');
+  const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     await prisma.bankAccount.updateMany({
       where: { id, companyId: session.companyId },
@@ -118,7 +118,7 @@ export async function deleteBankAccount(id: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EXCLUIR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Conta bancária ${id} inativada (soft delete).`,
     });
@@ -134,7 +134,7 @@ export async function deleteBankAccount(id: string) {
 // =============================================================================
 
 export async function getCostCenters() {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const centers = await prisma.costCenter.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -147,7 +147,7 @@ export async function getCostCenters() {
 }
 
 export async function createCostCenter(input: any) {
-  const session = await requirePermission('Financeiro', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = CostCenterSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -160,7 +160,7 @@ export async function createCostCenter(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: center.id,
       details: `Centro de custo "${center.name}" criado.`,
     });
@@ -173,7 +173,7 @@ export async function createCostCenter(input: any) {
 }
 
 export async function updateCostCenter(id: string, input: any) {
-  const session = await requirePermission('Financeiro', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   const parsed = CostCenterSchema.partial().safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -187,7 +187,7 @@ export async function updateCostCenter(id: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EDITAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Centro de custo ${id} atualizado.`,
     });
@@ -199,7 +199,7 @@ export async function updateCostCenter(id: string, input: any) {
 }
 
 export async function deleteCostCenter(id: string) {
-  const session = await requirePermission('Financeiro', 'excluir');
+  const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     await prisma.costCenter.updateMany({
       where: { id, companyId: session.companyId },
@@ -210,7 +210,7 @@ export async function deleteCostCenter(id: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EXCLUIR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Centro de custo ${id} inativado.`,
     });
@@ -226,7 +226,7 @@ export async function deleteCostCenter(id: string) {
 // =============================================================================
 
 export async function getFinancialAccounts() {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const accounts = await prisma.financialAccount.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -240,7 +240,7 @@ export async function getFinancialAccounts() {
 }
 
 export async function createFinancialAccount(input: any) {
-  const session = await requirePermission('Financeiro', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = FinancialAccountSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -253,7 +253,7 @@ export async function createFinancialAccount(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: account.id,
       details: `Conta contábil "${account.code} — ${account.name}" criada no plano de contas.`,
     });
@@ -266,7 +266,7 @@ export async function createFinancialAccount(input: any) {
 }
 
 export async function updateFinancialAccount(id: string, input: any) {
-  const session = await requirePermission('Financeiro', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   const parsed = FinancialAccountSchema.partial().safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -280,7 +280,7 @@ export async function updateFinancialAccount(id: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EDITAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Conta contábil ${id} atualizada no plano de contas.`,
     });
@@ -296,7 +296,7 @@ export async function updateFinancialAccount(id: string, input: any) {
 // =============================================================================
 
 export async function getPaymentMethods() {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const methods = await prisma.paymentMethod.findMany({
       where: { companyId: session.companyId, isActive: true },
@@ -309,7 +309,7 @@ export async function getPaymentMethods() {
 }
 
 export async function createPaymentMethod(input: any) {
-  const session = await requirePermission('Financeiro', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = PaymentMethodSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -326,7 +326,7 @@ export async function createPaymentMethod(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: method.id,
       details: `Forma de pagamento "${method.name}" (${method.type}) criada.`,
     });
@@ -339,7 +339,7 @@ export async function createPaymentMethod(input: any) {
 }
 
 export async function updatePaymentMethod(id: string, input: any) {
-  const session = await requirePermission('Financeiro', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   const parsed = PaymentMethodSchema.partial().safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -358,7 +358,7 @@ export async function updatePaymentMethod(id: string, input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EDITAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Forma de pagamento ${id} atualizada.`,
     });
@@ -370,7 +370,7 @@ export async function updatePaymentMethod(id: string, input: any) {
 }
 
 export async function deletePaymentMethod(id: string) {
-  const session = await requirePermission('Financeiro', 'excluir');
+  const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     const method = await prisma.paymentMethod.findFirst({ where: { id, companyId: session.companyId } });
     if (method?.isSystemDefault) return { success: false, error: 'Formas de pagamento padrão do sistema não podem ser excluídas.' };
@@ -384,7 +384,7 @@ export async function deletePaymentMethod(id: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'EXCLUIR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Forma de pagamento ${id} inativada.`,
     });
@@ -400,7 +400,7 @@ export async function deletePaymentMethod(id: string) {
 // =============================================================================
 
 export async function createFinancialTransaction(input: any) {
-  const session = await requirePermission('Financeiro', 'criar');
+  const session = await requirePermission('FINANCEIRO', 'CREATE');
   const parsed = FinancialTransactionSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -446,7 +446,7 @@ export async function createFinancialTransaction(input: any) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: transaction.id,
       details: `Transação financeira "${transaction.description}" de R$ ${transaction.amount} (${transaction.direction}) criada.`,
     });
@@ -466,7 +466,7 @@ export async function getFinancialTransactions(filters?: {
   startDate?: string;
   endDate?: string;
 }) {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const where: any = { companyId: session.companyId };
     if (filters?.type) where.type = filters.type;
@@ -499,7 +499,7 @@ export async function getFinancialTransactions(filters?: {
 }
 
 export async function cancelFinancialTransaction(id: string, reason: string) {
-  const session = await requirePermission('Financeiro', 'editar');
+  const session = await requirePermission('FINANCEIRO', 'UPDATE');
   try {
     const result = await prisma.$transaction(async (tx) => {
       const transaction = await tx.financialTransaction.findFirst({
@@ -530,7 +530,7 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
       companyId: session.companyId,
       userId: session.userId,
       action: 'CANCELAR',
-      module: 'Financeiro',
+      module: 'FINANCEIRO',
       recordId: id,
       details: `Transação "${id}" cancelada. Motivo: ${reason}`,
     });
@@ -546,7 +546,7 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
 // =============================================================================
 
 export async function getFinancialDashboardSummary() {
-  const session = await requirePermission('Financeiro', 'acessar');
+  const session = await requirePermission('FINANCEIRO', 'VIEW');
   try {
     const now = new Date();
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);

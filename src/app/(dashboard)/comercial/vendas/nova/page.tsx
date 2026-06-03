@@ -122,7 +122,7 @@ export default function NovaVendaPage() {
         totalPrice: (i.unitPrice - i.discount) * i.quantity
       })),
       payments: [], // Se a API permitir sem pagamentos. Se não, precisaremos buscar 1 metodo.
-      authPin: pin,
+      authorizationId: pin,
       authReason: reason
     });
 

@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getOperationalSettingsAction, updateOperationalSettingsAction } from '@/lib/configuracoes/operational-settings-actions';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -31,6 +32,8 @@ export default function OperationalSettingsForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('descontos');
+  const [initialData, setInitialData] = useState<any>(null);
+  const [settingsMeta, setSettingsMeta] = useState<any>(null);
 
   const [form, setForm] = useState({
     allowDiscount: true,
@@ -75,7 +78,8 @@ export default function OperationalSettingsForm() {
         const response = await getOperationalSettingsAction();
         if (response.success && response.data) {
           const s = response.data;
-          setForm({
+          setSettingsMeta(s);
+          const initialFormState = {
             allowDiscount: s.allowDiscount,
             sellerDiscountLimit: Number(s.sellerDiscountLimit),
             managerDiscountLimit: Number(s.managerDiscountLimit),
@@ -104,7 +108,9 @@ export default function OperationalSettingsForm() {
             enableCustomerWallet: s.enableCustomerWallet ?? true,
             walletExpirationDays: s.walletExpirationDays ? String(s.walletExpirationDays) : '',
             allowPartialWalletUsage: s.allowPartialWalletUsage ?? true,
-          });
+          };
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -126,13 +132,21 @@ export default function OperationalSettingsForm() {
     loadSettings();
   }, [toast]);
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     setIsSaving(true);
 
     try {
       const res = await updateOperationalSettingsAction(form);
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setSettingsMeta(res.data);
         toast({
           title: 'Sucesso',
           description: 'Configurações operacionais e PDV atualizadas com sucesso.',
@@ -154,6 +168,8 @@ export default function OperationalSettingsForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -564,9 +580,16 @@ export default function OperationalSettingsForm() {
           </ConfigTabsContent>
         </ConfigTabs>
 
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Configurações" />
-        </div>
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <ConfigFormActions 
+          isSaving={isSaving} 
+          isDirty={isDirty} 
+          onCancel={handleCancel} 
+          onSave={handleSave} 
+          saveLabel="Salvar Configurações" 
+          updatedAt={settingsMeta?.updatedAt}
+          updatedBy={settingsMeta?.updatedBy}
+        />
       </form>
     </div>
   );

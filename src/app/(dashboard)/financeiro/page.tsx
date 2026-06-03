@@ -197,7 +197,7 @@ export default function FinanceiroDashboardPage() {
 
       {/* Linha 1: Cartões Principais */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <PermissionGate modulo="Financeiro" acao="ver_saldos_bancarios" fallback={
+        <PermissionGate module="FINANCEIRO" action="VIEW" fallback={
           <Card className="bg-primary text-primary-foreground">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex justify-between items-center text-primary-foreground/80">
@@ -247,7 +247,7 @@ export default function FinanceiroDashboardPage() {
           </CardContent>
         </Card>
 
-        <PermissionGate modulo="Financeiro" acao="ver_lucro" fallback={
+        <PermissionGate module="FINANCEIRO" action="VIEW" fallback={
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium flex justify-between items-center text-muted-foreground">

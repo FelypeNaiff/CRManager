@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -16,6 +17,7 @@ export default function ContactForm() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [company, setCompany] = useState<any>(null);
+  const [initialData, setInitialData] = useState<any>(null);
 
   const [form, setForm] = useState({
     telefone: '',
@@ -33,12 +35,14 @@ export default function ContactForm() {
         if (response.success && response.data) {
           const comp = response.data;
           setCompany(comp);
-          setForm({
+          const initialFormState = {
             telefone: comp.telefone || '',
             whatsapp: comp.whatsapp || '',
             email: comp.email || '',
             site: comp.site || '',
-          });
+          };
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -69,8 +73,15 @@ export default function ContactForm() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+      setErrors({});
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!validate()) {
       toast({
         title: 'Erro de Validação',
@@ -90,6 +101,8 @@ export default function ContactForm() {
 
       const res = await updateCompanyAction(payload, 'contatos');
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setCompany(res.data);
         toast({
           title: 'Sucesso',
           description: 'Canais de contato atualizados com sucesso.',
@@ -111,6 +124,8 @@ export default function ContactForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -182,8 +197,17 @@ export default function ContactForm() {
           </div>
         </ConfigCardSection>
 
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Contatos" />
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <div className="sticky bottom-0 z-10 -mx-4 -mb-4 p-4 mt-6 bg-slate-50/90 backdrop-blur border-t rounded-b-xl shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)]">
+          <ConfigFormActions 
+            isSaving={isSaving} 
+            isDirty={isDirty} 
+            onCancel={handleCancel} 
+            onSave={handleSave} 
+            saveLabel="Salvar Contatos" 
+            updatedAt={company?.updatedAt}
+            updatedBy={company?.updatedBy}
+          />
         </div>
       </form>
     </div>

@@ -134,7 +134,7 @@ export default function ConfiguracoesLayout({
           <div className="flex flex-1 h-screen overflow-hidden">
             <ConfigSidebar />
             <main className="flex-1 flex flex-col overflow-y-auto bg-slate-50 p-4 md:p-6 lg:p-8">
-              <RequirePermission modulo="Configurações" acao="acessar">
+              <RequirePermission module="CONFIGURACOES" action="VIEW">
                 {children}
               </RequirePermission>
             </main>

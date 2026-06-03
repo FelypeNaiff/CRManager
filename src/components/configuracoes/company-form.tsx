@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { getCompanyAction, updateCompanyAction } from '@/lib/configuracoes/company-actions';
 import { fetchCnpjData, fetchViaCep } from '@/lib/lookup';
+import { isFormDirty } from '@/lib/utils/form-utils';
 import {
   ConfigPageHeader,
   ConfigCardSection,
@@ -22,6 +23,9 @@ export default function CompanyForm() {
   const [isSaving, setIsSaving] = useState(false);
   const [cnpjLoading, setCnpjLoading] = useState(false);
   const [cepLoading, setCepLoading] = useState(false);
+  
+  const [company, setCompany] = useState<any>(null);
+  const [initialData, setInitialData] = useState<any>(null);
 
   const [form, setForm] = useState({
     razaoSocial: '',
@@ -56,7 +60,7 @@ export default function CompanyForm() {
         const response = await getCompanyAction();
         if (response.success && response.data) {
           const comp = response.data;
-          setForm({
+          const initialFormState = {
             razaoSocial: comp.razaoSocial || '',
             nomeFantasia: comp.nomeFantasia || '',
             cnpjCpf: comp.cnpjCpf || '',
@@ -79,7 +83,10 @@ export default function CompanyForm() {
             nomeExibido: comp.nomeExibido || '',
             observacoes: comp.observacoes || '',
             status: comp.status || 'ativo',
-          });
+          };
+          setCompany(comp);
+          setInitialData(initialFormState);
+          setForm(initialFormState);
         } else {
           toast({
             title: 'Aviso',
@@ -208,8 +215,15 @@ export default function CompanyForm() {
     }
   };
 
-  const handleSave = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCancel = () => {
+    if (initialData) {
+      setForm(initialData);
+      setErrors({});
+    }
+  };
+
+  const handleSave = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!validate()) {
       toast({
         title: 'Erro de Validação',
@@ -221,8 +235,14 @@ export default function CompanyForm() {
 
     setIsSaving(true);
     try {
-      const res = await updateCompanyAction(form);
+      const payload = {
+        ...company,
+        ...form,
+      };
+      const res = await updateCompanyAction(payload);
       if (res.success) {
+        setInitialData(form);
+        if (res.data) setCompany(res.data);
         toast({
           title: 'Sucesso',
           description: 'Dados da empresa atualizados com sucesso.',
@@ -244,6 +264,8 @@ export default function CompanyForm() {
       setIsSaving(false);
     }
   };
+
+  const isDirty = isFormDirty(form, initialData);
 
   if (isLoading) {
     return (
@@ -587,10 +609,16 @@ export default function CompanyForm() {
           </div>
         </Tabs>
 
-        {/* BOTOES DE AÇÃO */}
-        <div className="flex justify-end p-4 rounded-xl border bg-white shadow-sm">
-          <ConfigFormActions isSaving={isSaving} saveLabel="Salvar Dados da Empresa" />
-        </div>
+        {/* BOTOES DE AÇÃO - FIXOS NO RODAPÉ */}
+        <ConfigFormActions 
+          isSaving={isSaving} 
+          isDirty={isDirty} 
+          onCancel={handleCancel} 
+          onSave={handleSave} 
+          saveLabel="Salvar Dados da Empresa" 
+          updatedAt={company?.updatedAt}
+          updatedBy={company?.updatedBy}
+        />
       </form>
     </div>
   );
