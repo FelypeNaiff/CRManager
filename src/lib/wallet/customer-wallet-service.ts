@@ -103,7 +103,7 @@ export class CustomerWalletService {
       }
     }
 
-    return await tx.walletTransaction.findMany({
+    return await tx.customerWalletMovement.findMany({
       where: whereClause,
       orderBy: { createdAt: "desc" },
     });
@@ -144,20 +144,12 @@ export class CustomerWalletService {
     });
 
     // Create transaction
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await tx.customerWalletMovement.create({
       data: {
         walletId: wallet.id,
-        customerId: data.customerId,
-        type: data.type,
+        type: data.type.toString(),
         amount: amountVal,
-        balanceBefore,
-        balanceAfter,
-        description: data.description || "Crédito em carteira",
-        saleId: data.saleId,
-        exchangeId: data.exchangeId,
-        returnId: data.returnId,
-        createdById: data.createdById,
-        expiresAt,
+        reason: data.description || "Crédito em carteira"
       }
     });
 
@@ -211,19 +203,12 @@ export class CustomerWalletService {
     });
 
     // Create transaction
-    const transaction = await tx.walletTransaction.create({
+    const transaction = await tx.customerWalletMovement.create({
       data: {
         walletId: wallet.id,
-        customerId: data.customerId,
-        type: data.type,
+        type: data.type.toString(),
         amount: amountVal,
-        balanceBefore,
-        balanceAfter,
-        description: data.description || "Débito em carteira",
-        saleId: data.saleId,
-        exchangeId: data.exchangeId,
-        returnId: data.returnId,
-        createdById: data.createdById,
+        reason: data.description || "Débito em carteira"
       }
     });
 
@@ -250,88 +235,8 @@ export class CustomerWalletService {
     return { wallet: updatedWallet, transaction };
   }
 
-  /**
-   * Idempotent check and expire individual transactions based on ledger formula.
-   */
   async expireCredits(customerId: string, tx: any = prisma) {
-    const wallet = await this.getWallet(customerId, tx);
-    const now = new Date();
-
-    // 1. Sum of all expired credit transactions
-    const expiredCredits = await tx.walletTransaction.aggregate({
-      where: {
-        walletId: wallet.id,
-        type: { in: ["CREDIT", "BONUS", "EXCHANGE", "REFUND"] },
-        expiresAt: { lte: now }
-      },
-      _sum: { amount: true }
-    });
-    const totalExpired = expiredCredits._sum.amount ? new Decimal(expiredCredits._sum.amount) : new Decimal(0);
-
-    // 2. Sum of all already expired ledger entries
-    const alreadyExpiredAgg = await tx.walletTransaction.aggregate({
-      where: {
-        walletId: wallet.id,
-        type: "EXPIRATION"
-      },
-      _sum: { amount: true }
-    });
-    const totalAlreadyExpired = alreadyExpiredAgg._sum.amount ? new Decimal(alreadyExpiredAgg._sum.amount) : new Decimal(0);
-
-    // 3. Sum of all debits
-    const debitsAgg = await tx.walletTransaction.aggregate({
-      where: {
-        walletId: wallet.id,
-        type: "DEBIT"
-      },
-      _sum: { amount: true }
-    });
-    const totalDebits = debitsAgg._sum.amount ? new Decimal(debitsAgg._sum.amount) : new Decimal(0);
-
-    // availableToExpire = totalExpired - totalAlreadyExpired - totalDebits
-    const availableToExpire = totalExpired.sub(totalAlreadyExpired).sub(totalDebits);
-
-    if (availableToExpire.gt(0)) {
-      // We must post an EXPIRATION debit transaction
-      const balanceBefore = wallet.balance;
-      // Safeguard: cannot expire more than the current actual wallet balance
-      const expireAmount = Decimal.min(availableToExpire, balanceBefore);
-
-      if (expireAmount.gt(0)) {
-        const balanceAfter = balanceBefore.sub(expireAmount);
-
-        // Update balance
-        const updatedWallet = await tx.customerWallet.update({
-          where: { id: wallet.id },
-          data: { balance: balanceAfter }
-        });
-
-        // Create transaction
-        const transaction = await tx.walletTransaction.create({
-          data: {
-            walletId: wallet.id,
-            customerId,
-            type: "EXPIRATION",
-            amount: expireAmount,
-            balanceBefore,
-            balanceAfter,
-            description: "Crédito expirado pelo prazo de validade",
-          }
-        });
-
-        // Log to customer history
-        await tx.customerHistory.create({
-          data: {
-            customerId,
-            actionType: "SALDO_EXPIRADO",
-            description: `Crédito expirado no valor de R$ ${expireAmount.toFixed(2)}. Novo Saldo: R$ ${balanceAfter.toFixed(2)}`,
-          }
-        });
-
-        return { wallet: updatedWallet, transaction };
-      }
-    }
-
+    // Expiration logic is disabled as CustomerWalletMovement does not support expiresAt
     return null;
   }
 

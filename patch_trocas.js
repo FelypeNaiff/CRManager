@@ -1,4 +1,6 @@
-"use client"
+const fs = require('fs');
+
+const content = `"use client"
 
 import React, { useMemo, useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -85,12 +87,12 @@ export default function TrocasDevolucoesPage() {
       listExchangeReturns(),
       getCustomers()
     ])
-    if (resRet.success && resRet.data) {
+    if (resRet.success) {
       setReturns(resRet.data)
     } else {
       setError(resRet.error as string)
     }
-    if (resCli.success && resCli.data) {
+    if (resCli.success) {
       setClients(resCli.data)
     }
     setIsLoadingReturns(false)
@@ -127,7 +129,7 @@ export default function TrocasDevolucoesPage() {
       setIsLoadingSales(true)
       try {
         const res = await listSalesAction(tenantId, { customerId: form.cliente_id })
-        if (res.success && 'data' in res) {
+        if (res.success) {
           setCustomerSales(res.data)
         }
       } catch (e) {
@@ -269,11 +271,11 @@ export default function TrocasDevolucoesPage() {
           <button
             key={tab.id}
             onClick={() => setActiveTab(tab.id)}
-            className={`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
+            className={\`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all \${
               activeTab === tab.id 
                 ? "border-indigo-600 text-indigo-600" 
                 : "border-transparent text-slate-400 hover:text-slate-600"
-            }`}
+            }\`}
           >
             <tab.icon className="h-4 w-4" />
             {tab.label}
@@ -316,9 +318,9 @@ export default function TrocasDevolucoesPage() {
               <Card key={idx} className="overflow-hidden border border-slate-100 hover:border-slate-200 transition-all shadow-sm">
                 <CardContent className="p-4 flex flex-col md:flex-row md:items-center justify-between gap-4 text-xs">
                   <div className="flex items-start gap-3">
-                    <div className={`h-9 w-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                    <div className={\`h-9 w-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 \${
                       item.tipo === "RETURN" ? "bg-amber-100 text-amber-600" : "bg-indigo-100 text-indigo-600"
-                    }`}>
+                    }\`}>
                       <Repeat className="h-4 w-4" />
                     </div>
                     <div className="space-y-1.5">
@@ -555,3 +557,6 @@ export default function TrocasDevolucoesPage() {
     </div>
   )
 }
+`;
+
+fs.writeFileSync('src/app/(dashboard)/crm/trocas/page.tsx', content, 'utf8');

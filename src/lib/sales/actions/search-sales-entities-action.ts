@@ -45,7 +45,8 @@ export async function searchCustomersAction(companyId: string, query: string) {
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { email: { contains: query, mode: "insensitive" } },
-          { phone: { contains: query, mode: "insensitive" } }
+          { phone: { contains: query, mode: "insensitive" } },
+          { cpf: { contains: query, mode: "insensitive" } }
         ]
       },
       include: {

@@ -44,6 +44,7 @@ import {
 import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { getChildren, getCustomers, createChild, updateChild, deleteChild } from "@/lib/crm/actions"
+import { usePermissions } from "@/hooks/use-permissions"
 
 const emptyForm = {
   nome: "",
@@ -82,6 +83,7 @@ function getIdadeEmAnos(dataNascimento: string): number | null {
 function FilhosPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
+  const { can } = usePermissions()
   const clienteId = searchParams.get("clienteId")
   const clienteNome = searchParams.get("nome") || "Cliente"
   
@@ -299,7 +301,7 @@ function FilhosPageContent() {
             )}
           </div>
         </div>
-        {clienteId && (
+        {clienteId && can('CLIENTES', 'UPDATE') && (
           <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2" onClick={openNewDialog}>
             <Plus className="h-4 w-4" /> Cadastrar Filho
           </Button>
@@ -409,13 +411,19 @@ function FilhosPageContent() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem className="cursor-pointer" onClick={() => openEditDialog(filho)}>
-                          <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar
-                        </DropdownMenuItem>
-                        <DropdownMenuSeparator />
-                        <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => openDeleteDialog(filho)}>
-                          <Trash2 className="mr-2 h-4 w-4" /> Arquivar
-                        </DropdownMenuItem>
+                        {can('CLIENTES', 'UPDATE') && (
+                          <DropdownMenuItem className="cursor-pointer" onClick={() => openEditDialog(filho)}>
+                            <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar
+                          </DropdownMenuItem>
+                        )}
+                        {can('CLIENTES', 'DELETE') && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => openDeleteDialog(filho)}>
+                              <Trash2 className="mr-2 h-4 w-4" /> Arquivar
+                            </DropdownMenuItem>
+                          </>
+                        )}
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>
@@ -480,13 +488,19 @@ function FilhosPageContent() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem className="cursor-pointer" onClick={() => openEditDialog(filho)}>
-                                <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => openDeleteDialog(filho)}>
-                                <Trash2 className="mr-2 h-4 w-4" /> Arquivar
-                              </DropdownMenuItem>
+                              {can('CLIENTES', 'UPDATE') && (
+                                <DropdownMenuItem className="cursor-pointer" onClick={() => openEditDialog(filho)}>
+                                  <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar
+                                </DropdownMenuItem>
+                              )}
+                              {can('CLIENTES', 'DELETE') && (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => openDeleteDialog(filho)}>
+                                    <Trash2 className="mr-2 h-4 w-4" /> Arquivar
+                                  </DropdownMenuItem>
+                                </>
+                              )}
                             </DropdownMenuContent>
                           </DropdownMenu>
                         </div>

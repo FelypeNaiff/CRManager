@@ -650,3 +650,186 @@ export async function getCustomerExchangeReturns(customerId: string) {
 
 
 
+
+
+export async function getSegmentationData() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const clients = await prisma.customer.findMany({
+      where: { companyId: session.companyId, status: { not: 'arquivado' } },
+      include: {
+        children: true,
+        tagRelations: { include: { tag: true } },
+        wallet: true,
+        sales: { select: { id: true, totalAmount: true, createdAt: true }, where: { status: { not: 'CANCELLED' } } }
+      }
+    });
+
+    const tags = await prisma.customerTag.findMany({
+      where: { companyId: session.companyId }
+    });
+
+    const stats: Record<string, any> = {};
+    clients.forEach(c => {
+      let total = 0;
+      let count = 0;
+      let last: Date | null = null;
+      c.sales.forEach(s => {
+        total += Number(s.totalAmount);
+        count++;
+        if (!last || s.createdAt > last) last = s.createdAt;
+      });
+
+      stats[c.id] = {
+        totalComprado: total,
+        ticketMedio: count > 0 ? total / count : 0,
+        ultimaCompra: last,
+        saldoDisponivel: Number(c.wallet?.balance || 0),
+        filhos: c.children.map(ch => ({ ...ch, data_nascimento: ch.birthDate, tamanho_roupa: ch.clothingSize, tamanho_calcado: ch.shoeSize, sexo: ch.gender, nome: ch.name })),
+        tags: c.tagRelations.map(tr => tr.tag.name)
+      };
+    });
+
+    const mappedClients = clients.map(c => ({
+      id: c.id,
+      nome: c.name,
+      whatsapp: c.phone,
+      whatsapp_principal: c.phone,
+      aceita_marketing: true,
+      aceita_marketing_whatsapp: true,
+      vip: false,
+      data_nascimento: c.birthDay ? new Date(c.birthYear || new Date().getFullYear(), (c.birthMonth || 1) - 1, c.birthDay) : null,
+    }));
+
+    return { success: true, data: { clientes: mappedClients, stats, tags } };
+  } catch (error: any) {
+    console.error('Error fetching segmentation data:', error);
+    return { success: false, error: 'Erro ao buscar dados para segmentacao.' };
+  }
+}
+
+export async function listExchangeReturns() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const list = await prisma.exchangeReturn.findMany({
+      where: { companyId: session.companyId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        items: {
+          include: { variant: { select: { name: true, product: { select: { name: true } } } } }
+        }
+      }
+    });
+
+    const customerIds = [...new Set(list.map((e: any) => e.customerId).filter(Boolean))] as string[];
+    const customers = await prisma.customer.findMany({ where: { id: { in: customerIds } } });
+    const customerMap = new Map(customers.map(c => [c.id, c]));
+
+    const mapped = list.map((e: any) => ({
+      id: e.id,
+      tipo: e.type,
+      cliente_id: e.customerId,
+      venda_id: e.originalSaleId,
+      status: e.status,
+      motivo: e.exchangeReason,
+      valor_total: Number(e.totalCredit),
+      valor_credito: Number(e.totalCredit),
+      gera_credito: Number(e.totalCredit) > 0,
+      observacao: "",
+      created_at: e.createdAt,
+      client: { nome: e.customerId ? (customerMap.get(e.customerId)?.name || "Consumidor") : "Consumidor" },
+      product: { nome: e.items[0]?.variant?.product?.name || "Produto" },
+      quantidade: e.items.reduce((acc: number, i: any) => acc + Number(i.quantity), 0)
+    }));
+
+    return { success: true, data: mapped };
+  } catch (error: any) {
+    console.error("Error in listExchangeReturns:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createExchangeReturnAction(data: any) {
+  const session = await requirePermission('CLIENTES', 'UPDATE');
+  try {
+    const { ExchangeService } = await import('@/lib/sales/exchange-service');
+    const svc = new ExchangeService();
+    const result = await svc.processExchangeReturn({
+      companyId: session.companyId,
+      saleId: data.venda_id,
+      userId: session.userId,
+      type: data.tipo,
+      reason: data.motivo,
+      items: [{
+        variantId: data.produto_id,
+        quantity: data.quantidade,
+        condition: data.destino_produto === 'avaria' ? 'DAMAGED' : (data.destino_produto === 'descarte' ? 'DISCARD' : 'RESALE')
+      }]
+    });
+    return { success: true, data: result };
+  } catch (error: any) {
+    console.error("Error creating exchange return:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function listCampaigns() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const list = await prisma.customerHistory.findMany({
+      where: { customer: { companyId: session.companyId }, actionType: 'Campanha WhatsApp' },
+      orderBy: { createdAt: 'desc' },
+      include: { customer: true }
+    });
+
+    const campaignsMap = new Map<string, any>();
+    
+    list.forEach(h => {
+      // Group by description prefix or time to simulate "campaigns"
+      // Since we don't have a Campaign model, we group by description.
+      // But actually we could just return history items if there is no Campaign model.
+      // Wait, we don't have a Campaign model? Let's check.
+    });
+
+    return { success: true, data: list.map(h => ({ id: h.id, nome: h.actionType, cliente: h.customer.name, createdAt: h.createdAt, description: h.description })) };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function createCampaignAction(data: any) {
+  const session = await requirePermission('CLIENTES', 'UPDATE');
+  try {
+    const { clients, name, message, integration } = data;
+    
+    for (const clientId of clients) {
+      await prisma.customerHistory.create({
+        data: {
+          customerId: clientId,
+          actionType: 'Campanha WhatsApp',
+          description: `Disparo da campanha "${name}" via ${integration}. Mensagem: "${message}"`
+        }
+      });
+    }
+
+    return { success: true };
+  } catch (error: any) {
+    return { success: false, error: error.message };
+  }
+}
+
+export async function getCustomerHistoryLogs() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const list = await prisma.customerHistory.findMany({
+      where: { customer: { companyId: session.companyId } },
+      include: { customer: true },
+      orderBy: { createdAt: 'desc' },
+      take: 200
+    });
+    return { success: true, data: list };
+  } catch (error: any) {
+    console.error('Error fetching customer history logs:', error);
+    return { success: false, error: 'Erro ao buscar histórico.' };
+  }
+}

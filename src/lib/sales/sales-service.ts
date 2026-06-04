@@ -210,6 +210,16 @@ export class SalesService {
         }
       });
 
+      if (data.customerId) {
+        await tx.customerHistory.create({
+          data: {
+            customerId: data.customerId,
+            actionType: "VENDA_CONCLUIDA",
+            description: `Venda #${sale.id} concluída. Valor Total: R$ ${data.totalAmount}`
+          }
+        });
+      }
+
       // Etapa 8: Integrar comissões e metas
       await sellerCommissionService.processSaleCommission(tx, sale);
 

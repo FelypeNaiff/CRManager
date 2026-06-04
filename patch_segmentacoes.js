@@ -1,4 +1,6 @@
-"use client"
+const fs = require('fs');
+
+const content = `"use client"
 
 import React, { useState, useMemo, useEffect } from "react"
 import { useRouter } from "next/navigation"
@@ -89,7 +91,7 @@ export default function SegmentacoesPage() {
     if (!clientes) return []
 
     return clientes.filter((c: any) => {
-      const cleanWhats = (c.whatsapp_principal || c.whatsapp || "").replace(/\D/g, "")
+      const cleanWhats = (c.whatsapp_principal || c.whatsapp || "").replace(/\\D/g, "")
       if (cleanWhats.length < 10) return false
       
       if (c.aceita_marketing === false || c.aceita_marketing_whatsapp === false) return false
@@ -209,24 +211,24 @@ export default function SegmentacoesPage() {
     const headers = ["Nome", "WhatsApp", "VIP", "Saldo Carteira", "Filhos", "Ticket Médio"]
     const rows = filteredClients.map((c: any) => {
       const statsObj = clientStats[c.id]
-      const kidsList = statsObj?.filhos.map((k: any) => `${k.nome} (${k.tamanho_roupa || 'N/A'})`).join(" | ") || ""
+      const kidsList = statsObj?.filhos.map((k: any) => \`\${k.nome} (\${k.tamanho_roupa || 'N/A'})\`).join(" | ") || ""
       return [
         c.nome,
         c.whatsapp_principal || c.whatsapp,
         c.vip ? "SIM" : "NAO",
-        `R$ ${(statsObj?.saldoDisponivel || 0).toFixed(2)}`,
+        \`R$ \${(statsObj?.saldoDisponivel || 0).toFixed(2)}\`,
         kidsList,
-        `R$ ${(statsObj?.ticketMedio || 0).toFixed(2)}`
+        \`R$ \${(statsObj?.ticketMedio || 0).toFixed(2)}\`
       ]
     })
 
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map((e: any) => e.map((val: any) => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n")
+      + [headers.join(","), ...rows.map((e: any) => e.map((val: any) => \`"\${String(val).replace(/"/g, '""')}"\`).join(","))].join("\\n")
     
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `segmentacao_whatsapp_${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.setAttribute("download", \`segmentacao_whatsapp_\${format(new Date(), "yyyy-MM-dd")}.csv\`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -555,7 +557,7 @@ export default function SegmentacoesPage() {
                               </Badge>
                             ))}
                           </TableCell>
-                          <TableCell className={`text-right font-bold ${statsObj?.saldoDisponivel > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+                          <TableCell className={\`text-right font-bold \${statsObj?.saldoDisponivel > 0 ? 'text-indigo-600' : 'text-slate-400'}\`}>
                             R$ {(statsObj?.saldoDisponivel || 0).toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right text-slate-600">
@@ -578,3 +580,6 @@ export default function SegmentacoesPage() {
     </div>
   )
 }
+`;
+
+fs.writeFileSync('src/app/(dashboard)/crm/segmentacoes/page.tsx', content, 'utf8');

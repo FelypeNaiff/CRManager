@@ -5,7 +5,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { History, Search, Loader2, Calendar, User, AlertCircle } from "lucide-react"
-import { getActivityLogs } from "@/lib/crm/actions"
+import { getCustomerHistoryLogs } from "@/lib/crm/actions"
 
 export default function HistoricoCrmPage() {
   const [searchTerm, setSearchTerm] = useState("")
@@ -20,15 +20,15 @@ export default function HistoricoCrmPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const res = await getActivityLogs()
+      const res = await getCustomerHistoryLogs()
       if (res.success && res.data) {
         // Map to compatible frontend structure
         const mapped = res.data.map((l: any) => ({
-          usuario_nome: l.user?.name || "Sistema",
-          acao: l.action,
-          modulo: l.module,
-          detalhes: l.details,
-          registro_id: l.recordId || "",
+          usuario_nome: l.customer?.name || "Sistema",
+          acao: l.actionType,
+          modulo: "CRM",
+          detalhes: l.description,
+          registro_id: l.id || "",
           data_hora: { seconds: new Date(l.createdAt).getTime() / 1000 }
         }))
         setLogs(mapped)

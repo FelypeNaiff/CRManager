@@ -1,4 +1,6 @@
-"use client"
+const fs = require('fs');
+
+const content = `"use client"
 
 import React, { useState, useMemo, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
@@ -24,11 +26,9 @@ import {
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { getCustomers, listCampaigns, createCampaignAction } from "@/lib/crm/actions"
-import { usePermissions } from "@/hooks/use-permissions"
 import { format } from "date-fns"
 
 export default function CampanhasPage() {
-  const { can } = usePermissions()
   const searchParams = useSearchParams()
   const router = useRouter()
 
@@ -113,7 +113,7 @@ export default function CampanhasPage() {
       if (res.success) {
         toast({ 
           title: "Campanha disparada!", 
-          description: `Sucesso: ${segmentClients.length} mensagens enviadas na simulação via ${integrationDest}.` 
+          description: \`Sucesso: \${segmentClients.length} mensagens enviadas na simulação via \${integrationDest}.\` 
         })
         setCampanhaNome("")
         setMensagemTemplate("Olá {{nome}}, temos novidades especiais na Trupe Kids...")
@@ -144,12 +144,12 @@ export default function CampanhasPage() {
     })
 
     const csvContent = "data:text/csv;charset=utf-8," 
-      + [headers.join(","), ...rows.map(e => e.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))].join("\n")
+      + [headers.join(","), ...rows.map(e => e.map(val => \`"\${String(val).replace(/"/g, '""')}"\`).join(","))].join("\\n")
     
     const encodedUri = encodeURI(csvContent)
     const link = document.createElement("a")
     link.setAttribute("href", encodedUri)
-    link.setAttribute("download", `publico_campanha_${format(new Date(), "yyyy-MM-dd")}.csv`)
+    link.setAttribute("download", \`publico_campanha_\${format(new Date(), "yyyy-MM-dd")}.csv\`)
     document.body.appendChild(link)
     link.click()
     document.body.removeChild(link)
@@ -168,25 +168,23 @@ export default function CampanhasPage() {
       </div>
 
       <div className="flex border-b border-slate-200 gap-6">
-        {can('CLIENTES', 'UPDATE') && (
-          <button
-            onClick={() => setActiveTab("nova")}
-            className={`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
-              activeTab === "nova" 
-                ? "border-indigo-600 text-indigo-600" 
-                : "border-transparent text-slate-400 hover:text-slate-600"
-            }`}
-          >
-            <Plus className="h-4 w-4" /> Nova Campanha
-          </button>
-        )}
+        <button
+          onClick={() => setActiveTab("nova")}
+          className={\`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all \${
+            activeTab === "nova" 
+              ? "border-indigo-600 text-indigo-600" 
+              : "border-transparent text-slate-400 hover:text-slate-600"
+          }\`}
+        >
+          <Plus className="h-4 w-4" /> Nova Campanha
+        </button>
         <button
           onClick={() => setActiveTab("historico")}
-          className={`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all ${
+          className={\`flex items-center gap-1.5 pb-3 text-xs font-semibold uppercase tracking-wider border-b-2 transition-all \${
             activeTab === "historico" 
               ? "border-indigo-600 text-indigo-600" 
               : "border-transparent text-slate-400 hover:text-slate-600"
-          }`}
+          }\`}
         >
           <History className="h-4 w-4" /> Histórico de Disparos
         </button>
@@ -369,3 +367,6 @@ export default function CampanhasPage() {
     </div>
   )
 }
+`;
+
+fs.writeFileSync('src/app/(dashboard)/crm/campanhas/page.tsx', content, 'utf8');

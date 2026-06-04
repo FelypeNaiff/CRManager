@@ -1,4 +1,6 @@
-"use client"
+const fs = require('fs');
+
+const content = `"use client"
 
 import React, { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
@@ -144,3 +146,6 @@ export default function CrmDashboardPage() {
     </div>
   )
 }
+`;
+
+fs.writeFileSync('src/app/(dashboard)/crm/dashboard/page.tsx', content, 'utf8');

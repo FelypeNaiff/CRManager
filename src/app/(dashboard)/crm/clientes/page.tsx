@@ -69,6 +69,7 @@ import { toast } from "@/hooks/use-toast"
 import { AuthorizationDialog } from "@/components/authorization/authorization-dialog"
 import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 import { useProfile } from "@/lib/contexts/profile-context"
+import { usePermissions } from "@/hooks/use-permissions"
 import {
   getCustomers,
   createCustomer,
@@ -104,8 +105,8 @@ function calcIdade(dataNascimento: string): string {
   let anos = hoje.getFullYear() - nasc.getFullYear()
   let meses = hoje.getMonth() - nasc.getMonth()
   if (meses < 0) { anos--; meses += 12 }
-  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} mês${meses !== 1 ? "es" : ""}`
-  return `${meses} mês${meses !== 1 ? "es" : ""}`
+  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} mÃªs${meses !== 1 ? "es" : ""}`
+  return `${meses} mÃªs${meses !== 1 ? "es" : ""}`
 }
 
 const emptyFilhoForm = {
@@ -136,7 +137,7 @@ const emptyForm = {
   cidade: "",
   estado: "",
   cep: "",
-  origem: "Loja Física",
+  origem: "Loja FÃ­sica",
   vip: false,
   aceita_marketing: true,
   observacoes: "",
@@ -145,18 +146,19 @@ const emptyForm = {
 
 export default function ClientesPage() {
   const { activeProfile } = useProfile()
-  const searchParamês = useSearchParams()
+  const { can } = usePermissions()
+  const searchParams = useSearchParams()
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("ativo")
 
   useEffect(() => {
-    const statusParam = searchParamês?.get("status")
+    const statusParam = searchParamÃªs?.get("status")
     if (statusParam) {
       setStatusFilter(statusParam)
     }
-  }, [searchParamês])
+  }, [searchParamÃªs])
 
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -291,7 +293,7 @@ export default function ClientesPage() {
       }
     } catch (e: any) {
       console.error(e)
-      setError("Não foi possível carregar os clientes. Tente atualizar a página. Se o erro continuar, verifique a conexão com o banco.")
+      setError("NÃ£o foi possÃ­vel carregar os clientes. Tente atualizar a pÃ¡gina. Se o erro continuar, verifique a conexÃ£o com o banco.")
     } finally {
       setIsLoading(false)
     }
@@ -312,22 +314,35 @@ export default function ClientesPage() {
       const matchStatus = statusFilter === "todos" || c.status === statusFilter
       if (!matchSearch || !matchStatus) return false
 
-      const tabParam = searchParamês?.get("tab")
+      const tabParam = searchParamÃªs?.get("tab")
       if (tabParam === "aniversariantes") {
-        const dateField = c.data_nascimento
-        if (!dateField) return false
-        const bdayMonth = new Date(dateField).getMonth() + 1
         const currentMonth = new Date().getMonth() + 1
-        return bdayMonth === currentMonth
+        let isBirthday = false
+        if (c.data_nascimento) {
+          const bdayMonth = new Date(c.data_nascimento).getMonth() + 1
+          if (bdayMonth === currentMonth) isBirthday = true
+        }
+        if (!isBirthday && c.children) {
+          for (const child of c.children) {
+            if (child.birthDate) {
+              const childMonth = new Date(child.birthDate).getMonth() + 1
+              if (childMonth === currentMonth) {
+                isBirthday = true
+                break
+              }
+            }
+          }
+        }
+        if (!isBirthday) return false
       }
 
       return true
     })
-  }, [rawCustomers, searchTerm, statusFilter, searchParamês])
+  }, [rawCustomers, searchTerm, statusFilter, searchParamÃªs])
 
   const handleSaveQuickFilho = async () => {
     if (!quickFilhoForm.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatório", description: "Informe o nome da criança." })
+      return toast({ variant: "destructive", title: "Nome obrigatÃ³rio", description: "Informe o nome da crianÃ§a." })
     }
     if (!selectedCustomer) return
 
@@ -400,7 +415,7 @@ export default function ClientesPage() {
       cidade: "",
       estado: "",
       cep: "",
-      origem: "Loja Física",
+      origem: "Loja FÃ­sica",
       vip: customer.status === 'vip',
       aceita_marketing: true,
       observacoes: customer.observacoes || "",
@@ -466,7 +481,7 @@ export default function ClientesPage() {
       // 3. Wallet details
       await loadWalletData(customer.id)
 
-      // 5. Returns & Exchanges — using new SaleExchange + SaleReturn tables (Fase 1 migration)
+      // 5. Returns & Exchanges â€” using new SaleExchange + SaleReturn tables (Fase 1 migration)
       const returnsRes = await getCustomerExchangeReturns(customer.id)
       if (returnsRes.success && returnsRes.data) {
         setReturnsHistory(returnsRes.data.map((r: any) => ({
@@ -512,10 +527,10 @@ export default function ClientesPage() {
   // Save Cliente form (and linked Filhos)
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o nome completo." })
+      return toast({ variant: "destructive", title: "Nome obrigatÃ³rio", description: "Preencha o nome completo." })
     }
     if (!form.whatsapp_principal.trim()) {
-      return toast({ variant: "destructive", title: "WhatsApp obrigatório", description: "WhatsApp principal ├® de preenchimento obrigatório." })
+      return toast({ variant: "destructive", title: "WhatsApp obrigatÃ³rio", description: "WhatsApp principal â”œÂ® de preenchimento obrigatÃ³rio." })
     }
 
     const cleanWhatsapp = form.whatsapp_principal.replace(/\D/g, "")
@@ -624,7 +639,7 @@ export default function ClientesPage() {
       setIsFormOpen(false)
     } catch (e) {
       console.error(e)
-      toast({ variant: "destructive", title: "Erro ao salvar", description: "Não foi possível salvar o cadastro. Verifique os campos obrigatórios e tente novamente." })
+      toast({ variant: "destructive", title: "Erro ao salvar", description: "NÃ£o foi possÃ­vel salvar o cadastro. Verifique os campos obrigatÃ³rios e tente novamente." })
     } finally {
       setIsSaving(false)
     }
@@ -652,10 +667,10 @@ export default function ClientesPage() {
   const handleSaveWalletAdjustment = async (authId?: string) => {
     const safeAdjust = safeNumber(adjustAmount);
     if (!safeAdjust || safeAdjust <= 0) {
-      return toast({ variant: "destructive", title: "Valor inválido" })
+      return toast({ variant: "destructive", title: "Valor invÃ¡lido" })
     }
     if (!adjustReason.trim()) {
-      return toast({ variant: "destructive", title: "Observação obrigatória", description: "Você deve informar o motivo do ajuste manual." })
+      return toast({ variant: "destructive", title: "ObservaÃ§Ã£o obrigatÃ³ria", description: "VocÃª deve informar o motivo do ajuste manual." })
     }
     if (!walletInfo) return
 
@@ -732,18 +747,20 @@ export default function ClientesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold tracking-tight text-slate-800 flex items-center gap-2">
-            <User className="h-8 w-8 text-indigo-600" /> Clientes e Responsáveis
+            <User className="h-8 w-8 text-indigo-600" /> Clientes e ResponsÃ¡veis
           </h1>
-          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsáveis, filhos, tags e extrato de saldo.</p>
+          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsÃ¡veis, filhos, tags e extrato de saldo.</p>
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" className="border-indigo-100 text-indigo-600 hover:bg-indigo-50/50 gap-2 h-10 font-semibold" onClick={() => handleOpenCreate(true)}>
-            <PlusCircle className="h-4 w-4" /> Cadastro Rápido
-          </Button>
-          <Button className="bg-indigo-600 hover:bg-indigo-500 gap-2 text-white h-10 font-semibold shadow-sm" onClick={() => handleOpenCreate(false)}>
-            <UserPlus className="h-4 w-4" /> Cadastro Completo
-          </Button>
-        </div>
+        {can('CLIENTES', 'CREATE') && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button variant="outline" className="border-indigo-100 text-indigo-600 hover:bg-indigo-50/50 gap-2 h-10 font-semibold" onClick={() => handleOpenCreate(true)}>
+              <PlusCircle className="h-4 w-4" /> Cadastro Rápido
+            </Button>
+            <Button className="bg-indigo-600 hover:bg-indigo-500 gap-2 text-white h-10 font-semibold shadow-sm" onClick={() => handleOpenCreate(false)}>
+              <UserPlus className="h-4 w-4" /> Cadastro Completo
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Search & Tabs status */}
@@ -791,7 +808,7 @@ export default function ClientesPage() {
         <div className="text-center py-20 border-2 border-dashed rounded-2xl bg-slate-50/50">
           <User className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
           <p className="text-slate-600 font-semibold text-base">Nenhum cliente encontrado</p>
-          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou cadastre um novo cliente/responsável.</p>
+          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou cadastre um novo cliente/responsÃ¡vel.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -816,13 +833,19 @@ export default function ClientesPage() {
                     <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenDetails(customer)}>
                       <Eye className="mr-2 h-4 w-4 text-indigo-500" /> Ficha Completa
                     </DropdownMenuItem>
-                    <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenEdit(customer)}>
-                      <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ficha
-                    </DropdownMenuItem>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => handleOpenDelete(customer.id)}>
-                      <Trash2 className="mr-2 h-4 w-4" /> Arquivar
-                    </DropdownMenuItem>
+                    {can('CLIENTES', 'UPDATE') && (
+                      <DropdownMenuItem className="cursor-pointer" onClick={() => handleOpenEdit(customer)}>
+                        <Pencil className="mr-2 h-4 w-4 text-blue-500" /> Editar Ficha
+                      </DropdownMenuItem>
+                    )}
+                    {can('CLIENTES', 'DELETE') && (
+                      <>
+                        <DropdownMenuSeparator />
+                        <DropdownMenuItem className="text-rose-600 cursor-pointer" onClick={() => handleOpenDelete(customer.id)}>
+                          <Trash2 className="mr-2 h-4 w-4" /> Arquivar
+                        </DropdownMenuItem>
+                      </>
+                    )}
                   </DropdownMenuContent>
                 </DropdownMenu>
               </div>
@@ -831,7 +854,7 @@ export default function ClientesPage() {
                 {/* Balance display */}
                 <div className="bg-slate-50 p-2.5 rounded-lg flex items-center justify-between border">
                   <span className="text-slate-400 font-semibold uppercase text-[9px] flex items-center gap-1">
-                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Crédito
+                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> CrÃ©dito
                   </span>
                   <strong className="text-indigo-600 text-sm">
                     R$ {(walletsMap[customer.id] || 0).toFixed(2)}
@@ -878,10 +901,10 @@ export default function ClientesPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-800">
-              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente Respons├ível"}
+              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente Responsâ”œÃ­vel"}
             </DialogTitle>
             <DialogDescription>
-              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmenta├º├úo."}
+              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentaâ”œÂºâ”œÃºo."}
             </DialogDescription>
           </DialogHeader>
 
@@ -903,7 +926,7 @@ export default function ClientesPage() {
                 <Input id="cwhats" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_principal} onChange={e => setForm({ ...form, whatsapp_principal: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="cwhats2">WhatsApp Secund├írio</Label>
+                <Label htmlFor="cwhats2">WhatsApp Secundâ”œÃ­rio</Label>
                 <Input id="cwhats2" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_secundario} onChange={e => setForm({ ...form, whatsapp_secundario: e.target.value })} />
               </div>
             </div>
@@ -925,7 +948,7 @@ export default function ClientesPage() {
                 <h3 className="font-bold text-slate-800 text-sm">Vincular Filhos / Dependentes</h3>
                 
                 {filhos.length === 0 ? (
-                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsável.</p>
+                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsÃ¡vel.</p>
                 ) : (
                   <div className="space-y-3">
                     {filhos.map((filho, idx) => (
@@ -961,7 +984,7 @@ export default function ClientesPage() {
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <Label>Calçado</Label>
+                            <Label>CalÃ§ado</Label>
                             <Input placeholder="Ex: 24" value={filho.tamanho_calcado} onChange={e => handleFilhoChange(idx, "tamanho_calcado", e.target.value)} />
                           </div>
                         </div>
@@ -976,7 +999,7 @@ export default function ClientesPage() {
               </>
             ) : (
               <div className="bg-indigo-50/30 p-3 rounded-lg border space-y-3">
-                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
+                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro RÃ¡pido do Primeiro Filho</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Nome do Filho</Label>
@@ -993,8 +1016,8 @@ export default function ClientesPage() {
             <Separator />
             
             <div className="space-y-2">
-              <Label>Observações de Atendimento</Label>
-              <Textarea placeholder="Histórico de alergias, marcas preferidas, restrições..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              <Label>ObservaÃ§Ãµes de Atendimento</Label>
+              <Textarea placeholder="HistÃ³rico de alergias, marcas preferidas, restriÃ§Ãµes..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
             </div>
 
             <div className="flex items-center gap-6 bg-slate-50 p-3 rounded-lg border">
@@ -1013,7 +1036,7 @@ export default function ClientesPage() {
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancelar</Button>
             <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSave} disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingCustomer ? "Salvar Altera├º├Áes" : "Concluir Cadastro"}
+              {editingCustomer ? "Salvar Alteraâ”œÂºâ”œÃes" : "Concluir Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1025,7 +1048,7 @@ export default function ClientesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-bold text-slate-800">Inativar Ficha do Cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja arquivar este cliente? O saldo atual da carteira permanecer├í congelado, mas o cadastro n├úo constar├í nas listagens de vendas ativas.
+              Deseja arquivar este cliente? O saldo atual da carteira permanecerâ”œÃ­ congelado, mas o cadastro nâ”œÃºo constarâ”œÃ­ nas listagens de vendas ativas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1057,25 +1080,25 @@ export default function ClientesPage() {
 
           <Tabs defaultValue="ficha" className="w-full mt-4">
             <TabsList className="bg-white border w-full justify-start gap-1 p-1">
-              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha B├ísica</TabsTrigger>
+              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Bâ”œÃ­sica</TabsTrigger>
               <TabsTrigger value="filhos" className="flex items-center gap-1.5"><Baby className="h-4 w-4 text-emerald-600" /> Dependentes ({filhos.length})</TabsTrigger>
-              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Créditos/Carteira</TabsTrigger>
+              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> CrÃ©ditos/Carteira</TabsTrigger>
               <TabsTrigger value="trocas" className="flex items-center gap-1.5">Trocas ({returnsHistory.length})</TabsTrigger>
-              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> Histórico CRM ({historyLogs.length})</TabsTrigger>
+              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> HistÃ³rico CRM ({historyLogs.length})</TabsTrigger>
             </TabsList>
 
-            {/* TAB: Ficha B├ísica */}
+            {/* TAB: Ficha Bâ”œÃ­sica */}
             <TabsContent value="ficha" className="space-y-4 pt-4 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">CPF</span>
-                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "N├úo informado"}</span>
+                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Nâ”œÃºo informado"}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">Data de Nascimento</span>
                     <span className="text-slate-800 font-medium block mt-1">
-                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "N├úo informada"}
+                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Nâ”œÃºo informada"}
                     </span>
                   </div>
                 </div>
@@ -1089,7 +1112,7 @@ export default function ClientesPage() {
                   )}
 
                   <div className="bg-slate-50 p-3 rounded-lg border space-y-2">
-                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmenta├º├úo</span>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentaâ”œÂºâ”œÃºo</span>
                     
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {availableTags.map((tag) => {
@@ -1117,15 +1140,15 @@ export default function ClientesPage() {
             {/* TAB: Dependentes */}
             <TabsContent value="filhos" className="space-y-4 pt-4 text-xs">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-sm">Crian├ºas Associadas</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Crianâ”œÂºas Associadas</h3>
                 <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 h-8 text-[11px]" onClick={() => setIsQuickAddFilhoOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Adicionar Crian├ºa
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Crianâ”œÂºa
                 </Button>
               </div>
 
               {filhos.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
-                  Sem crianças vinculadas a este responsável.
+                  Sem crianÃ§as vinculadas a este responsÃ¡vel.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1140,7 +1163,7 @@ export default function ClientesPage() {
                             <p className="font-bold text-slate-800">{filho.nome}</p>
                             {filho.data_nascimento && (
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                {new Date(filho.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR")} ┬À {calcIdade(filho.data_nascimento)}
+                                {new Date(filho.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR")} â”¬Ã€ {calcIdade(filho.data_nascimento)}
                               </p>
                             )}
                           </div>
@@ -1155,7 +1178,7 @@ export default function ClientesPage() {
                         </Badge>
                         {filho.tamanho_calcado && (
                           <Badge variant="outline" className="text-[8px] h-4 bg-indigo-50 text-indigo-700 border-indigo-100">
-                            Calçado: {filho.tamanho_calcado}
+                            CalÃ§ado: {filho.tamanho_calcado}
                           </Badge>
                         )}
                       </div>
@@ -1165,26 +1188,28 @@ export default function ClientesPage() {
               )}
             </TabsContent>
             
-            {/* TAB: Carteira de Créditos */}
+            {/* TAB: Carteira de CrÃ©ditos */}
             <TabsContent value="carteira" className="space-y-4 pt-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-indigo-50/50 p-4 border border-indigo-100 rounded-xl flex flex-col justify-between">
                   <div>
-                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo Disponível</span>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo DisponÃ­vel</span>
                     <strong className="text-2xl text-indigo-600 block mt-1">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</strong>
                   </div>
-                  <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 mt-3 w-full" onClick={() => setIsAdjustingWallet(true)}>
-                    <PlusCircle className="h-4 w-4" /> Ajuste Manual
-                  </Button>
+                  {can('CARTEIRA', 'UPDATE') && (
+                    <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 mt-3 w-full" onClick={() => setIsAdjustingWallet(true)}>
+                      <PlusCircle className="h-4 w-4" /> Ajuste Manual
+                    </Button>
+                  )}
                 </div>
 
                 <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-xl">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Créditos (Filtro)</span>
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total CrÃ©ditos (Filtro)</span>
                   <strong className="text-2xl text-emerald-600 block mt-1">R$ {walletInfo?.total_creditos?.toFixed(2) || "0.00"}</strong>
                 </div>
 
                 <div className="bg-rose-50/50 p-4 border border-rose-100 rounded-xl">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Débitos (Filtro)</span>
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total DÃ©bitos (Filtro)</span>
                   <strong className="text-2xl text-rose-600 block mt-1">R$ {walletInfo?.total_debitos?.toFixed(2) || "0.00"}</strong>
                 </div>
               </div>
@@ -1192,7 +1217,7 @@ export default function ClientesPage() {
               {/* Filtros */}
               <div className="bg-slate-50 p-3 rounded-xl border grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Início</label>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">InÃ­cio</label>
                   <Input
                     type="date"
                     className="h-8 text-xs bg-white"
@@ -1217,13 +1242,13 @@ export default function ClientesPage() {
                     onChange={e => setWalletFilterType(e.target.value)}
                   >
                     <option value="ALL">Todos os Tipos</option>
-                    <option value="CREDIT">Crédito (Manual)</option>
-                    <option value="DEBIT">Débito</option>
-                    <option value="BONUS">Bônus</option>
+                    <option value="CREDIT">CrÃ©dito (Manual)</option>
+                    <option value="DEBIT">DÃ©bito</option>
+                    <option value="BONUS">BÃ´nus</option>
                     <option value="ADJUSTMENT">Ajuste</option>
                     <option value="REFUND">Reembolso</option>
                     <option value="EXCHANGE">Troca</option>
-                    <option value="EXPIRATION">Expiração</option>
+                    <option value="EXPIRATION">ExpiraÃ§Ã£o</option>
                   </select>
                 </div>
                 <div>
@@ -1236,16 +1261,16 @@ export default function ClientesPage() {
                     <option value="ALL">Todas as Origens</option>
                     <option value="sale">Vendas</option>
                     <option value="exchange">Trocas</option>
-                    <option value="return">Devoluções</option>
+                    <option value="return">DevoluÃ§Ãµes</option>
                     <option value="manual">Ajustes Manuais</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2 mt-4">
-                <h4 className="font-bold text-slate-800 text-sm">Histórico do Extrato</h4>
+                <h4 className="font-bold text-slate-800 text-sm">HistÃ³rico do Extrato</h4>
                 {walletHistory.length === 0 ? (
-                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentação registrada.</p>
+                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentaÃ§Ã£o registrada.</p>
                 ) : (
                   <div className="border rounded-xl divide-y bg-white max-h-64 overflow-y-auto">
                     {walletHistory.map((tx, idx) => {
@@ -1265,7 +1290,7 @@ export default function ClientesPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] font-medium text-slate-800 mt-1">{tx.description || "Sem descrição"}</p>
+                            <p className="text-[10px] font-medium text-slate-800 mt-1">{tx.description || "Sem descriÃ§Ã£o"}</p>
                             <span className="text-[9px] text-slate-400 block mt-0.5">
                               Saldos: R$ {tx.balanceBefore?.toFixed(2)} &rarr; R$ {tx.balanceAfter?.toFixed(2)}
                             </span>
@@ -1286,9 +1311,9 @@ export default function ClientesPage() {
               </div>
             </TabsContent>
 
-            {/* TAB: Trocas e Devoluções */}
+            {/* TAB: Trocas e DevoluÃ§Ãµes */}
             <TabsContent value="trocas" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">Histórico de Trocas (PDV)</h3>
+              <h3 className="font-bold text-slate-800 text-sm">HistÃ³rico de Trocas (PDV)</h3>
               {returnsHistory.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
                   Nenhuma troca registrada para este comprador.
@@ -1299,7 +1324,7 @@ export default function ClientesPage() {
                     <div key={idx} className="p-3 flex items-center justify-between">
                       <div>
                         <strong className="text-slate-800">Troca #{item.venda_id?.substring(0,8) || item.id?.substring(0,8)}</strong>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Respons├ível: {item.vendedor_nome || "Balc├úo"}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Responsâ”œÃ­vel: {item.vendedor_nome || "Balcâ”œÃºo"}</p>
                       </div>
                       <div className="text-right">
                         <strong className="text-indigo-600">R$ {(safeNumber(item.valor_credito ?? item.valor) ?? 0).toFixed(2)}</strong>
@@ -1313,12 +1338,12 @@ export default function ClientesPage() {
               )}
             </TabsContent>
 
-            {/* TAB: Histórico CRM */}
+            {/* TAB: HistÃ³rico CRM */}
             <TabsContent value="historico" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">Histórico de Auditoria do Cliente</h3>
+              <h3 className="font-bold text-slate-800 text-sm">HistÃ³rico de Auditoria do Cliente</h3>
               {historyLogs.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
-                  Sem registros de hist├│rico.
+                  Sem registros de histâ”œâ”‚rico.
                 </div>
               ) : (
                 <div className="border rounded-xl divide-y bg-white">
@@ -1382,7 +1407,7 @@ export default function ClientesPage() {
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>Calçado</Label>
+                <Label>CalÃ§ado</Label>
                 <Input placeholder="Ex: 24" value={quickFilhoForm.tamanho_calcado} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, tamanho_calcado: e.target.value })} />
               </div>
             </div>
@@ -1405,14 +1430,14 @@ export default function ClientesPage() {
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>A├º├úo</Label>
+              <Label>Aâ”œÂºâ”œÃºo</Label>
               <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ENTRADA">Adicionar Crédito (Entrada)</SelectItem>
-                  <SelectItem value="SAIDA">Debitar Crédito (Sa├¡da)</SelectItem>
+                  <SelectItem value="ENTRADA">Adicionar CrÃ©dito (Entrada)</SelectItem>
+                  <SelectItem value="SAIDA">Debitar CrÃ©dito (Saâ”œÂ¡da)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1421,7 +1446,7 @@ export default function ClientesPage() {
               <Input type="number" step="0.01" placeholder="0.00" value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Justificativa Obrigat├│ria</Label>
+              <Label>Justificativa Obrigatâ”œâ”‚ria</Label>
               <Input placeholder="Ex: Ajuste manual" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2 pt-2">
@@ -1440,8 +1465,8 @@ export default function ClientesPage() {
         onOpenChange={setShowAuthDialog}
         authorizationId={authorizationId}
         authorizationType={adjustType === "ENTRADA" ? "WALLET_CREDIT" : "WALLET_DEBIT"}
-        title="Autorização de Ajuste"
-        description="Este ajuste manual de saldo exige aprovação de um gerente."
+        title="AutorizaÃ§Ã£o de Ajuste"
+        description="Este ajuste manual de saldo exige aprovaÃ§Ã£o de um gerente."
         amount={safeNumber(adjustAmount) ?? 0}
         onAuthorized={(auth) => handleSaveWalletAdjustment(auth.id)}
       />

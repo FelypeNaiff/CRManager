@@ -24,10 +24,12 @@ import {
 } from "@/components/ui/select"
 import { Wallet, Search, Loader2, Plus, ArrowUpRight, ArrowDownLeft, AlertCircle, Pencil, History } from "lucide-react"
 import { getWallets, adjustWalletBalance, getWalletHistory } from "@/lib/crm/actions"
+import { usePermissions } from "@/hooks/use-permissions"
 import { safeNumber } from "@/lib/utils/form-normalizer"
 import { toast } from "@/hooks/use-toast"
 
 export default function CarteiraSaldosPage() {
+  const { can } = usePermissions()
   const searchParams = useSearchParams()
   const filterParam = searchParams?.get("filter")
 
@@ -247,10 +249,12 @@ export default function CarteiraSaldosPage() {
                   </div>
                 </div>
 
-                <div className="flex gap-2 border-t pt-3">
-                  <Button variant="outline" className="flex-1 text-[11px] h-8 gap-1 border-indigo-100 text-indigo-600 hover:bg-indigo-50/50" onClick={() => openAdjustDialog(wallet)}>
-                    <Pencil className="h-3 w-3" /> Ajustar Saldo
-                  </Button>
+                <div className="p-3 border-t bg-slate-50/50 flex gap-2">
+                  {can('CARTEIRA', 'UPDATE') && (
+                    <Button variant="outline" className="flex-1 text-[11px] h-8 gap-1 border-indigo-100 text-indigo-600 hover:bg-indigo-50/50" onClick={() => openAdjustDialog(wallet)}>
+                      <Plus className="h-3 w-3" /> Ajuste
+                    </Button>
+                  )}
                   <Button variant="ghost" className="flex-1 text-[11px] h-8 gap-1 text-slate-600 hover:bg-slate-50" onClick={() => openHistoryDialog(wallet)}>
                     <History className="h-3 w-3" /> Extrato
                   </Button>
