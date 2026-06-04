@@ -51,7 +51,8 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
-import { Search, Plus, MoreVertical, Pencil, Trash2, Loader2, CreditCard, FolderTree, Building } from "lucide-react"
+import { Settings, CreditCard, Tag, Plus, Edit2, Trash2, Search, MoreVertical, Pencil, Loader2, FolderTree, Building } from "lucide-react"
+import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 
 // ==========================================
 // COMPONENTE: FORMAS DE PAGAMENTO
@@ -92,9 +93,9 @@ function PaymentMethodsTab({ db }: { db: any }) {
     try {
       const dataToSave = {
         name: form.name,
-        feePercentage: Number(form.feePercentage),
-        feeFixed: Number(form.feeFixed),
-        receiptDays: Number(form.receiptDays),
+        feePercentage: safeNumber(form.feePercentage) ?? 0,
+        feeFixed: safeNumber(form.feeFixed) ?? 0,
+        receiptDays: safeInteger(form.receiptDays) ?? 0,
         updatedAt: serverTimestamp(),
       }
 

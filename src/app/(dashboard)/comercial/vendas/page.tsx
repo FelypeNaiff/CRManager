@@ -14,6 +14,11 @@ export default function VendasPage() {
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [page, setPage] = useState(1);
+  const pageSize = 30;
+  const [totalCount, setTotalCount] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+
   // Filters
   const [sellerId, setSellerId] = useState("");
   const [status, setStatus] = useState("");
@@ -23,17 +28,25 @@ export default function VendasPage() {
     setLoading(true);
     const res = await listSalesAction(activeProfile.empresaId, {
       sellerId: sellerId || undefined,
-      status: status || undefined
+      status: status || undefined,
+      page,
+      pageSize
     });
-    if (res.success) {
-      setSales(res.sales || []);
+    if (res.success && 'data' in res && res.data) {
+      setSales(res.data);
+      if (res.metadata) {
+        setTotalPages(res.metadata.totalPages);
+        setTotalCount(res.metadata.totalCount);
+      }
+    } else {
+      setSales([]);
     }
     setLoading(false);
   };
 
   useEffect(() => {
     loadSales();
-  }, [activeProfile?.empresaId]);
+  }, [activeProfile?.empresaId, page]);
 
   return (
     <div className="p-6 space-y-6">
@@ -111,6 +124,35 @@ export default function VendasPage() {
           </div>
         </CardContent>
       </Card>
+      
+      {!loading && sales.length > 0 && (
+        <div className="flex justify-between items-center mt-4">
+          <span className="text-[12px] text-muted-foreground">
+            Mostrando {sales.length} de {totalCount} resultados
+          </span>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => Math.max(1, p - 1))}
+              disabled={page === 1 || loading}
+            >
+              Anterior
+            </Button>
+            <span className="text-sm px-4 py-2 bg-gray-50 border rounded-sm">
+              Página {page} de {totalPages}
+            </span>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages || loading}
+            >
+              Próximo
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

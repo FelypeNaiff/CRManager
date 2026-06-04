@@ -67,18 +67,24 @@ export default function ProdutosPage() {
   const [fornecedores, setFornecedores] = useState<any[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<any>(null)
+  
+  // Paginação
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
 
   const loadData = useCallback(async () => {
     setIsLoading(true)
     setError(null)
     try {
       const [prodRes, catRes, supRes] = await Promise.all([
-        getProducts(),
+        getProducts({ search: searchTerm, page, pageSize }),
         getProductCategories(),
         getSuppliers()
       ]);
 
-      if (prodRes.success && prodRes.data) {
+      if (prodRes.success && 'data' in prodRes && prodRes.data) {
         const mapped = prodRes.data.map((p: any) => {
           const defaultVariant = p.variants.find((v: any) => v.name === 'Único') || p.variants[0];
           return {
@@ -103,6 +109,10 @@ export default function ProdutosPage() {
           };
         });
         setProdutos(mapped);
+        if ('metadata' in prodRes && prodRes.metadata) {
+          setTotalPages(prodRes.metadata.totalPages);
+          setTotalCount(prodRes.metadata.totalCount);
+        }
       } else if (!prodRes.success) {
         setError({ message: prodRes.error });
       }
@@ -126,11 +136,14 @@ export default function ProdutosPage() {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [searchTerm, page, pageSize]);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    const delay = setTimeout(() => {
+      loadData();
+    }, 500);
+    return () => clearTimeout(delay);
+  }, [loadData, searchTerm, page]);
 
   const [cols, setCols] = useState({
     codigo: true,
@@ -593,11 +606,32 @@ export default function ProdutosPage() {
         </div>
       </div>
       
-      {!isLoading && produtos && (
-        <div className="text-[12px] text-muted-foreground">
-          Mostrando {processedProdutos.length} de um total de {produtos.length} produtos
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-[12px] text-muted-foreground">
+          Mostrando {produtos?.length || 0} de {totalCount} resultados
+        </span>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1 || isLoading}
+          >
+            Anterior
+          </Button>
+          <span className="text-sm px-4 py-2 bg-gray-50 border rounded-sm">
+            Página {page} de {totalPages}
+          </span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || isLoading}
+          >
+            Próximo
+          </Button>
         </div>
-      )}
+      </div>
 
       {selectedProdutoForMov && (
         <MovimentacoesModal 

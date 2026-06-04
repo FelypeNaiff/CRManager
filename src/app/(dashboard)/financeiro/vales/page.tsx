@@ -36,6 +36,7 @@ import { toast } from "@/hooks/use-toast"
 import { 
   Search, Plus, Loader2, Users, Receipt, Wallet, ArrowDownCircle, Printer, CheckCircle2
 } from "lucide-react"
+import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 import { format, parseISO } from "date-fns"
 import { ptBR } from "date-fns/locale"
 
@@ -124,9 +125,9 @@ export default function ValesPage() {
     setIsSaving(true)
     try {
       const bankAcc = bankAccounts?.find((b: any) => b.id === form.bankAccountId)
-      const amount = Number(form.amount)
-      const installments = Number(form.installments) || 1
-      const discountPerInstallment = Number((amount / installments).toFixed(2))
+      const safeAmount = safeNumber(form.amount) ?? 0
+      const safeInst = safeInteger(form.installments) || 1
+      const discountPerInstallment = safeNumber((safeAmount / safeInst).toFixed(2)) ?? 0
 
       const batch = writeBatch(db!)
 
@@ -135,11 +136,11 @@ export default function ValesPage() {
       batch.set(valeRef, {
         employeeName: form.employeeName,
         type: form.type,
-        amount,
-        installments,
+        amount: safeAmount,
+        installments: safeInst,
         discountPerInstallment,
         discountedAmount: 0,
-        remainingBalance: amount,
+        remainingBalance: safeAmount,
         bankAccountId: form.bankAccountId,
         date: form.date,
         notes: form.notes,
@@ -150,7 +151,7 @@ export default function ValesPage() {
       // 2. Descontar da Conta Bancária (Integração)
       const bankRef = doc(db!, "bank_accounts", form.bankAccountId)
       batch.update(bankRef, {
-        currentBalance: (bankAcc?.currentBalance || 0) - amount,
+        currentBalance: (bankAcc?.currentBalance || 0) - safeAmount,
         updatedAt: serverTimestamp()
       })
 
@@ -159,7 +160,7 @@ export default function ValesPage() {
       batch.set(transRef, {
         type: "EXPENSE",
         date: form.date,
-        amount: amount,
+        amount: safeAmount,
         description: `Vale/Adiantamento: ${form.employeeName} (${form.type})`,
         status: "COMPLETED",
         bankAccountId: form.bankAccountId,
@@ -187,9 +188,8 @@ export default function ValesPage() {
   }
 
   const handleRegisterDiscount = async () => {
-    if (!selectedVale || !discountAmount) return
-
-    const amountToDiscount = Number(discountAmount)
+    if (!selectedVale) return
+    const amountToDiscount = safeNumber(discountAmount) ?? 0
     if (amountToDiscount <= 0 || amountToDiscount > selectedVale.remainingBalance) {
       return toast({ variant: "destructive", title: "Valor de desconto inválido" })
     }

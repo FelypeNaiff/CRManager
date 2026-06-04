@@ -50,7 +50,8 @@ import {
 import { Switch } from "@/components/ui/switch"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
-import { Search, Plus, MoreVertical, Pencil, Trash2, Loader2, Building2 } from "lucide-react"
+import { Search, Plus, MoreVertical, Pencil, Trash2, Loader2, Building2, Banknote, ArrowUpDown, ArrowRightLeft, CreditCard } from "lucide-react"
+import { safeNumber } from "@/lib/utils/form-normalizer"
 
 const emptyForm = {
   name: "",
@@ -134,7 +135,7 @@ export default function ContasBancariasPage() {
         bankName: form.bankName,
         agency: form.agency,
         accountNumber: form.accountNumber,
-        initialBalance: Number(form.initialBalance),
+        initialBalance: safeNumber(form.initialBalance) ?? 0,
         updatedAt: serverTimestamp(),
       }
 
@@ -146,7 +147,7 @@ export default function ContasBancariasPage() {
       } else {
         await addDoc(collection(db, "bank_accounts"), {
           ...dataToSave,
-          currentBalance: Number(form.initialBalance),
+          currentBalance: safeNumber(form.initialBalance) ?? 0,
           status: "ACTIVE",
           createdAt: serverTimestamp(),
         })

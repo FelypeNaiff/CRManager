@@ -67,6 +67,7 @@ import {
 
 import { toast } from "@/hooks/use-toast"
 import { AuthorizationDialog } from "@/components/authorization/authorization-dialog"
+import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 import { useProfile } from "@/lib/contexts/profile-context"
 import {
   getCustomers,
@@ -103,8 +104,8 @@ function calcIdade(dataNascimento: string): string {
   let anos = hoje.getFullYear() - nasc.getFullYear()
   let meses = hoje.getMonth() - nasc.getMonth()
   if (meses < 0) { anos--; meses += 12 }
-  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} m├¬s${meses !== 1 ? "es" : ""}`
-  return `${meses} m├¬s${meses !== 1 ? "es" : ""}`
+  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} mês${meses !== 1 ? "es" : ""}`
+  return `${meses} mês${meses !== 1 ? "es" : ""}`
 }
 
 const emptyFilhoForm = {
@@ -135,7 +136,7 @@ const emptyForm = {
   cidade: "",
   estado: "",
   cep: "",
-  origem: "Loja F├¡sica",
+  origem: "Loja Física",
   vip: false,
   aceita_marketing: true,
   observacoes: "",
@@ -144,18 +145,18 @@ const emptyForm = {
 
 export default function ClientesPage() {
   const { activeProfile } = useProfile()
-  const searchParams = useSearchParams()
+  const searchParamês = useSearchParams()
 
   // Search & Filter state
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState("ativo")
 
   useEffect(() => {
-    const statusParam = searchParams?.get("status")
+    const statusParam = searchParamês?.get("status")
     if (statusParam) {
       setStatusFilter(statusParam)
     }
-  }, [searchParams])
+  }, [searchParamês])
 
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -277,7 +278,7 @@ export default function ClientesPage() {
         const wMap: Record<string, number> = {}
         custRes.data.forEach((c: any) => {
           if (c.wallet) {
-            wMap[c.id] = Number(c.wallet.balance)
+            wMap[c.id] = safeNumber(c.wallet.balance) ?? 0
           }
         })
         setWalletsMap(wMap)
@@ -290,7 +291,7 @@ export default function ClientesPage() {
       }
     } catch (e: any) {
       console.error(e)
-      setError("Falha ao carregar dados do Supabase.")
+      setError("Não foi possível carregar os clientes. Tente atualizar a página. Se o erro continuar, verifique a conexão com o banco.")
     } finally {
       setIsLoading(false)
     }
@@ -311,7 +312,7 @@ export default function ClientesPage() {
       const matchStatus = statusFilter === "todos" || c.status === statusFilter
       if (!matchSearch || !matchStatus) return false
 
-      const tabParam = searchParams?.get("tab")
+      const tabParam = searchParamês?.get("tab")
       if (tabParam === "aniversariantes") {
         const dateField = c.data_nascimento
         if (!dateField) return false
@@ -322,11 +323,11 @@ export default function ClientesPage() {
 
       return true
     })
-  }, [rawCustomers, searchTerm, statusFilter, searchParams])
+  }, [rawCustomers, searchTerm, statusFilter, searchParamês])
 
   const handleSaveQuickFilho = async () => {
     if (!quickFilhoForm.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigat├│rio", description: "Informe o nome da crian├ºa." })
+      return toast({ variant: "destructive", title: "Nome obrigatório", description: "Informe o nome da criança." })
     }
     if (!selectedCustomer) return
 
@@ -345,7 +346,7 @@ export default function ClientesPage() {
       const res = await createChild(payload)
 
       if (res.success) {
-        toast({ title: "Filho cadastrado!", description: "Dados gravados no Supabase." })
+        toast({ title: "Filho cadastrado!", description: "Dados gravados com sucesso no sistema." })
         await loadData()
         // Reload details aba
         if (selectedCustomer) {
@@ -399,7 +400,7 @@ export default function ClientesPage() {
       cidade: "",
       estado: "",
       cep: "",
-      origem: "Loja F├¡sica",
+      origem: "Loja Física",
       vip: customer.status === 'vip',
       aceita_marketing: true,
       observacoes: customer.observacoes || "",
@@ -511,10 +512,10 @@ export default function ClientesPage() {
   // Save Cliente form (and linked Filhos)
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigat├│rio", description: "Preencha o nome completo." })
+      return toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o nome completo." })
     }
     if (!form.whatsapp_principal.trim()) {
-      return toast({ variant: "destructive", title: "WhatsApp obrigat├│rio", description: "WhatsApp principal ├® de preenchimento obrigat├│rio." })
+      return toast({ variant: "destructive", title: "WhatsApp obrigatório", description: "WhatsApp principal ├® de preenchimento obrigatório." })
     }
 
     const cleanWhatsapp = form.whatsapp_principal.replace(/\D/g, "")
@@ -528,17 +529,20 @@ export default function ClientesPage() {
       if (form.data_nascimento) {
         const parts = form.data_nascimento.split("-")
         if (parts.length === 3) {
-          bYear = parseInt(parts[0])
-          bMonth = parseInt(parts[1])
-          bDay = parseInt(parts[2])
+          bYear = safeInteger(parts[0])
+          bMonth = safeInteger(parts[1])
+          bDay = safeInteger(parts[2])
         }
       }
+
+      const cleanCpf = form.cpf ? form.cpf.replace(/\D/g, "") : null;
+      const finalCpf = cleanCpf && cleanCpf.length === 11 ? form.cpf : null;
 
       const clientPayload = {
         name: form.nome,
         email: form.email || null,
         phone: cleanWhatsapp,
-        cpf: form.cpf || null,
+        cpf: finalCpf,
         birthDay: bDay,
         birthMonth: bMonth,
         birthYear: bYear,
@@ -552,7 +556,7 @@ export default function ClientesPage() {
         const res = await updateCustomer(editingCustomer.id, clientPayload)
         if (res.success) {
           savedClient = res.data
-          toast({ title: "Cliente atualizado!", description: "Dados gravados no Supabase." })
+          toast({ title: "Cliente atualizado!", description: "Dados gravados com sucesso no sistema." })
         } else {
           setIsSaving(false)
           return toast({ variant: "destructive", title: "Erro ao atualizar", description: res.error })
@@ -574,8 +578,8 @@ export default function ClientesPage() {
       if (isCadastroRapido && rapidoFilhoNome.trim()) {
         let dataNascCalculada = ""
         if (rapidoFilhoIdade) {
-          const anos = Number(rapidoFilhoIdade)
-          if (!isNaN(anos) && anos >= 0) {
+          const anos = safeNumber(rapidoFilhoIdade)
+          if (anos !== null && anos >= 0) {
             const anoNasc = new Date().getFullYear() - anos
             dataNascCalculada = `${anoNasc}-06-15`
           }
@@ -620,7 +624,7 @@ export default function ClientesPage() {
       setIsFormOpen(false)
     } catch (e) {
       console.error(e)
-      toast({ variant: "destructive", title: "Erro ao salvar", description: "Ocorreu um erro ao gravar as altera├º├Áes." })
+      toast({ variant: "destructive", title: "Erro ao salvar", description: "Não foi possível salvar o cadastro. Verifique os campos obrigatórios e tente novamente." })
     } finally {
       setIsSaving(false)
     }
@@ -632,7 +636,7 @@ export default function ClientesPage() {
     try {
       const res = await deleteCustomer(deletingId)
       if (res.success) {
-        toast({ title: "Cliente arquivado", description: "O cliente foi movido para o arquivo no Supabase." })
+        toast({ title: "Cliente arquivado", description: "O cliente foi movido para o arquivo do sistema." })
         await loadData()
       } else {
         toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
@@ -646,11 +650,12 @@ export default function ClientesPage() {
   }
 
   const handleSaveWalletAdjustment = async (authId?: string) => {
-    if (!adjustAmount || Number(adjustAmount) <= 0) {
-      return toast({ variant: "destructive", title: "Valor inv├ílido" })
+    const safeAdjust = safeNumber(adjustAmount);
+    if (!safeAdjust || safeAdjust <= 0) {
+      return toast({ variant: "destructive", title: "Valor inválido" })
     }
     if (!adjustReason.trim()) {
-      return toast({ variant: "destructive", title: "Observa├º├úo obrigat├│ria", description: "Voc├¬ deve informar o motivo do ajuste manual." })
+      return toast({ variant: "destructive", title: "Observação obrigatória", description: "Você deve informar o motivo do ajuste manual." })
     }
     if (!walletInfo) return
 
@@ -658,14 +663,14 @@ export default function ClientesPage() {
     try {
       const res = await createManualAdjustmentAction({
         customerId: selectedCustomer.id,
-        amount: Number(adjustAmount),
+        amount: safeAdjust,
         type: adjustType === "ENTRADA" ? "credit" : "debit",
         reason: adjustReason,
         authorizationId: authId
       })
 
       if (res.success) {
-        toast({ title: "Saldo ajustado!", description: `Carteira atualizada no Supabase.` })
+        toast({ title: "Saldo ajustado!", description: `Carteira atualizada no sistema.` })
         await loadData()
         // Reload details tab to show changes
         const freshData = rawCustomers?.find(c => c.id === selectedCustomer.id)
@@ -727,13 +732,13 @@ export default function ClientesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold tracking-tight text-slate-800 flex items-center gap-2">
-            <User className="h-8 w-8 text-indigo-600" /> Clientes & Respons├íveis
+            <User className="h-8 w-8 text-indigo-600" /> Clientes e Responsáveis
           </h1>
-          <p className="text-muted-foreground text-sm">Controle completo de compradores, v├¡nculo de filhos, tags e extrato de saldo.</p>
+          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsáveis, filhos, tags e extrato de saldo.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" className="border-indigo-100 text-indigo-600 hover:bg-indigo-50/50 gap-2 h-10 font-semibold" onClick={() => handleOpenCreate(true)}>
-            <PlusCircle className="h-4 w-4" /> Cadastro R├ípido
+            <PlusCircle className="h-4 w-4" /> Cadastro Rápido
           </Button>
           <Button className="bg-indigo-600 hover:bg-indigo-500 gap-2 text-white h-10 font-semibold shadow-sm" onClick={() => handleOpenCreate(false)}>
             <UserPlus className="h-4 w-4" /> Cadastro Completo
@@ -771,7 +776,7 @@ export default function ClientesPage() {
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
           <div>
-            <h3 className="font-semibold text-base">Erro na base</h3>
+            <h3 className="font-semibold text-base">Aviso no Carregamento</h3>
             <p className="text-sm">{error}</p>
           </div>
         </div>
@@ -785,8 +790,8 @@ export default function ClientesPage() {
       ) : filteredCustomers.length === 0 ? (
         <div className="text-center py-20 border-2 border-dashed rounded-2xl bg-slate-50/50">
           <User className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
-          <p className="text-slate-600 font-semibold text-base">Nenhum cliente localizado</p>
-          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou adicione um novo registro de respons├ível.</p>
+          <p className="text-slate-600 font-semibold text-base">Nenhum cliente encontrado</p>
+          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou cadastre um novo cliente/responsável.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -826,7 +831,7 @@ export default function ClientesPage() {
                 {/* Balance display */}
                 <div className="bg-slate-50 p-2.5 rounded-lg flex items-center justify-between border">
                   <span className="text-slate-400 font-semibold uppercase text-[9px] flex items-center gap-1">
-                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Cr├®dito
+                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Crédito
                   </span>
                   <strong className="text-indigo-600 text-sm">
                     R$ {(walletsMap[customer.id] || 0).toFixed(2)}
@@ -920,13 +925,13 @@ export default function ClientesPage() {
                 <h3 className="font-bold text-slate-800 text-sm">Vincular Filhos / Dependentes</h3>
                 
                 {filhos.length === 0 ? (
-                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este respons├ível.</p>
+                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsável.</p>
                 ) : (
                   <div className="space-y-3">
                     {filhos.map((filho, idx) => (
                       <div key={idx} className="border p-3 rounded-lg bg-slate-50/50 space-y-3 relative">
-                        <Button variant="ghost" size="icon" className="h-6 w-6 text-rose-500 absolute top-2 right-2" onClick={() => handleRemoveFilho(idx)}>
-                          Ô£ò
+                        <Button variant="ghost" size="icon" aria-label="Remover dependente" className="h-6 w-6 text-rose-500 absolute top-2 right-2" onClick={() => handleRemoveFilho(idx)}>
+                          <Trash2 className="h-4 w-4" />
                         </Button>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
@@ -956,7 +961,7 @@ export default function ClientesPage() {
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <Label>Cal├ºado</Label>
+                            <Label>Calçado</Label>
                             <Input placeholder="Ex: 24" value={filho.tamanho_calcado} onChange={e => handleFilhoChange(idx, "tamanho_calcado", e.target.value)} />
                           </div>
                         </div>
@@ -971,7 +976,7 @@ export default function ClientesPage() {
               </>
             ) : (
               <div className="bg-indigo-50/30 p-3 rounded-lg border space-y-3">
-                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro R├ípido do Primeiro Filho</h4>
+                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
                     <Label>Nome do Filho</Label>
@@ -988,8 +993,8 @@ export default function ClientesPage() {
             <Separator />
             
             <div className="space-y-2">
-              <Label>Observa├º├Áes de Atendimento</Label>
-              <Textarea placeholder="Hist├│rico de alergias, marcas preferidas, restri├º├Áes..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              <Label>Observações de Atendimento</Label>
+              <Textarea placeholder="Histórico de alergias, marcas preferidas, restrições..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
             </div>
 
             <div className="flex items-center gap-6 bg-slate-50 p-3 rounded-lg border">
@@ -1054,9 +1059,9 @@ export default function ClientesPage() {
             <TabsList className="bg-white border w-full justify-start gap-1 p-1">
               <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha B├ísica</TabsTrigger>
               <TabsTrigger value="filhos" className="flex items-center gap-1.5"><Baby className="h-4 w-4 text-emerald-600" /> Dependentes ({filhos.length})</TabsTrigger>
-              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Cr├®ditos/Carteira</TabsTrigger>
+              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Créditos/Carteira</TabsTrigger>
               <TabsTrigger value="trocas" className="flex items-center gap-1.5">Trocas ({returnsHistory.length})</TabsTrigger>
-              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> Hist├│rico CRM ({historyLogs.length})</TabsTrigger>
+              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> Histórico CRM ({historyLogs.length})</TabsTrigger>
             </TabsList>
 
             {/* TAB: Ficha B├ísica */}
@@ -1120,7 +1125,7 @@ export default function ClientesPage() {
 
               {filhos.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
-                  Sem crian├ºas vinculadas a este respons├ível.
+                  Sem crianças vinculadas a este responsável.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1283,7 +1288,7 @@ export default function ClientesPage() {
 
             {/* TAB: Trocas e Devoluções */}
             <TabsContent value="trocas" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">Hist├│rico de Trocas (PDV)</h3>
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Trocas (PDV)</h3>
               {returnsHistory.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
                   Nenhuma troca registrada para este comprador.
@@ -1297,7 +1302,7 @@ export default function ClientesPage() {
                         <p className="text-[10px] text-muted-foreground mt-0.5">Respons├ível: {item.vendedor_nome || "Balc├úo"}</p>
                       </div>
                       <div className="text-right">
-                        <strong className="text-indigo-600">R$ {Number(item.valor_credito || item.valor || 0).toFixed(2)}</strong>
+                        <strong className="text-indigo-600">R$ {(safeNumber(item.valor_credito ?? item.valor) ?? 0).toFixed(2)}</strong>
                         <p className="text-[9px] text-slate-400 mt-0.5">
                           {item.created_at ? new Date(item.created_at.seconds * 1000).toLocaleString("pt-BR") : ""}
                         </p>
@@ -1308,9 +1313,9 @@ export default function ClientesPage() {
               )}
             </TabsContent>
 
-            {/* TAB: Hist├│rico CRM */}
+            {/* TAB: Histórico CRM */}
             <TabsContent value="historico" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">Hist├│rico de Auditoria do Cliente</h3>
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Auditoria do Cliente</h3>
               {historyLogs.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
                   Sem registros de hist├│rico.
@@ -1377,7 +1382,7 @@ export default function ClientesPage() {
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>Cal├ºado</Label>
+                <Label>Calçado</Label>
                 <Input placeholder="Ex: 24" value={quickFilhoForm.tamanho_calcado} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, tamanho_calcado: e.target.value })} />
               </div>
             </div>
@@ -1406,8 +1411,8 @@ export default function ClientesPage() {
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ENTRADA">Adicionar Cr├®dito (Entrada)</SelectItem>
-                  <SelectItem value="SAIDA">Debitar Cr├®dito (Sa├¡da)</SelectItem>
+                  <SelectItem value="ENTRADA">Adicionar Crédito (Entrada)</SelectItem>
+                  <SelectItem value="SAIDA">Debitar Crédito (Sa├¡da)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1437,7 +1442,7 @@ export default function ClientesPage() {
         authorizationType={adjustType === "ENTRADA" ? "WALLET_CREDIT" : "WALLET_DEBIT"}
         title="Autorização de Ajuste"
         description="Este ajuste manual de saldo exige aprovação de um gerente."
-        amount={Number(adjustAmount)}
+        amount={safeNumber(adjustAmount) ?? 0}
         onAuthorized={(auth) => handleSaveWalletAdjustment(auth.id)}
       />
 

@@ -58,6 +58,17 @@ export default function NovaVendaPage() {
     if (res.success) setVariants(res.variants || []);
   };
 
+  useEffect(() => {
+    if (step === 3 && searchQuery.length >= 2) {
+      const timer = setTimeout(() => {
+        handleSearchVariant();
+      }, 300);
+      return () => clearTimeout(timer);
+    } else if (step === 3 && searchQuery.length === 0) {
+      setVariants([]);
+    }
+  }, [searchQuery, step, activeProfile?.empresaId]);
+
   const addToCart = (variant: any) => {
     setCartItems(prev => {
       const existing = prev.find(i => i.variantId === variant.id);
@@ -215,7 +226,7 @@ export default function NovaVendaPage() {
               <h2 className="text-xl font-semibold">Adicionar Produtos</h2>
               <div className="flex gap-2">
                 <Input 
-                  placeholder="Buscar produto por nome ou SKU..." 
+                  placeholder="Buscar produto por nome, código ou SKU..." 
                   value={searchQuery} 
                   onChange={(e) => setSearchQuery(e.target.value)} 
                 />

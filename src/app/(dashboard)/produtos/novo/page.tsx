@@ -21,6 +21,7 @@ import {
   createSupplier,
   createProduct
 } from "@/lib/crm/products-actions"
+import { safeNumber } from "@/lib/utils/form-normalizer"
 
 export default function NovoProdutoPage() {
   const router = useRouter()
@@ -304,8 +305,8 @@ export default function NovoProdutoPage() {
         imageUrl: "",
         thumbnailUrl: "",
         galleryUrls: [],
-        costPrice: Number(form.custoBase),
-        salePrice: Number(form.valorVenda),
+        costPrice: safeNumber(form.custoBase) ?? 0,
+        salePrice: safeNumber(form.valorVenda) ?? 0,
         barcode: form.codigoBarras || null,
         barcodeType: null,
       });

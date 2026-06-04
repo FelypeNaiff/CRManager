@@ -1,7 +1,8 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { requirePermission } from '@/lib/auth/permissions';
+import { requirePermission } from '../auth/permissions';
+import { safeDate } from '../utils/form-normalizer';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
@@ -94,9 +95,6 @@ export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
         instagram: data.instagram || null,
         notes: data.notes || null,
         status: data.status,
-        wallet: {
-          create: { balance: 0.0 },
-        },
       },
     });
 
@@ -225,7 +223,7 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
       data: {
         customerId: data.customerId,
         name: data.name,
-        birthDate: data.birthDate ? new Date(data.birthDate) : null,
+        birthDate: data.birthDate ? safeDate(data.birthDate) : null,
         gender: data.gender || null,
         shoeSize: data.shoeSize || null,
         clothingSize: data.clothingSize || null,
@@ -497,7 +495,7 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
       where: { id },
       data: {
         name: rawData.name,
-        birthDate: rawData.birthDate ? new Date(rawData.birthDate) : undefined,
+        birthDate: rawData.birthDate ? safeDate(rawData.birthDate) ?? undefined : undefined,
         gender: rawData.gender,
         shoeSize: rawData.shoeSize,
         clothingSize: rawData.clothingSize,

@@ -9,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Switch } from "@/components/ui/switch"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
@@ -186,7 +187,7 @@ export default function SegmentacoesPage() {
         const dateField = c.data_nascimento || c.dataNascimento
         if (!dateField) return false
         const mes = new Date(dateField).getMonth() + 1
-        if (mes !== Number(filterMesAniversario)) return false
+        if (mes !== safeInteger(filterMesAniversario)) return false
       }
 
       // 5. Inactivity (No purchases within X days)
@@ -199,11 +200,14 @@ export default function SegmentacoesPage() {
       }
 
       // 6. Ticket averages
-      if (filterTicketMedioMin && stat.ticketMedio < Number(filterTicketMedioMin)) return false
-      if (filterTicketMedioMax && stat.ticketMedio > Number(filterTicketMedioMax)) return false
+      const safeTicketMin = safeNumber(filterTicketMedioMin)
+      if (safeTicketMin !== null && stat.ticketMedio < safeTicketMin) return false
+      const safeTicketMax = safeNumber(filterTicketMedioMax)
+      if (safeTicketMax !== null && stat.ticketMedio > safeTicketMax) return false
 
       // 7. Total spent
-      if (filterTotalCompradoMin && stat.totalComprado < Number(filterTotalCompradoMin)) return false
+      const safeTotalMin = safeNumber(filterTotalCompradoMin)
+      if (safeTotalMin !== null && stat.totalComprado < safeTotalMin) return false
 
       // 8. Tags filter (matches all selected)
       if (selectedTagsFilter.length > 0) {
@@ -227,8 +231,10 @@ export default function SegmentacoesPage() {
           
           if (k.data_nascimento) {
             const kidAge = new Date().getFullYear() - new Date(k.data_nascimento).getFullYear()
-            if (filterKidIdadeMin && kidAge < Number(filterKidIdadeMin)) return false
-            if (filterKidIdadeMax && kidAge > Number(filterKidIdadeMax)) return false
+            const sMin = safeNumber(filterKidIdadeMin)
+            if (sMin !== null && kidAge < sMin) return false
+            const sMax = safeNumber(filterKidIdadeMax)
+            if (sMax !== null && kidAge > sMax) return false
           } else {
             if (filterKidIdadeMin || filterKidIdadeMax) return false
           }
@@ -239,7 +245,7 @@ export default function SegmentacoesPage() {
           if (filterMesAniversarioFilho) {
             if (!k.data_nascimento) return false
             const mes = new Date(k.data_nascimento).getMonth() + 1
-            if (mes !== Number(filterMesAniversarioFilho)) return false
+            if (mes !== safeInteger(filterMesAniversarioFilho)) return false
           }
 
           return true

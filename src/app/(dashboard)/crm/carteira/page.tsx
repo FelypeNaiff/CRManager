@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select"
 import { Wallet, Search, Loader2, Plus, ArrowUpRight, ArrowDownLeft, AlertCircle, Pencil, History } from "lucide-react"
 import { getWallets, adjustWalletBalance, getWalletHistory } from "@/lib/crm/actions"
+import { safeNumber } from "@/lib/utils/form-normalizer"
 import { toast } from "@/hooks/use-toast"
 
 export default function CarteiraSaldosPage() {
@@ -134,7 +135,8 @@ export default function CarteiraSaldosPage() {
   }
 
   const handleSaveAdjustment = async () => {
-    if (!adjustAmount || Number(adjustAmount) <= 0) {
+    const safeAdjust = safeNumber(adjustAmount)
+    if (!safeAdjust || safeAdjust <= 0) {
       return toast({ variant: "destructive", title: "Valor inválido" })
     }
     if (!adjustReason.trim()) {
@@ -146,7 +148,7 @@ export default function CarteiraSaldosPage() {
     try {
       const res = await adjustWalletBalance({
         customerId: selectedWallet.cliente_id,
-        amount: Number(adjustAmount),
+        amount: safeAdjust,
         type: adjustType === "ENTRADA" ? "credit" : "debit",
         reason: adjustReason
       })

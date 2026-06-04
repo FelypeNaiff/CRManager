@@ -135,8 +135,9 @@ export default function DashboardPage() {
           })
         }
 
-        if (salesRes.success && salesRes.sales) {
-          salesRes.sales.forEach((s: any) => {
+        if (salesRes.success && 'data' in salesRes && salesRes.data) {
+          const salesList = Array.isArray(salesRes.data) ? salesRes.data : [];
+          salesList.forEach((s: any) => {
             const sDate = new Date(s.createdAt)
             const dayBucket = daysList.find(d => d.dateStr === sDate.toDateString())
             if (dayBucket && s.status !== 'CANCELLED') {

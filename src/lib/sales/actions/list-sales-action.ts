@@ -8,10 +8,12 @@ export async function listSalesAction(companyId: string, filters?: {
   status?: string;
   startDate?: Date;
   endDate?: Date;
+  page?: number;
+  pageSize?: number;
 }) {
   try {
-    const sales = await salesService.listSales(companyId, filters);
-    return { success: true, sales };
+    const result = await salesService.listSales(companyId, filters);
+    return { success: true, ...result };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

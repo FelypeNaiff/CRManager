@@ -1,7 +1,10 @@
 'use server';
 
-import { prisma } from '../prisma';
-import { requirePermission } from '../auth/permissions';
+import { prisma } from '@/lib/prisma';
+import { requirePermission } from '@/lib/auth/permissions';
+import { revalidatePath } from 'next/cache';
+import { getPaginationArgs, buildPaginatedResult, PaginationParams } from '@/lib/performance/pagination';
+import { buildProductSearchWhere } from '@/lib/performance/query-utils';
 import { writeActivityLog } from '../auth/activity-log';
 import {
   ProductCategorySchema,
@@ -122,10 +125,12 @@ export async function createSupplier(input: any) {
 // Product Actions
 // =========================================================================
 
-export async function getProducts(filters?: { categoryId?: string; search?: string }) {
+export async function getProducts(filters?: { categoryId?: string; search?: string } & PaginationParams) {
   const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
-    const whereClause: Prisma.ProductWhereInput = {
+    const { skip, take, page, pageSize } = getPaginationArgs(filters);
+    
+    let whereClause: Prisma.ProductWhereInput = {
       companyId: session.companyId,
       isActive: true,
     };
@@ -135,26 +140,46 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
     }
 
     if (filters?.search) {
-      whereClause.OR = [
-        { name: { contains: filters.search, mode: 'insensitive' } },
-        { internalCode: { contains: filters.search, mode: 'insensitive' } },
-        { variants: { some: { sku: { contains: filters.search, mode: 'insensitive' } } } },
-      ];
+      const searchWhere = buildProductSearchWhere(filters.search);
+      if (searchWhere.OR) {
+        whereClause.OR = searchWhere.OR;
+      }
     }
 
-    const products = await prisma.product.findMany({
-      where: whereClause,
-      include: {
-        category: true,
-        supplier: true,
-        variants: {
-          where: { isActive: true },
+    const [totalCount, products] = await Promise.all([
+      prisma.product.count({ where: whereClause }),
+      prisma.product.findMany({
+        where: whereClause,
+        select: {
+          id: true,
+          name: true,
+          internalCode: true,
+          imageUrl: true,
+          categoryId: true,
+          category: { select: { name: true } },
+          supplierId: true,
+          supplier: { select: { name: true } },
+          variants: {
+            where: { isActive: true, companyId: session.companyId },
+            select: {
+              id: true,
+              sku: true,
+              barcode: true,
+              name: true,
+              costPrice: true,
+              salePrice: true,
+              currentStock: true,
+              availableStock: true,
+            }
+          }
         },
-      },
-      orderBy: { name: 'asc' },
-    });
+        orderBy: { name: 'asc' },
+        skip,
+        take,
+      })
+    ]);
 
-    return { success: true, data: products };
+    return { success: true, ...buildPaginatedResult(products, totalCount, page, pageSize) };
   } catch (error: any) {
     console.error('Error fetching products:', error);
     return { success: false, error: error.message };
@@ -170,7 +195,7 @@ export async function getProductById(id: string) {
         category: true,
         supplier: true,
         variants: {
-          where: { isActive: true },
+          where: { isActive: true, companyId: session.companyId },
         },
       },
     });
@@ -215,6 +240,7 @@ export async function createProduct(input: any) {
       // 2. Criar a variação única padrão
       const defaultVariant = await tx.productVariant.create({
         data: {
+          companyId: session.companyId,
           productId: newProduct.id,
           name: 'Único',
           sku: skuVal,
@@ -278,7 +304,7 @@ export async function updateProduct(id: string, input: any) {
       where: { id, companyId: session.companyId, isActive: true },
       include: {
         variants: {
-          where: { name: 'Único', isActive: true },
+          where: { name: 'Único', isActive: true, companyId: session.companyId },
         },
       },
     });
@@ -406,28 +432,38 @@ export async function deleteProduct(id: string) {
 // Inventory & Movements Actions
 // =========================================================================
 
-export async function getInventoryMovements(variantId?: string) {
+export async function getInventoryMovements(filters?: { variantId?: string } & PaginationParams) {
   const session = await requirePermission('ESTOQUE', 'VIEW');
   try {
-    const movements = await prisma.inventoryMovement.findMany({
-      where: {
-        ...(variantId ? { variantId } : {}),
-        variant: {
-          product: { companyId: session.companyId },
-        },
+    const { skip, take, page, pageSize } = getPaginationArgs(filters);
+    const variantId = filters?.variantId;
+    
+    let whereClause: Prisma.InventoryMovementWhereInput = {
+      ...(variantId ? { variantId } : {}),
+      variant: {
+        companyId: session.companyId,
+        product: { companyId: session.companyId },
       },
-      include: {
-        variant: {
-          include: {
-            product: true
-          }
+    };
+
+    const [totalCount, movements] = await Promise.all([
+      prisma.inventoryMovement.count({ where: whereClause }),
+      prisma.inventoryMovement.findMany({
+        where: whereClause,
+        include: {
+          variant: {
+            include: {
+              product: true
+            }
+          },
+          user: true
         },
-        user: true
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100
-    });
-    return { success: true, data: movements };
+        orderBy: { createdAt: 'desc' },
+        take,
+        skip,
+      })
+    ]);
+    return { success: true, ...buildPaginatedResult(movements, totalCount, page, pageSize) };
   } catch (error: any) {
     console.error('Error fetching inventory movements:', error);
     return { success: false, error: error.message };
@@ -610,24 +646,32 @@ export async function getProductPriceHistory(productId: string) {
 }
 
 
-export async function getProductInventoryMovements(productId: string) {
+export async function getProductInventoryMovements(productId: string, filters?: PaginationParams) {
   const session = await requirePermission('PRODUTOS', 'VIEW');
   try {
-    const movements = await prisma.inventoryMovement.findMany({
-      where: {
-        variant: {
-          productId,
-          product: { companyId: session.companyId }
-        }
-      },
+    const { skip, take, page, pageSize } = getPaginationArgs(filters);
+    
+    let whereClause: Prisma.InventoryMovementWhereInput = {
+      variant: {
+        productId,
+        companyId: session.companyId,
+      }
+    };
+
+    const [totalCount, movements] = await Promise.all([
+      prisma.inventoryMovement.count({ where: whereClause }),
+      prisma.inventoryMovement.findMany({
+        where: whereClause,
       include: {
         variant: true,
         user: true
       },
       orderBy: { createdAt: 'desc' },
-      take: 100
-    });
-    return { success: true, data: movements };
+      take,
+      skip,
+    })
+    ]);
+    return { success: true, ...buildPaginatedResult(movements, totalCount, page, pageSize) };
   } catch (error: any) {
     console.error('Error fetching product inventory movements:', error);
     return { success: false, error: error.message };

@@ -5,6 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
+import { safeInteger } from "@/lib/utils/form-normalizer"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
@@ -161,12 +162,12 @@ function FilhosPageContent() {
       const idade = getIdadeEmAnos(dataNasc)
       
       if (idadeMin) {
-        const min = Number(idadeMin)
-        if (idade === null || idade < min) return false
+        const min = safeInteger(idadeMin)
+        if (min !== null && (idade === null || idade < min)) return false
       }
       if (idadeMax) {
-        const max = Number(idadeMax)
-        if (idade === null || idade > max) return false
+        const max = safeInteger(idadeMax)
+        if (max !== null && (idade === null || idade > max)) return false
       }
       return true
     })

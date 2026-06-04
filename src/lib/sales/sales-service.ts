@@ -3,6 +3,8 @@ import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
 import { authorizationService } from "../auth/authorization-service";
+import { receivablesService } from "../financial/receivables-service";
+import { getPaginationArgs, buildPaginatedResult, PaginationParams } from "../performance/pagination";
 
 import bcrypt from "bcryptjs";
 
@@ -173,129 +175,7 @@ export class SalesService {
       }
 
       // Etapa 4: Processar Pagamentos e Financeiro
-      for (const payment of data.payments) {
-        const pm = await tx.paymentMethod.findUnique({ where: { id: payment.paymentMethodId } });
-        if (!pm) throw new Error("Método de pagamento inválido.");
-
-        if (pm.type === "STORE_CREDIT") {
-          // Crediário
-          if (!data.customerId) throw new Error("Cliente obrigatório para crediário.");
-          
-          const finTx = await tx.financialTransaction.create({
-            data: {
-              companyId: data.companyId,
-              type: "INCOME",
-              direction: "IN",
-              status: "PENDING",
-              customerId: data.customerId,
-              cashRegisterId: data.cashRegisterId,
-              paymentMethodId: pm.id,
-              referenceType: "SALE",
-              referenceId: sale.id,
-              sourceModule: "SALES",
-              description: `Venda #${sale.id} - Crediário`,
-              amount: payment.amount,
-              createdByUserId: data.sellerId
-            }
-          });
-
-          await tx.accountsReceivable.create({
-            data: {
-              companyId: data.companyId,
-              customerId: data.customerId,
-              financialTransactionId: finTx.id,
-              totalInstallments: payment.installments || 1,
-              installmentNumber: 1,
-              originalAmount: payment.amount,
-              remainingAmount: payment.amount,
-              dueDate: new Date(new Date().setDate(new Date().getDate() + 30)),
-              status: "PENDING"
-            }
-          });
-
-        } else if (pm.type === "CUSTOMER_WALLET") {
-          // Carteira Digital
-          if (!data.customerId) throw new Error("Cliente obrigatório para usar carteira digital.");
-          const wallet = await tx.customerWallet.findUnique({ where: { customerId: data.customerId } });
-          if (!wallet || Number(wallet.balance) < payment.amount) {
-            throw new Error(`Saldo insuficiente na carteira do cliente.`);
-          }
-
-          // Debitar da carteira
-          const balanceBefore = wallet.balance;
-          const balanceAfter = balanceBefore.sub(payment.amount);
-
-          await tx.customerWallet.update({
-            where: { id: wallet.id },
-            data: { balance: balanceAfter }
-          });
-
-          // Novo ledger WalletTransaction
-          await tx.walletTransaction.create({
-            data: {
-              walletId: wallet.id,
-              customerId: data.customerId,
-              type: "DEBIT",
-              amount: payment.amount,
-              balanceBefore,
-              balanceAfter,
-              description: `Pagamento Venda #${sale.id.slice(0, 8)}`,
-              saleId: sale.id
-            }
-          });
-
-          // Legado
-          await tx.customerWalletMovement.create({
-            data: {
-              walletId: wallet.id,
-              amount: payment.amount,
-              type: "OUT",
-              reason: `Pagamento Venda #${sale.id}`
-            }
-          });
-
-        } else {
-          // CASH, PIX, CREDIT_CARD, DEBIT_CARD, etc
-          const isCash = pm.type === "CASH";
-          
-          const finTx = await tx.financialTransaction.create({
-            data: {
-              companyId: data.companyId,
-              type: "INCOME",
-              direction: "IN",
-              status: "PAID",
-              customerId: data.customerId || undefined,
-              cashRegisterId: data.cashRegisterId,
-              paymentMethodId: pm.id,
-              referenceType: "SALE",
-              referenceId: sale.id,
-              sourceModule: "SALES",
-              description: `Venda #${sale.id} - ${pm.name}`,
-              amount: payment.amount,
-              paidAt: new Date(),
-              createdByUserId: data.sellerId
-            }
-          });
-
-          if (isCash) {
-            await tx.cashMovement.create({
-              data: {
-                companyId: data.companyId,
-                cashRegisterId: data.cashRegisterId!,
-                type: "IN",
-                amount: payment.amount,
-                description: `Venda #${sale.id}`,
-                createdByUserId: data.sellerId
-              }
-            });
-
-            await tx.cashRegister.update({
-              where: { id: data.cashRegisterId! },
-              data: { expectedBalance: { increment: payment.amount } }
-            });
-          }
-        }
-      }
+      await receivablesService.generateReceivablesFromSale(sale.id, tx);
 
       // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant
       for (const item of data.items) {
@@ -401,6 +281,9 @@ export class SalesService {
         }
       });
 
+      // Estornar Contas a Receber e Saldo de Carteira / Dinheiro
+      await receivablesService.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
+
       // Criar InventoryMovement tipo CANCELLATION e devolver estoque
       for (const item of sale.items) {
         await tx.inventoryMovement.create({
@@ -461,7 +344,7 @@ export class SalesService {
     status?: string;
     startDate?: Date;
     endDate?: Date;
-  }) {
+  } & PaginationParams) {
     const whereClause: any = { companyId };
     
     if (filters?.sellerId) whereClause.sellerId = filters.sellerId;
@@ -474,16 +357,34 @@ export class SalesService {
       if (filters.endDate) whereClause.createdAt.lte = filters.endDate;
     }
 
-    return prisma.sale.findMany({
-      where: whereClause,
-      orderBy: { createdAt: "desc" },
-      include: {
-        items: true,
-        payments: true,
-        seller: true,
-        customer: true
-      }
-    });
+    const { skip, take, page, pageSize } = getPaginationArgs(filters);
+
+    const [totalCount, sales] = await Promise.all([
+      prisma.sale.count({ where: whereClause }),
+      prisma.sale.findMany({
+        where: whereClause,
+        orderBy: { createdAt: "desc" },
+        include: {
+          items: {
+            include: {
+              variant: {
+                select: {
+                  name: true,
+                  sku: true,
+                }
+              }
+            }
+          },
+          payments: true,
+          seller: { select: { name: true } },
+          customer: { select: { name: true } }
+        },
+        skip,
+        take
+      })
+    ]);
+
+    return buildPaginatedResult(sales, totalCount, page, pageSize);
   }
 }
 

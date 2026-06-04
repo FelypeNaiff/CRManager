@@ -43,7 +43,7 @@ export function MovimentacoesModal({ produtoId, produtoNome, isOpen, onClose }: 
     setIsLoading(true)
     try {
       const res = await getProductInventoryMovements(produtoId)
-      if (res.success && res.data) {
+      if (res.success && 'data' in res && res.data) {
         const mapped = res.data.map((m: any) => {
           const qty = Number(m.quantity)
           const variantSale = Number(m.variant.salePrice || 0)

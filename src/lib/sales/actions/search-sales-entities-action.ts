@@ -6,17 +6,29 @@ const prisma = new PrismaClient();
 
 export async function searchVariantsAction(companyId: string, query: string) {
   try {
+    const q = query.trim();
     const variants = await prisma.productVariant.findMany({
       where: {
-        product: { companyId },
+        companyId,
+        isActive: true,
         OR: [
-          { name: { contains: query, mode: "insensitive" } },
-          { sku: { contains: query, mode: "insensitive" } },
-          { barcode: { contains: query, mode: "insensitive" } },
-          { product: { name: { contains: query, mode: "insensitive" } } }
+          { sku: { equals: q } },
+          { barcode: { equals: q } },
+          { name: { contains: q, mode: "insensitive" } },
+          { product: { name: { contains: q, mode: "insensitive" } } },
+          { product: { internalCode: { equals: q } } }
         ]
       },
-      include: { product: true },
+      select: {
+        id: true,
+        sku: true,
+        barcode: true,
+        name: true,
+        salePrice: true,
+        availableStock: true,
+        productId: true,
+        product: { select: { name: true, imageUrl: true } }
+      },
       take: 20
     });
     return { success: true, variants };

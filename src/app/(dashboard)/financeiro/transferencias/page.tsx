@@ -36,6 +36,7 @@ import { toast } from "@/hooks/use-toast"
 import { 
   Search, Plus, Loader2, ArrowRightLeft, Building2, Banknote, CalendarDays 
 } from "lucide-react"
+import { safeNumber } from "@/lib/utils/form-normalizer"
 import { format, parseISO } from "date-fns"
 
 const emptyForm = {
@@ -87,13 +88,14 @@ export default function TransferenciasPage() {
   }, [rawTransfers, searchTerm])
 
   const handleSave = async () => {
+    const safeAmount = safeNumber(form.amount)
     if (!form.sourceId || !form.destinationId) {
       return toast({ variant: "destructive", title: "Selecione as contas de origem e destino" })
     }
     if (form.sourceId === form.destinationId) {
       return toast({ variant: "destructive", title: "A conta de origem e destino devem ser diferentes" })
     }
-    if (!form.amount || Number(form.amount) <= 0) {
+    if (!safeAmount || safeAmount <= 0) {
       return toast({ variant: "destructive", title: "Informe um valor válido maior que zero" })
     }
 
@@ -105,7 +107,7 @@ export default function TransferenciasPage() {
     }
 
     // Alerta de saldo negativo (mas permite passar, pois contas podem ficar negativas)
-    if (sourceAccount.currentBalance < Number(form.amount)) {
+    if (sourceAccount.currentBalance < safeAmount) {
       if (!confirm("A conta de origem não possui saldo suficiente para esta transferência. A conta ficará com saldo negativo. Deseja continuar?")) {
         return
       }
@@ -118,14 +120,14 @@ export default function TransferenciasPage() {
       // 1. Debitar Origem
       const sourceRef = doc(db!, "bank_accounts", form.sourceId)
       batch.update(sourceRef, {
-        currentBalance: sourceAccount.currentBalance - Number(form.amount),
+        currentBalance: sourceAccount.currentBalance - safeAmount,
         updatedAt: serverTimestamp()
       })
 
       // 2. Creditar Destino
       const destRef = doc(db!, "bank_accounts", form.destinationId)
       batch.update(destRef, {
-        currentBalance: destAccount.currentBalance + Number(form.amount),
+        currentBalance: destAccount.currentBalance + safeAmount,
         updatedAt: serverTimestamp()
       })
 
@@ -134,7 +136,7 @@ export default function TransferenciasPage() {
       batch.set(transRef, {
         type: "TRANSFER",
         date: form.date,
-        amount: Number(form.amount),
+        amount: safeAmount,
         description: form.description || `Transferência de ${sourceAccount.name} para ${destAccount.name}`,
         status: "COMPLETED",
         bankAccountId: form.sourceId, // Origem

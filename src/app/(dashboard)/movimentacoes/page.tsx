@@ -25,6 +25,11 @@ export default function MovimentacoesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
 
+  const [page, setPage] = useState(1)
+  const pageSize = 50
+  const [totalCount, setTotalCount] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
+
   useEffect(() => {
     loadMovimentacoes()
   }, [])
@@ -32,8 +37,8 @@ export default function MovimentacoesPage() {
   const loadMovimentacoes = async () => {
     setIsLoading(true)
     try {
-      const res = await getInventoryMovements()
-      if (res.success && res.data) {
+      const res = await getInventoryMovements({ page, pageSize })
+      if (res.success && 'data' in res && res.data) {
         const mapped = res.data.map((m: any) => {
           const qty = Number(m.quantity)
           const variantCost = Number(m.variant.costPrice || 0)
@@ -56,6 +61,10 @@ export default function MovimentacoesPage() {
           }
         })
         setMovimentacoes(mapped)
+        if ('metadata' in res && res.metadata) {
+          setTotalPages(res.metadata.totalPages)
+          setTotalCount(res.metadata.totalCount)
+        }
       } else {
         setMovimentacoes([])
       }
@@ -168,11 +177,32 @@ export default function MovimentacoesPage() {
         </div>
       </div>
       
-      {!isLoading && filteredData.length > 0 && (
-        <div className="text-[12px] text-muted-foreground">
-          Mostrando 1 a {filteredData.length} movimentações
+      <div className="flex justify-between items-center mt-4">
+        <span className="text-[12px] text-muted-foreground">
+          Mostrando {filteredData.length} de {totalCount} resultados
+        </span>
+        <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setPage(p => Math.max(1, p - 1))}
+            disabled={page === 1 || isLoading}
+          >
+            Anterior
+          </Button>
+          <span className="text-sm px-4 py-2 bg-gray-50 border rounded-sm">
+            Página {page} de {totalPages}
+          </span>
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+            disabled={page === totalPages || isLoading}
+          >
+            Próximo
+          </Button>
         </div>
-      )}
+      </div>
     </div>
   )
 }
