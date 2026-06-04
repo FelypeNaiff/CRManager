@@ -1121,11 +1121,12 @@ export default function ClientesPage() {
                           <button
                             key={tag.id}
                             onClick={() => handleUpdateTags(tag.name)}
+                            disabled={!can('CLIENTES', 'UPDATE')}
                             className={`px-2 py-0.5 rounded text-[10px] font-bold border transition-all ${
                               active
                                 ? "bg-indigo-600 border-indigo-600 text-white shadow-sm"
                                 : "bg-white border-slate-200 text-slate-500 hover:bg-slate-50"
-                            }`}
+                            } disabled:opacity-60 disabled:cursor-not-allowed`}
                           >
                             {tag.name}
                           </button>

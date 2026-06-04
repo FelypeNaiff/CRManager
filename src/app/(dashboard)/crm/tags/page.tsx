@@ -27,6 +27,7 @@ import {
 import { Tags, Plus, Pencil, Trash2, Loader2, Info, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import { getTags, createTag, deleteTag, getCustomers } from "@/lib/crm/actions"
+import { usePermissions } from "@/hooks/use-permissions"
 
 const emptyForm = {
   nome: "",
@@ -35,6 +36,7 @@ const emptyForm = {
 }
 
 export default function TagsPage() {
+  const { can } = usePermissions()
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
   const [editingTag, setEditingTag] = useState<any>(null)
@@ -168,9 +170,11 @@ export default function TagsPage() {
           </h1>
           <p className="text-muted-foreground text-sm">Crie e configure etiquetas de segmentação para automatizar disparos de WhatsApp.</p>
         </div>
-        <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2" onClick={openNewDialog}>
-          <Plus className="h-4 w-4" /> Nova Tag
-        </Button>
+        {can('CLIENTES', 'UPDATE') && (
+          <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2" onClick={openNewDialog}>
+            <Plus className="h-4 w-4" /> Nova Tag
+          </Button>
+        )}
       </div>
 
       {/* Info card */}
@@ -209,12 +213,16 @@ export default function TagsPage() {
                 </Badge>
                 
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-700" onClick={() => openEditDialog(tag)}>
-                    <Pencil className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-600" onClick={() => openDeleteDialog(tag)}>
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
+                  {can('CLIENTES', 'UPDATE') && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-slate-400 hover:text-slate-700" onClick={() => openEditDialog(tag)}>
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                  {can('CLIENTES', 'DELETE') && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 text-rose-400 hover:text-rose-600" onClick={() => openDeleteDialog(tag)}>
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
               </CardHeader>
               <CardContent className="p-4 pl-6 pt-0 text-xs text-slate-500">

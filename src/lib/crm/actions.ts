@@ -285,7 +285,7 @@ export async function getTags() {
 }
 
 export async function createTag(name: string, color?: string) {
-  const session = await requirePermission('CRM', 'VIEW');
+  const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const tag = await prisma.customerTag.upsert({
       where: {
@@ -520,7 +520,7 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
 }
 
 export async function deleteTag(id: string) {
-  const session = await requirePermission('CRM', 'VIEW');
+  const session = await requirePermission('CLIENTES', 'DELETE');
   try {
     // Check if tag is used, if so delete relationships first (Prisma handles Cascade if config allows)
     await prisma.customerTag.delete({
