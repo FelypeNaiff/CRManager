@@ -793,7 +793,7 @@ export async function listCampaigns() {
       // Wait, we don't have a Campaign model? Let's check.
     });
 
-    return { success: true, data: list.map(h => ({ id: h.id, nome: h.actionType, cliente: h.customer.name, createdAt: h.createdAt, description: h.description })) };
+    return { success: true, data: serialize(list.map(h => ({ id: h.id, nome: h.actionType, cliente: h.customer.name, createdAt: h.createdAt, description: h.description }))) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
