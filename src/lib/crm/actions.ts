@@ -7,6 +7,8 @@ import { writeActivityLog } from '@/lib/auth/activity-log';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 
+const serialize = (obj: any) => JSON.parse(JSON.stringify(obj, (key, value) => typeof value === 'bigint' ? value.toString() : value));
+
 // ─── Zod Schemas ───
 
 export const CustomerSchema = z.object({
@@ -58,7 +60,7 @@ export async function getCustomers() {
       },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching customers:', error);
     return { success: false, error: 'Erro ao buscar clientes.' };
@@ -115,7 +117,7 @@ export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
       details: `Criou o cliente ${customer.name}`,
     });
 
-    return { success: true, data: customer };
+    return { success: true, data: serialize(customer) };
   } catch (error: any) {
     console.error('Error creating customer:', error);
     return { success: false, error: error.message || 'Erro ao criar cliente.' };
@@ -173,7 +175,7 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
       details: `Editou dados do cliente ${customer.name}`,
     });
 
-    return { success: true, data: customer };
+    return { success: true, data: serialize(customer) };
   } catch (error: any) {
     console.error('Error updating customer:', error);
     return { success: false, error: error.message || 'Erro ao atualizar cliente.' };
@@ -239,7 +241,7 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
       },
     });
 
-    return { success: true, data: child };
+    return { success: true, data: serialize(child) };
   } catch (error: any) {
     console.error('Error creating child:', error);
     return { success: false, error: error.message || 'Erro ao criar cadastro de filho.' };
@@ -277,7 +279,7 @@ export async function getTags() {
       where: { companyId: session.companyId },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: tags };
+    return { success: true, data: serialize(tags) };
   } catch (error: any) {
     console.error('Error getting tags:', error);
     return { success: false, error: 'Erro ao obter tags.' };
@@ -301,7 +303,7 @@ export async function createTag(name: string, color?: string) {
         color: color || '#64748b',
       },
     });
-    return { success: true, data: tag };
+    return { success: true, data: serialize(tag) };
   } catch (error: any) {
     console.error('Error creating tag:', error);
     return { success: false, error: 'Erro ao criar tag.' };
@@ -328,7 +330,7 @@ export async function addTagToCustomer(customerId: string, tagId: string) {
       },
     });
 
-    return { success: true, data: relation };
+    return { success: true, data: serialize(relation) };
   } catch (error: any) {
     console.error('Error linking tag:', error);
     return { success: false, error: 'Erro ao vincular tag.' };
@@ -386,7 +388,7 @@ export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustme
       details: `Ajuste de saldo (${data.type === 'credit' ? 'Crédito' : 'Débito'}): R$ ${data.amount.toFixed(2)} para o cliente ID ${data.customerId}`,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: serialize(result) };
   } catch (error: any) {
     console.error('Error adjusting wallet balance:', error);
     return { success: false, error: error.message || 'Erro ao realizar transação de saldo.' };
@@ -402,7 +404,7 @@ export async function getCustomerHistory(customerId: string) {
       where: { customerId },
       orderBy: { createdAt: 'desc' },
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching history:', error);
     return { success: false, error: 'Erro ao buscar histórico do cliente.' };
@@ -480,7 +482,7 @@ export async function getChildren(customerId?: string) {
       include: { customer: true },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching children:', error);
     return { success: false, error: 'Erro ao buscar filhos.' };
@@ -512,7 +514,7 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
       },
     });
 
-    return { success: true, data: child };
+    return { success: true, data: serialize(child) };
   } catch (error: any) {
     console.error('Error updating child:', error);
     return { success: false, error: 'Erro ao atualizar cadastro do filho.' };
@@ -549,7 +551,7 @@ export async function getWallets() {
         }
       }
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching wallets:', error);
     return { success: false, error: 'Erro ao buscar carteiras.' };
@@ -571,7 +573,7 @@ export async function getWalletHistory(walletId: string) {
       },
       orderBy: { createdAt: 'desc' }
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching wallet history:', error);
     return { success: false, error: 'Erro ao buscar extrato da carteira.' };
@@ -587,7 +589,7 @@ export async function getActivityLogs() {
       orderBy: { createdAt: 'desc' },
       take: 100
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching activity logs:', error);
     return { success: false, error: 'Erro ao buscar logs de auditoria.' };
@@ -641,7 +643,7 @@ export async function getCustomerExchangeReturns(customerId: string) {
       })),
     ].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
 
-    return { success: true, data: unified };
+    return { success: true, data: serialize(unified) };
   } catch (error: any) {
     console.error('Error fetching customer exchange returns:', error);
     return { success: false, error: 'Erro ao buscar trocas e devoluções.' };
@@ -701,7 +703,7 @@ export async function getSegmentationData() {
       data_nascimento: c.birthDay ? new Date(c.birthYear || new Date().getFullYear(), (c.birthMonth || 1) - 1, c.birthDay) : null,
     }));
 
-    return { success: true, data: { clientes: mappedClients, stats, tags } };
+    return { success: true, data: serialize({ clientes: mappedClients, stats, tags }) };
   } catch (error: any) {
     console.error('Error fetching segmentation data:', error);
     return { success: false, error: 'Erro ao buscar dados para segmentacao.' };
@@ -742,7 +744,7 @@ export async function listExchangeReturns() {
       quantidade: e.items.reduce((acc: number, i: any) => acc + Number(i.quantity), 0)
     }));
 
-    return { success: true, data: mapped };
+    return { success: true, data: serialize(mapped) };
   } catch (error: any) {
     console.error("Error in listExchangeReturns:", error);
     return { success: false, error: error.message };
@@ -766,7 +768,7 @@ export async function createExchangeReturnAction(data: any) {
         condition: data.destino_produto === 'avaria' ? 'DAMAGED' : (data.destino_produto === 'descarte' ? 'DISCARD' : 'RESALE')
       }]
     });
-    return { success: true, data: result };
+    return { success: true, data: serialize(result) };
   } catch (error: any) {
     console.error("Error creating exchange return:", error);
     return { success: false, error: error.message };
@@ -827,7 +829,7 @@ export async function getCustomerHistoryLogs() {
       orderBy: { createdAt: 'desc' },
       take: 200
     });
-    return { success: true, data: list };
+    return { success: true, data: serialize(list) };
   } catch (error: any) {
     console.error('Error fetching customer history logs:', error);
     return { success: false, error: 'Erro ao buscar histórico.' };
