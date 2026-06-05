@@ -1,4 +1,5 @@
-"use server";
+'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { CommercialReportService, ReportFilters } from "../commercial-report-service";
 import { revalidatePath } from "next/cache";

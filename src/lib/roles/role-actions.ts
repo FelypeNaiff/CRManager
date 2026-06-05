@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -55,7 +56,7 @@ export async function getRolesAction() {
       },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: roles };
+    return { success: true, data: serializePrisma(roles) };
   } catch (error: any) {
     console.error('Error fetching roles:', error);
     return { success: false, error: 'Erro ao buscar grupos de usuários.' };
@@ -74,7 +75,7 @@ export async function getRoleByIdAction(id: string) {
     if (!role) {
       return { success: false, error: 'Grupo não encontrado.' };
     }
-    return { success: true, data: role };
+    return { success: true, data: serializePrisma(role) };
   } catch (error: any) {
     console.error('Error fetching role:', error);
     return { success: false, error: 'Erro ao buscar grupo de usuários.' };

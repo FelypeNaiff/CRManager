@@ -1,4 +1,5 @@
-"use server";
+'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { PrismaClient } from "@prisma/client";
 import { UpdateSellerGoalInput, updateSellerGoalSchema } from "../seller-schemas";

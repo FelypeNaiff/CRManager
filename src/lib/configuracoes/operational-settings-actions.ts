@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { z } from 'zod';
 import { requireAuth, requirePermission } from '@/lib/auth/permissions';
@@ -54,10 +55,7 @@ export async function getOperationalSettingsAction() {
   const session = await requireAuth();
   try {
     const settings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId);
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(settings)),
-    };
+    return { success: true, data: serializePrisma(JSON.parse(JSON.stringify(settings)),) };
   } catch (error: any) {
     console.error('Error in getOperationalSettingsAction:', error);
     return { success: false, error: error.message || 'Erro ao carregar configurações.' };
@@ -86,10 +84,7 @@ export async function updateOperationalSettingsAction(rawData: any) {
       details: 'Atualização das configurações operacionais e PDV',
     });
 
-    return {
-      success: true,
-      data: JSON.parse(JSON.stringify(updated)),
-    };
+    return { success: true, data: serializePrisma(JSON.parse(JSON.stringify(updated)),) };
   } catch (error: any) {
     console.error('Error in updateOperationalSettingsAction:', error);
     if (error instanceof z.ZodError) {

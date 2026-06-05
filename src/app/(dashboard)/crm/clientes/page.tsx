@@ -154,11 +154,11 @@ export default function ClientesPage() {
   const [statusFilter, setStatusFilter] = useState("ativo")
 
   useEffect(() => {
-    const statusParam = searchParamÃªs?.get("status")
+    const statusParam = searchParams?.get("status")
     if (statusParam) {
       setStatusFilter(statusParam)
     }
-  }, [searchParamÃªs])
+  }, [searchParams])
 
   // Modals state
   const [isFormOpen, setIsFormOpen] = useState(false)
@@ -314,7 +314,7 @@ export default function ClientesPage() {
       const matchStatus = statusFilter === "todos" || c.status === statusFilter
       if (!matchSearch || !matchStatus) return false
 
-      const tabParam = searchParamÃªs?.get("tab")
+      const tabParam = searchParams?.get("tab")
       if (tabParam === "aniversariantes") {
         const currentMonth = new Date().getMonth() + 1
         let isBirthday = false
@@ -338,7 +338,7 @@ export default function ClientesPage() {
 
       return true
     })
-  }, [rawCustomers, searchTerm, statusFilter, searchParamÃªs])
+  }, [rawCustomers, searchTerm, statusFilter, searchParams])
 
   const handleSaveQuickFilho = async () => {
     if (!quickFilhoForm.nome.trim()) {

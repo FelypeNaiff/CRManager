@@ -1,4 +1,5 @@
-"use server";
+'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { salesService } from "../sales-service";
 

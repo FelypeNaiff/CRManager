@@ -1,4 +1,5 @@
-"use server";
+'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { exchangeService, CreateExchangeInput } from "./exchange-service";

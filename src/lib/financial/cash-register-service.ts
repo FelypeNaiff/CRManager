@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -29,7 +30,7 @@ export async function getCurrentOpenRegister() {
         movements: { orderBy: { createdAt: 'asc' } },
       },
     });
-    return { success: true, data: register };
+    return { success: true, data: serializePrisma(register) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -49,7 +50,7 @@ export async function getCashRegisters(limit = 30) {
       orderBy: { openedAt: 'desc' },
       take: limit,
     });
-    return { success: true, data: registers };
+    return { success: true, data: serializePrisma(registers) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -114,7 +115,7 @@ export async function openCashRegister(input: any) {
       details: `Caixa aberto com saldo inicial de R$ ${result.openingBalance}.`,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error opening cash register:', error);
     return { success: false, error: error.message };
@@ -196,7 +197,7 @@ export async function closeCashRegister(registerId: string, input: any) {
       details: `Caixa fechado. Saldo real: R$ ${result.closingBalance} | Esperado: R$ ${result.expectedBalance} | Diferença: R$ ${result.difference}.`,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error closing cash register:', error);
     return { success: false, error: error.message };
@@ -299,7 +300,7 @@ export async function addCashMovement(input: any) {
       details: `${typeLabel} de R$ ${parsed.data.amount} realizado no caixa.`,
     });
 
-    return { success: true, data: movement };
+    return { success: true, data: serializePrisma(movement) };
   } catch (error: any) {
     console.error('Error adding cash movement:', error);
     return { success: false, error: error.message };
@@ -314,7 +315,7 @@ export async function getCashRegisterMovements(cashRegisterId: string) {
       include: { createdBy: { select: { id: true, name: true } } },
       orderBy: { createdAt: 'asc' },
     });
-    return { success: true, data: movements };
+    return { success: true, data: serializePrisma(movements) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

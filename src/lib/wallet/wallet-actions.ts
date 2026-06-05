@@ -1,4 +1,5 @@
-"use server";
+'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { customerWalletService } from "./customer-wallet-service";

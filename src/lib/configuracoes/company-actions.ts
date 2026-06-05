@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { CompanyService, CompanyDataInput } from './company-service';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -46,7 +47,7 @@ export async function getCompanyAction() {
   const session = await requirePermission('CONFIGURACOES_EMPRESA', 'VIEW');
   try {
     const company = await CompanyService.getActiveCompany();
-    return { success: true, data: company };
+    return { success: true, data: serializePrisma(company) };
   } catch (error: any) {
     console.error('Error in getCompanyAction:', error);
     return { success: false, error: error.message || 'Erro ao buscar dados da empresa.' };
@@ -95,7 +96,7 @@ export async function updateCompanyAction(rawData: any, updateType?: 'contatos' 
       details: logDetails,
     });
 
-    return { success: true, data: updatedCompany };
+    return { success: true, data: serializePrisma(updatedCompany) };
   } catch (error: any) {
     console.error('Error in updateCompanyAction:', error);
     if (error instanceof z.ZodError) {

@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -46,7 +47,7 @@ export async function getAccountsReceivable(filters?: {
       take: 300,
     });
 
-    return { success: true, data: receivables };
+    return { success: true, data: serializePrisma(receivables) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -99,7 +100,7 @@ export async function createAccountsReceivable(input: any) {
       details: `${totalInstallments}x parcela(s) de R$ ${installmentAmount.toFixed(2)} criadas. Total: R$ ${totalAmount}. Descrição: ${description}`,
     });
 
-    return { success: true, data: installments };
+    return { success: true, data: serializePrisma(installments) };
   } catch (error: any) {
     console.error('Error creating accounts receivable:', error);
     return { success: false, error: error.message };
@@ -191,7 +192,7 @@ export async function payInstallment(
       details: `Pagamento de R$ ${amount} registrado na parcela ${result.installmentNumber}/${result.totalInstallments}. Status: ${result.status}. Restante: R$ ${result.remainingAmount}.`,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error paying installment:', error);
     return { success: false, error: error.message };

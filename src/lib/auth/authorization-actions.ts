@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { revalidatePath } from 'next/cache';
 import { requireAuth } from '@/lib/auth/permissions';
@@ -101,7 +102,7 @@ export async function getPendingAuthorizationsAction() {
   try {
     const session = await requireAuth();
     const authorizations = await authorizationService.getPendingAuthorizations(session.companyId);
-    return { success: true, data: authorizations };
+    return { success: true, data: serializePrisma(authorizations) };
   } catch (err: any) {
     return { success: false, error: err.message || 'Falha ao carregar autorizações.' };
   }
@@ -111,7 +112,7 @@ export async function getAuthorizationHistoryAction() {
   try {
     const session = await requireAuth();
     const authorizations = await authorizationService.getAuthorizationHistory(session.companyId);
-    return { success: true, data: authorizations };
+    return { success: true, data: serializePrisma(authorizations) };
   } catch (err: any) {
     return { success: false, error: err.message || 'Falha ao carregar histórico.' };
   }

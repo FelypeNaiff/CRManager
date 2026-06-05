@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -7,7 +8,7 @@ import { PERMISSION_CATALOG, TEMPLATES, ADMIN_TEMPLATE, PermissionModule, Permis
 
 export async function getPermissionCatalogAction() {
   const session = await requirePermission('PERMISSOES', 'VIEW');
-  return { success: true, data: PERMISSION_CATALOG };
+  return { success: true, data: serializePrisma(PERMISSION_CATALOG) };
 }
 
 export async function getRolePermissionsAction(roleId: string) {

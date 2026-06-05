@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -23,7 +24,7 @@ export async function getBankAccounts() {
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: accounts };
+    return { success: true, data: serializePrisma(accounts) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -36,7 +37,7 @@ export async function getBankAccountById(id: string) {
       where: { id, companyId: session.companyId },
     });
     if (!account) return { success: false, error: 'Conta não encontrada.' };
-    return { success: true, data: account };
+    return { success: true, data: serializePrisma(account) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -74,7 +75,7 @@ export async function createBankAccount(input: any) {
       details: `Conta bancária "${account.name}" criada com saldo inicial de R$ ${account.initialBalance}.`,
     });
 
-    return { success: true, data: account };
+    return { success: true, data: serializePrisma(account) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -100,7 +101,7 @@ export async function updateBankAccount(id: string, input: any) {
       details: `Conta bancária "${parsed.data.name ?? id}" atualizada.`,
     });
 
-    return { success: true, data: account };
+    return { success: true, data: serializePrisma(account) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -140,7 +141,7 @@ export async function getCostCenters() {
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: centers };
+    return { success: true, data: serializePrisma(centers) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -165,7 +166,7 @@ export async function createCostCenter(input: any) {
       details: `Centro de custo "${center.name}" criado.`,
     });
 
-    return { success: true, data: center };
+    return { success: true, data: serializePrisma(center) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe um centro de custo com este nome.' };
     return { success: false, error: error.message };
@@ -233,7 +234,7 @@ export async function getFinancialAccounts() {
       include: { children: { where: { isActive: true } } },
       orderBy: { code: 'asc' },
     });
-    return { success: true, data: accounts };
+    return { success: true, data: serializePrisma(accounts) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -258,7 +259,7 @@ export async function createFinancialAccount(input: any) {
       details: `Conta contábil "${account.code} — ${account.name}" criada no plano de contas.`,
     });
 
-    return { success: true, data: account };
+    return { success: true, data: serializePrisma(account) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe uma conta com este código.' };
     return { success: false, error: error.message };
@@ -302,7 +303,7 @@ export async function getPaymentMethods() {
       where: { companyId: session.companyId, isActive: true },
       orderBy: [{ isSystemDefault: 'desc' }, { name: 'asc' }],
     });
-    return { success: true, data: methods };
+    return { success: true, data: serializePrisma(methods) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -331,7 +332,7 @@ export async function createPaymentMethod(input: any) {
       details: `Forma de pagamento "${method.name}" (${method.type}) criada.`,
     });
 
-    return { success: true, data: method };
+    return { success: true, data: serializePrisma(method) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe uma forma de pagamento com este nome.' };
     return { success: false, error: error.message };
@@ -451,7 +452,7 @@ export async function createFinancialTransaction(input: any) {
       details: `Transação financeira "${transaction.description}" de R$ ${transaction.amount} (${transaction.direction}) criada.`,
     });
 
-    return { success: true, data: transaction };
+    return { success: true, data: serializePrisma(transaction) };
   } catch (error: any) {
     console.error('Error creating financial transaction:', error);
     return { success: false, error: error.message };
@@ -492,7 +493,7 @@ export async function getFinancialTransactions(filters?: {
       take: 200,
     });
 
-    return { success: true, data: transactions };
+    return { success: true, data: serializePrisma(transactions) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -535,7 +536,7 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
       details: `Transação "${id}" cancelada. Motivo: ${reason}`,
     });
 
-    return { success: true, data: result };
+    return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }

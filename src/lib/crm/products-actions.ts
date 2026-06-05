@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -27,7 +28,7 @@ export async function getProductCategories() {
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: categories };
+    return { success: true, data: serializePrisma(categories) };
   } catch (error: any) {
     console.error('Error fetching product categories:', error);
     return { success: false, error: error.message };
@@ -59,7 +60,7 @@ export async function createProductCategory(input: any) {
       details: `Categoria "${newCategory.name}" criada.`,
     });
 
-    return { success: true, data: newCategory };
+    return { success: true, data: serializePrisma(newCategory) };
   } catch (error: any) {
     console.error('Error creating product category:', error);
     if (error.code === 'P2002') {
@@ -80,7 +81,7 @@ export async function getSuppliers() {
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: suppliers };
+    return { success: true, data: serializePrisma(suppliers) };
   } catch (error: any) {
     console.error('Error fetching suppliers:', error);
     return { success: false, error: error.message };
@@ -114,7 +115,7 @@ export async function createSupplier(input: any) {
       details: `Fornecedor "${newSupplier.name}" criado.`,
     });
 
-    return { success: true, data: newSupplier };
+    return { success: true, data: serializePrisma(newSupplier) };
   } catch (error: any) {
     console.error('Error creating supplier:', error);
     return { success: false, error: error.message };
@@ -202,7 +203,7 @@ export async function getProductById(id: string) {
     if (!product) {
       return { success: false, error: 'Produto não encontrado.' };
     }
-    return { success: true, data: product };
+    return { success: true, data: serializePrisma(product) };
   } catch (error: any) {
     return { success: false, error: error.message };
   }
@@ -282,7 +283,7 @@ export async function createProduct(input: any) {
 
     
 
-    return { success: true, data: result.product };
+    return { success: true, data: serializePrisma(result.product) };
   } catch (error: any) {
     console.error('Error creating product:', error);
     if (error.code === 'P2002') {
@@ -379,7 +380,7 @@ export async function updateProduct(id: string, input: any) {
 
     
 
-    return { success: true, data: result };
+    return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error updating product:', error);
     return { success: false, error: error.message };
@@ -621,7 +622,7 @@ export async function createInventoryMovement(input: any) {
       
     }
 
-    return { success: true, data: movement };
+    return { success: true, data: serializePrisma(movement) };
   } catch (error: any) {
     console.error('Error creating inventory movement:', error);
     return { success: false, error: error.message };
@@ -638,7 +639,7 @@ export async function getProductPriceHistory(productId: string) {
       },
       orderBy: { changedAt: 'desc' }
     });
-    return { success: true, data: history };
+    return { success: true, data: serializePrisma(history) };
   } catch (error: any) {
     console.error('Error fetching product price history:', error);
     return { success: false, error: error.message };

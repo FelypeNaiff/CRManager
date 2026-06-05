@@ -1,4 +1,5 @@
 'use server';
+import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
@@ -51,7 +52,7 @@ export async function getUsersAction() {
       },
       orderBy: { name: 'asc' },
     });
-    return { success: true, data: users };
+    return { success: true, data: serializePrisma(users) };
   } catch (error: any) {
     console.error('Error fetching users:', error);
     return { success: false, error: 'Erro ao buscar usuários.' };
@@ -83,7 +84,7 @@ export async function getUserByIdAction(id: string) {
       return { success: false, error: 'Usuário não encontrado.' };
     }
     
-    return { success: true, data: user };
+    return { success: true, data: serializePrisma(user) };
   } catch (error: any) {
     console.error('Error fetching user:', error);
     return { success: false, error: 'Erro ao buscar usuário.' };
