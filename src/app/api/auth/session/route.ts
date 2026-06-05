@@ -11,7 +11,9 @@ export async function GET() {
     const session = await getActiveProfileSession();
 
     if (!session) {
-      return NextResponse.json({ authenticated: false, session: null }, { status: 401 });
+      const response = NextResponse.json({ authenticated: false, session: null }, { status: 401 });
+      response.cookies.delete('@crmanager:activeProfileSession');
+      return response;
     }
 
     // Return safe subset — never expose the full permissions object to the client

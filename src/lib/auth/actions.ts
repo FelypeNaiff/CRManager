@@ -150,14 +150,18 @@ export async function getActiveProfileSession(): Promise<ActiveProfileSession | 
     return (global as any).mockSession || null;
   }
   try {
+    console.log('[getActiveProfileSession] starting...');
     const cookieStore = await cookies();
     const sessionCookie = cookieStore.get(SESSION_COOKIE);
     if (!sessionCookie || !sessionCookie.value) {
+      console.log('[getActiveProfileSession] no session cookie');
       return null;
     }
-    return JSON.parse(sessionCookie.value) as ActiveProfileSession;
+    const session = JSON.parse(sessionCookie.value) as ActiveProfileSession;
+    console.log('[getActiveProfileSession] parsed session:', session.userId);
+    return session;
   } catch (error) {
-    console.error('Error reading active profile session:', error);
+    console.error('[getActiveProfileSession] erro:', error);
     return null;
   }
 }
