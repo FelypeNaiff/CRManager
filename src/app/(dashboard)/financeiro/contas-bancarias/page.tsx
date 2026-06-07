@@ -117,13 +117,13 @@ export default function ContasBancariasPage() {
       })
       toast({ title: "Status atualizado" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao atualizar status" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
   }
 
   const handleSave = async () => {
     if (!form.name.trim()) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o nome da conta." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -157,7 +157,7 @@ export default function ContasBancariasPage() {
       setIsDialogOpen(false)
       setForm(emptyForm)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -169,7 +169,7 @@ export default function ContasBancariasPage() {
       await deleteDoc(doc(db, "bank_accounts", deletingId))
       toast({ title: "Conta excluída" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setDeletingId(null)
       setIsDeleteOpen(false)
@@ -198,7 +198,7 @@ export default function ContasBancariasPage() {
           <p className="text-muted-foreground">Gerencie as contas bancárias e caixas internos da empresa.</p>
         </div>
         <Button className="gap-2" onClick={openNewDialog}>
-          <Plus className="h-4 w-4" /> Nova Conta
+          <Plus className="h-4 w-4" /> Nãova Conta
         </Button>
       </div>
 
@@ -227,7 +227,7 @@ export default function ContasBancariasPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Nãome</TableHead>
                   <TableHead>Banco</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Saldo Atual</TableHead>
@@ -304,14 +304,14 @@ export default function ContasBancariasPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Conta Bancária" : "Nova Conta Bancária"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Conta Bancária" : "Nãova Conta Bancária"}</DialogTitle>
             <DialogDescription>
               Preencha os dados da conta para lançamentos financeiros.
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Nome da Conta *</Label>
+              <Label>Nãome da Conta *</Label>
               <Input 
                 value={form.name} 
                 onChange={(e) => setForm({...form, name: e.target.value})} 
@@ -336,7 +336,7 @@ export default function ContasBancariasPage() {
             {form.type !== "CASH" && (
               <>
                 <div className="space-y-2">
-                  <Label>Nome do Banco</Label>
+                  <Label>Nãome do Banco</Label>
                   <Input 
                     value={form.bankName} 
                     onChange={(e) => setForm({...form, bankName: e.target.value})} 

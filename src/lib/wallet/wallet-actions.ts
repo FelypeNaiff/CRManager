@@ -120,18 +120,51 @@ export async function createManualAdjustmentAction(data: {
   authorizationId?: string;
 }) {
   const session = await requirePermission("CARTEIRA", "UPDATE"); // matching ADJUST
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: "INFO",
+    action: "WALLET_ADJUSTMENT_REQUEST",
+    customerId: data.customerId,
+    amount: data.amount,
+    type: data.type,
+    userId: session.userId
+  }));
+
   try {
     const result = await customerWalletService.createManualAdjustment({
       ...data,
       createdById: session.userId,
       authorizationId: data.authorizationId
     });
+    
     if (result && 'requireAuthorization' in result) {
+      console.log(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: "INFO",
+        action: "WALLET_ADJUSTMENT_REQUIRES_AUTH",
+        authorizationId: result.authorizationId
+      }));
       return { success: false, requireAuthorization: true, authorizationId: result.authorizationId, type: data.type };
     }
+
+    console.log(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "INFO",
+      action: "WALLET_ADJUSTMENT_SUCCESS",
+      customerId: data.customerId,
+      amount: data.amount,
+      type: data.type
+    }));
+
     return { success: true, wallet: result.wallet };
   } catch (error: any) {
-    console.error("Error in createManualAdjustmentAction:", error);
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "ERROR",
+      action: "WALLET_ADJUSTMENT_FAILURE",
+      customerId: data.customerId,
+      error: error.message || "Erro ao aplicar ajuste manual."
+    }));
     return { success: false, error: error.message || "Erro ao aplicar ajuste manual." };
   }
 }

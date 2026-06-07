@@ -60,7 +60,7 @@ export default function GruposUsuariosPage() {
     setIsFormOpen(true);
   };
 
-  const handleNotImplemented = () => {
+  const handleNãotImplemented = () => {
     toast({ title: 'Aviso', description: 'Visualizar Permissões em breve.' });
   };
 
@@ -83,7 +83,7 @@ export default function GruposUsuariosPage() {
             </Link>
           </Button>
           <Button onClick={handleOpenCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-            <Plus className="mr-2 h-4 w-4" /> Novo Grupo
+            <Plus className="mr-2 h-4 w-4" /> Nãovo Grupo
           </Button>
         </div>
       </div>
@@ -154,7 +154,7 @@ export default function GruposUsuariosPage() {
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={handleNotImplemented} title="Permissões">
+                        <Button variant="ghost" size="icon" onClick={handleNãotImplemented} title="Permissões">
                           <KeyRound className="h-4 w-4 text-purple-600" />
                         </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role.id)} title="Editar Grupo">

@@ -43,7 +43,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Baby, Plus, ArrowLeft, MoreVertical, Pencil, Trash2, Loader2, Cake, AlertCircle } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { getChildren, getCustomers, createChild, updateChild, deleteChild } from "@/lib/crm/actions"
+import { getChildren, createChild, updateChild, deleteChild } from "@/lib/crm/actions"
 import { usePermissions } from "@/hooks/use-permissions"
 
 const emptyForm = {
@@ -85,7 +85,7 @@ function FilhosPageContent() {
   const router = useRouter()
   const { can } = usePermissions()
   const clienteId = searchParams.get("clienteId")
-  const clienteNome = searchParams.get("nome") || "Cliente"
+  const clienteNãome = searchParams.get("nome") || "Cliente"
   
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [isDeleteOpen, setIsDeleteOpen] = useState(false)
@@ -102,7 +102,6 @@ function FilhosPageContent() {
 
   // Supabase states
   const [filhos, setFilhos] = useState<any[] | null>(null)
-  const [clientes, setClientes] = useState<any[] | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -110,15 +109,13 @@ function FilhosPageContent() {
     setIsLoading(true)
     setError(null)
     try {
-      const [filhosRes, clientesRes] = await Promise.all([
-        getChildren(clienteId || undefined),
-        getCustomers()
-      ])
+      const filhosRes = await getChildren(clienteId || undefined)
 
       if (filhosRes.success && filhosRes.data) {
         const mapped = filhosRes.data.map((f: any) => ({
           id: f.id,
           cliente_id: f.customerId,
+          cliente_nome: f.customer?.name || "Cliente Desconhecido",
           nome: f.name,
           data_nascimento: f.birthDate ? new Date(f.birthDate).toISOString().substring(0, 10) : "",
           sexo: f.gender || "",
@@ -130,10 +127,6 @@ function FilhosPageContent() {
         setFilhos(mapped)
       } else {
         setError(filhosRes.error || "Erro ao carregar lista de filhos.")
-      }
-
-      if (clientesRes.success && clientesRes.data) {
-        setClientes(clientesRes.data)
       }
     } catch (e: any) {
       console.error(e)
@@ -148,11 +141,12 @@ function FilhosPageContent() {
   }, [loadData])
 
   const clientesMap = useMemo(() => {
-    return (clientes || []).reduce((acc: Record<string, string>, c: any) => {
-      acc[c.id] = c.name || "Cliente Desconhecido"
+    if (!filhos) return {}
+    return filhos.reduce((acc: Record<string, string>, f: any) => {
+      acc[f.cliente_id] = f.cliente_nome
       return acc
     }, {})
-  }, [clientes])
+  }, [filhos])
 
   const filteredFilhos = useMemo(() => {
     if (!filhos) return []
@@ -215,12 +209,12 @@ function FilhosPageContent() {
 
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatório", description: "Informe o nome da criança." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     const targetClientId = clienteId || editingFilho?.cliente_id
     if (!targetClientId) {
-      return toast({ variant: "destructive", title: "Erro", description: "Esta criança deve estar vinculada a um cliente." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -250,7 +244,7 @@ function FilhosPageContent() {
         toast({ variant: "destructive", title: "Erro ao salvar", description: res.error })
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao salvar" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -267,7 +261,7 @@ function FilhosPageContent() {
         toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
       }
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setDeletingFilho(null)
       setIsDeleteOpen(false)
@@ -295,7 +289,7 @@ function FilhosPageContent() {
               <Baby className="h-8 w-8 text-indigo-600" /> Filhos & Público Vendas
             </h1>
             {clienteId ? (
-              <p className="text-muted-foreground text-sm">Crianças vinculadas a <span className="font-semibold text-slate-800">{decodeURIComponent(clienteNome)}</span></p>
+              <p className="text-muted-foreground text-sm">Crianças vinculadas a <span className="font-semibold text-slate-800">{decodeURIComponent(clienteNãome)}</span></p>
             ) : (
               <p className="text-muted-foreground text-sm">Controle geral de faixa etária, marcas e preferências infantis para fidelização.</p>
             )}
@@ -532,7 +526,7 @@ function FilhosPageContent() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-lg bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-800">{editingFilho ? "Editar Informações do Filho" : "Cadastrar Novo Filho"}</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-slate-800">{editingFilho ? "Editar Informações do Filho" : "Cadastrar Nãovo Filho"}</DialogTitle>
             <DialogDescription>
               Fidelize com campanhas baseadas na idade, tamanho ou personagens favoritos.
             </DialogDescription>
@@ -540,7 +534,7 @@ function FilhosPageContent() {
 
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <Label htmlFor="fnome">Nome Completo *</Label>
+              <Label htmlFor="fnome">Nãome Completo *</Label>
               <Input id="fnome" placeholder="Ex: Felipe Naiff Junior" {...field("nome")} />
             </div>
 

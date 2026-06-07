@@ -40,7 +40,7 @@ export default function GruposProdutosPage() {
 
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -64,7 +64,7 @@ export default function GruposProdutosPage() {
       }
       setIsDialogOpen(false)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar grupo." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -76,7 +76,7 @@ export default function GruposProdutosPage() {
         await deleteDoc(doc(db, "gruposProdutos", id))
         toast({ title: "Grupo excluído com sucesso." })
       } catch (err) {
-        toast({ variant: "destructive", title: "Erro ao excluir grupo." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       }
     }
   }
@@ -125,7 +125,7 @@ export default function GruposProdutosPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-gray-100 border-b">
-                <th className="text-left p-3 font-semibold">Nome</th>
+                <th className="text-left p-3 font-semibold">Nãome</th>
                 <th className="text-left p-3 font-semibold">Descrição</th>
                 <th className="text-center p-3 font-semibold">Ações</th>
               </tr>
@@ -162,12 +162,12 @@ export default function GruposProdutosPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Grupo" : "Novo Grupo de Produtos"}</DialogTitle>
+            <DialogTitle>{editingId ? "Editar Grupo" : "Nãovo Grupo de Produtos"}</DialogTitle>
             <DialogDescription>Preencha as informações do grupo</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-semibold">Nome *</label>
+              <label className="text-sm font-semibold">Nãome *</label>
               <Input 
                 value={form.nome}
                 onChange={(e) => setForm({ ...form, nome: e.target.value })}

@@ -52,6 +52,21 @@ export class CustomerWalletService {
       });
     }
 
+    // Se estiver rodando dentro de uma transação ativa (tx !== prisma), aplica trava pessimista
+    if (tx && tx !== prisma) {
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`,
+        customerId
+      );
+      // Re-busca para garantir que lemos o saldo atualizado pós-trava
+      const lockedWallet = await tx.customerWallet.findUnique({
+        where: { customerId },
+      });
+      if (lockedWallet) {
+        wallet = lockedWallet;
+      }
+    }
+
     return wallet;
   }
 
@@ -113,126 +128,142 @@ export class CustomerWalletService {
    * Credits a wallet, inserting a ledger transaction.
    */
   async creditWallet(data: CreditWalletInput, tx: any = prisma) {
-    const amountVal = new Decimal(data.amount);
-    if (amountVal.lte(0)) throw new Error("O valor do crédito deve ser maior que zero.");
+    const execute = async (innerTx: any) => {
+      const amountVal = new Decimal(data.amount);
+      if (amountVal.lte(0)) throw new Error("O valor do crédito deve ser maior que zero.");
 
-    const wallet = await this.getWallet(data.customerId, tx);
-    const customer = await tx.customer.findUnique({
-      where: { id: data.customerId }
-    });
-    if (!customer) throw new Error("Cliente não encontrado.");
-
-    const balanceBefore = wallet.balance;
-    const balanceAfter = balanceBefore.add(amountVal);
-
-    // Expiration date resolving:
-    let expiresAt = data.expiresAt;
-    if (!expiresAt) {
-      const settings = await tx.operationalSettings.findFirst({
-        where: { companyId: customer.companyId }
+      const wallet = await this.getWallet(data.customerId, innerTx);
+      const customer = await innerTx.customer.findUnique({
+        where: { id: data.customerId }
       });
-      if (settings?.walletExpirationDays) {
-        expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + settings.walletExpirationDays);
+      if (!customer) throw new Error("Cliente não encontrado.");
+
+      const balanceBefore = wallet.balance;
+      const balanceAfter = balanceBefore.add(amountVal);
+
+      // Expiration date resolving:
+      let expiresAt = data.expiresAt;
+      if (!expiresAt) {
+        const settings = await innerTx.operationalSettings.findFirst({
+          where: { companyId: customer.companyId }
+        });
+        if (settings?.walletExpirationDays) {
+          expiresAt = new Date();
+          expiresAt.setDate(expiresAt.getDate() + settings.walletExpirationDays);
+        }
       }
-    }
 
-    // Update balance
-    const updatedWallet = await tx.customerWallet.update({
-      where: { id: wallet.id },
-      data: { balance: balanceAfter }
-    });
-
-    // Create transaction
-    const transaction = await tx.customerWalletMovement.create({
-      data: {
-        walletId: wallet.id,
-        type: data.type.toString(),
-        amount: amountVal,
-        reason: data.description || "Crédito em carteira"
-      }
-    });
-
-    // Log to customer history
-    await tx.customerHistory.create({
-      data: {
-        customerId: data.customerId,
-        actionType: "SALDO_CREDITO",
-        description: `Crédito de R$ ${amountVal.toFixed(2)} lançado. Motivo: ${data.description || "N/A"}. Novo Saldo: R$ ${balanceAfter.toFixed(2)}`,
-      }
-    });
-
-    if (data.createdById) {
-      await writeActivityLog({
-        companyId: customer.companyId,
-        userId: data.createdById,
-        action: "CREDITO_CARTEIRA",
-        module: "CARTEIRA",
-        recordId: wallet.id,
-        details: `Crédito de R$ ${amountVal.toFixed(2)} gerado para cliente ${customer.name}.`,
+      // Update balance
+      const updatedWallet = await innerTx.customerWallet.update({
+        where: { id: wallet.id },
+        data: { balance: balanceAfter }
       });
-    }
 
-    return { wallet: updatedWallet, transaction };
+      // Create transaction
+      const transaction = await innerTx.customerWalletMovement.create({
+        data: {
+          walletId: wallet.id,
+          type: data.type.toString(),
+          amount: amountVal,
+          reason: data.description || "Crédito em carteira"
+        }
+      });
+
+      // Log to customer history
+      await innerTx.customerHistory.create({
+        data: {
+          customerId: data.customerId,
+          actionType: "SALDO_CREDITO",
+          description: `Crédito de R$ ${amountVal.toFixed(2)} lançado. Motivo: ${data.description || "N/A"}. Novo Saldo: R$ ${balanceAfter.toFixed(2)}`,
+        }
+      });
+
+      if (data.createdById) {
+        await writeActivityLog({
+          companyId: customer.companyId,
+          userId: data.createdById,
+          action: "CREDITO_CARTEIRA",
+          module: "CARTEIRA",
+          recordId: wallet.id,
+          details: `Crédito de R$ ${amountVal.toFixed(2)} gerado para cliente ${customer.name}.`,
+        });
+      }
+
+      return { wallet: updatedWallet, transaction };
+    };
+
+    if (tx === prisma) {
+      return await prisma.$transaction(execute);
+    } else {
+      return await execute(tx);
+    }
   }
 
   /**
    * Debits a wallet, verifying balance.
    */
   async debitWallet(data: DebitWalletInput, tx: any = prisma) {
-    const amountVal = new Decimal(data.amount);
-    if (amountVal.lte(0)) throw new Error("O valor do débito deve ser maior que zero.");
+    const execute = async (innerTx: any) => {
+      const amountVal = new Decimal(data.amount);
+      if (amountVal.lte(0)) throw new Error("O valor do débito deve ser maior que zero.");
 
-    const wallet = await this.getWallet(data.customerId, tx);
-    const customer = await tx.customer.findUnique({
-      where: { id: data.customerId }
-    });
-    if (!customer) throw new Error("Cliente não encontrado.");
-
-    const balanceBefore = wallet.balance;
-    if (balanceBefore.lt(amountVal)) {
-      throw new Error(`Saldo insuficiente na carteira do cliente. Saldo: R$ ${balanceBefore.toFixed(2)}, Requerido: R$ ${amountVal.toFixed(2)}`);
-    }
-
-    const balanceAfter = balanceBefore.sub(amountVal);
-
-    // Update balance
-    const updatedWallet = await tx.customerWallet.update({
-      where: { id: wallet.id },
-      data: { balance: balanceAfter }
-    });
-
-    // Create transaction
-    const transaction = await tx.customerWalletMovement.create({
-      data: {
-        walletId: wallet.id,
-        type: data.type.toString(),
-        amount: amountVal,
-        reason: data.description || "Débito em carteira"
-      }
-    });
-
-    // Log to customer history
-    await tx.customerHistory.create({
-      data: {
-        customerId: data.customerId,
-        actionType: "SALDO_DEBITO",
-        description: `Débito de R$ ${amountVal.toFixed(2)} realizado. Motivo: ${data.description || "N/A"}. Novo Saldo: R$ ${balanceAfter.toFixed(2)}`,
-      }
-    });
-
-    if (data.createdById) {
-      await writeActivityLog({
-        companyId: customer.companyId,
-        userId: data.createdById,
-        action: "DEBITO_CARTEIRA",
-        module: "CARTEIRA",
-        recordId: wallet.id,
-        details: `Débito de R$ ${amountVal.toFixed(2)} realizado para cliente ${customer.name}.`,
+      const wallet = await this.getWallet(data.customerId, innerTx);
+      const customer = await innerTx.customer.findUnique({
+        where: { id: data.customerId }
       });
-    }
+      if (!customer) throw new Error("Cliente não encontrado.");
 
-    return { wallet: updatedWallet, transaction };
+      const balanceBefore = wallet.balance;
+      if (balanceBefore.lt(amountVal)) {
+        throw new Error(`Saldo insuficiente na carteira do cliente. Saldo: R$ ${balanceBefore.toFixed(2)}, Requerido: R$ ${amountVal.toFixed(2)}`);
+      }
+
+      const balanceAfter = balanceBefore.sub(amountVal);
+
+      // Update balance
+      const updatedWallet = await innerTx.customerWallet.update({
+        where: { id: wallet.id },
+        data: { balance: balanceAfter }
+      });
+
+      // Create transaction
+      const transaction = await innerTx.customerWalletMovement.create({
+        data: {
+          walletId: wallet.id,
+          type: data.type.toString(),
+          amount: amountVal,
+          reason: data.description || "Débito em carteira"
+        }
+      });
+
+      // Log to customer history
+      await innerTx.customerHistory.create({
+        data: {
+          customerId: data.customerId,
+          actionType: "SALDO_DEBITO",
+          description: `Débito de R$ ${amountVal.toFixed(2)} realizado. Motivo: ${data.description || "N/A"}. Novo Saldo: R$ ${balanceAfter.toFixed(2)}`,
+        }
+      });
+
+      if (data.createdById) {
+        await writeActivityLog({
+          companyId: customer.companyId,
+          userId: data.createdById,
+          action: "DEBITO_CARTEIRA",
+          module: "CARTEIRA",
+          recordId: wallet.id,
+          details: `Débito de R$ ${amountVal.toFixed(2)} realizado para cliente ${customer.name}.`,
+        });
+      }
+
+      return { wallet: updatedWallet, transaction };
+    };
+
+    if (tx === prisma) {
+      return await prisma.$transaction(execute);
+    } else {
+      return await execute(tx);
+    }
   }
 
   async expireCredits(customerId: string, tx: any = prisma) {

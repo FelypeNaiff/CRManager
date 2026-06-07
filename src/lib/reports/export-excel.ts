@@ -2,7 +2,7 @@ import * as XLSX from "xlsx";
 
 export function exportToExcel(data: any[], filename: string) {
   if (!data || data.length === 0) {
-    console.warn("No data to export");
+    console.warn("Não data to export");
     return;
   }
   

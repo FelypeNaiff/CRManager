@@ -21,7 +21,7 @@ interface SessionData {
 export default function ConfiguracoesLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNãode
 }) {
   const { activeProfile, loginProfile } = useProfile()
   const router = useRouter()

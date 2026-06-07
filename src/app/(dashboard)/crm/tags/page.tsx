@@ -119,7 +119,7 @@ export default function TagsPage() {
 
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatório" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -137,7 +137,7 @@ export default function TagsPage() {
         toast({ variant: "destructive", title: "Erro ao salvar tag", description: res.error })
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao salvar tag" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -154,7 +154,7 @@ export default function TagsPage() {
         toast({ variant: "destructive", title: "Erro ao remover tag", description: res.error })
       }
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setDeletingTag(null)
       setIsDeleteOpen(false)
@@ -172,7 +172,7 @@ export default function TagsPage() {
         </div>
         {can('CLIENTES', 'UPDATE') && (
           <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2" onClick={openNewDialog}>
-            <Plus className="h-4 w-4" /> Nova Tag
+            <Plus className="h-4 w-4" /> Nãova Tag
           </Button>
         )}
       </div>
@@ -240,7 +240,7 @@ export default function TagsPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-md bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-800">{editingTag ? "Editar Tag" : "Nova Tag de Segmentação"}</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-slate-800">{editingTag ? "Editar Tag" : "Nãova Tag de Segmentação"}</DialogTitle>
             <DialogDescription>
               Crie uma tag para segmentar sua base de clientes.
             </DialogDescription>
@@ -248,7 +248,7 @@ export default function TagsPage() {
 
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <Label htmlFor="fnome">Nome da Tag (Será convertida em MAIÚSCULAS) *</Label>
+              <Label htmlFor="fnome">Nãome da Tag (Será convertida em MAIÚSCULAS) *</Label>
               <Input 
                 id="fnome" 
                 placeholder="Ex: MAE_DE_GEMEOS" 

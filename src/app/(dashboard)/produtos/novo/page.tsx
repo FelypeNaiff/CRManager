@@ -23,7 +23,7 @@ import {
 } from "@/lib/crm/products-actions"
 import { safeNumber } from "@/lib/utils/form-normalizer"
 
-export default function NovoProdutoPage() {
+export default function NãovoProdutoPage() {
   const router = useRouter()
   const db = useFirestore()
   const [isSaving, setIsSaving] = useState(false)
@@ -184,7 +184,7 @@ export default function NovoProdutoPage() {
 
   const handleCreateNewGrupo = async () => {
     if (!newGrupoName.trim()) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     setIsCreatingGrupo(true)
@@ -203,7 +203,7 @@ export default function NovoProdutoPage() {
         toast({ variant: "destructive", title: res.error || "Erro ao criar grupo." })
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao criar grupo." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsCreatingGrupo(false)
     }
@@ -211,7 +211,7 @@ export default function NovoProdutoPage() {
 
   const handleCreateNewGrade = async () => {
     if (!newGradeName.trim() || !newGradeValues.trim() || !db) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome e valores são obrigatórios." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     setIsCreatingGrade(true)
@@ -230,7 +230,7 @@ export default function NovoProdutoPage() {
       setIsNewGradeDialogOpen(false)
       toast({ title: "Grade criada com sucesso!" })
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao criar grade." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsCreatingGrade(false)
     }
@@ -238,7 +238,7 @@ export default function NovoProdutoPage() {
 
   const handleCreateNewUnidade = async () => {
     if (!newUnidadeName.trim() || !newUnidadeSigla.trim() || !db) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome e sigla são obrigatórios." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     setIsCreatingUnidade(true)
@@ -256,7 +256,7 @@ export default function NovoProdutoPage() {
       setIsNewUnidadeDialogOpen(false)
       toast({ title: "Unidade criada com sucesso!" })
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao criar unidade." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsCreatingUnidade(false)
     }
@@ -264,7 +264,7 @@ export default function NovoProdutoPage() {
 
   const handleCreateNewFornecedor = async () => {
     if (!newFornecedorName.trim()) {
-      toast({ variant: "destructive", title: "Erro", description: "Nome é obrigatório." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     setIsCreatingFornecedor(true)
@@ -282,7 +282,7 @@ export default function NovoProdutoPage() {
         toast({ variant: "destructive", title: res.error || "Erro ao criar fornecedor." })
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao criar fornecedor." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsCreatingFornecedor(false)
     }
@@ -290,7 +290,7 @@ export default function NovoProdutoPage() {
 
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "O produto precisa ter um nome." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -312,14 +312,14 @@ export default function NovoProdutoPage() {
       });
 
       if (res.success) {
-        toast({ title: "Sucesso!", description: "Produto cadastrado com sucesso." })
+        toast({ title: "Sucesso", description: "Operação realizada com sucesso." })
         router.push("/produtos")
       } else {
         toast({ variant: "destructive", title: "Erro", description: res.error || "Ocorreu um erro ao salvar o produto." })
       }
     } catch (error) {
       console.error(error)
-      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao salvar o produto." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -334,7 +334,7 @@ export default function NovoProdutoPage() {
             <Package className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-headline font-bold">Novo Produto</h1>
+            <h1 className="text-2xl font-headline font-bold">Nãovo Produto</h1>
             <p className="text-muted-foreground text-sm">Preencha as informações para cadastrar um novo produto no estoque.</p>
           </div>
         </div>
@@ -379,7 +379,7 @@ export default function NovoProdutoPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="nome">Nome do Produto *</Label>
+                <Label htmlFor="nome">Nãome do Produto *</Label>
                 <Input 
                   id="nome" 
                   placeholder="Ex: Camiseta Algodão Básica" 
@@ -700,7 +700,7 @@ export default function NovoProdutoPage() {
             <Alert className="bg-blue-50/50 text-blue-800 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                Dados fiscais obrigatórios para emissão de Nota Fiscal. Consulte seu contador em caso de dúvidas.
+                Dados fiscais obrigatórios para emissão de Nãota Fiscal. Consulte seu contador em caso de dúvidas.
               </AlertDescription>
             </Alert>
             
@@ -738,7 +738,7 @@ export default function NovoProdutoPage() {
                 <Select defaultValue="padrao">
                   <SelectTrigger><SelectValue placeholder="Selecione o perfil tributário" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="padrao">Tributação Normal Padrão</SelectItem>
+                    <SelectItem value="padrao">Tributação Nãormal Padrão</SelectItem>
                     <SelectItem value="simples">Simples Nacional</SelectItem>
                     <SelectItem value="isento">Isento / Não Tributado</SelectItem>
                   </SelectContent>
@@ -753,12 +753,12 @@ export default function NovoProdutoPage() {
       <Dialog open={isNewGrupoDialogOpen} onOpenChange={setIsNewGrupoDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Grupo de Produtos</DialogTitle>
+            <DialogTitle>Nãovo Grupo de Produtos</DialogTitle>
             <DialogDescription>Crie um novo grupo para categorizar seus produtos</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newGrupoName">Nome do Grupo *</Label>
+              <Label htmlFor="newGrupoName">Nãome do Grupo *</Label>
               <Input 
                 id="newGrupoName"
                 value={newGrupoName}
@@ -780,12 +780,12 @@ export default function NovoProdutoPage() {
       <Dialog open={isNewGradeDialogOpen} onOpenChange={setIsNewGradeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nova Grade de Variação</DialogTitle>
+            <DialogTitle>Nãova Grade de Variação</DialogTitle>
             <DialogDescription>Crie uma nova grade para definir variações de produtos</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newGradeName">Nome da Grade *</Label>
+              <Label htmlFor="newGradeName">Nãome da Grade *</Label>
               <Input 
                 id="newGradeName"
                 value={newGradeName}
@@ -830,12 +830,12 @@ export default function NovoProdutoPage() {
       <Dialog open={isNewUnidadeDialogOpen} onOpenChange={setIsNewUnidadeDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nova Unidade de Medida</DialogTitle>
+            <DialogTitle>Nãova Unidade de Medida</DialogTitle>
             <DialogDescription>Cadastre uma nova unidade de medida no sistema</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newUnidadeName">Nome da Unidade *</Label>
+              <Label htmlFor="newUnidadeName">Nãome da Unidade *</Label>
               <Input 
                 id="newUnidadeName"
                 value={newUnidadeName}
@@ -867,12 +867,12 @@ export default function NovoProdutoPage() {
       <Dialog open={isNewFornecedorDialogOpen} onOpenChange={setIsNewFornecedorDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Novo Fornecedor Rápido</DialogTitle>
+            <DialogTitle>Nãovo Fornecedor Rápido</DialogTitle>
             <DialogDescription>Cadastre um fornecedor rapidamente. Detalhes completos poderão ser inseridos depois no menu Fornecedores.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newFornecedorName">Nome do Fornecedor *</Label>
+              <Label htmlFor="newFornecedorName">Nãome do Fornecedor *</Label>
               <Input 
                 id="newFornecedorName"
                 value={newFornecedorName}

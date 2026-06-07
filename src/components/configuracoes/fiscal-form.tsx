@@ -85,7 +85,7 @@ export default function FiscalForm() {
       newErrors.razaoSocial = 'Razão Social é obrigatória';
     }
     if (!form.nomeFantasia.trim()) {
-      newErrors.nomeFantasia = 'Nome Fantasia é obrigatório';
+      newErrors.nomeFantasia = 'Nãome Fantasia é obrigatório';
     }
     if (!form.cnpjCpf.trim()) {
       newErrors.cnpjCpf = 'CNPJ/CPF é obrigatório';
@@ -259,7 +259,7 @@ export default function FiscalForm() {
 
             <div className="space-y-1">
               <ConfigInputField
-                label="Nome Fantasia *"
+                label="Nãome Fantasia *"
                 id="nomeFantasia"
                 value={form.nomeFantasia}
                 onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })}
@@ -344,7 +344,7 @@ export default function FiscalForm() {
               options={[
                 { label: '1 - Simples Nacional', value: '1' },
                 { label: '2 - Simples Nacional - excesso de sublimite', value: '2' },
-                { label: '3 - Regime Normal', value: '3' },
+                { label: '3 - Regime Nãormal', value: '3' },
               ]}
             />
           </div>

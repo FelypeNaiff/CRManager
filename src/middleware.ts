@@ -91,7 +91,7 @@ export function middleware(request: NextRequest) {
 
   // 3. Read session cookie (if no session -> redirect to login)
   if (!sessionCookie?.value) {
-    // No session → redirect to login
+    // Não session → redirect to login
     const loginUrl = new URL('/login', request.url);
     loginUrl.searchParams.set('callbackUrl', pathname);
     return NextResponse.redirect(loginUrl);

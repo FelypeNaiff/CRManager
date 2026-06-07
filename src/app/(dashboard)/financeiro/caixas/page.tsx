@@ -59,7 +59,7 @@ export default function CaixasPage() {
   // Forms
   const [initialBalance, setInitialBalance] = useState<number | string>(0)
   const [countedBalance, setCountedBalance] = useState<number | string>("")
-  const [closingNotes, setClosingNotes] = useState("")
+  const [closingNãotes, setClosingNãotes] = useState("")
 
   // Check if there is an active open register
   const openRegister = useMemo(() => {
@@ -92,14 +92,14 @@ export default function CaixasPage() {
       await setDoc(doc(db, "configuracoes", "pdv"), { requireOpenRegister: val }, { merge: true })
       toast({ title: "Configuração atualizada!" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao salvar configuração" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       setRequireOpenRegister(!val)
     }
   }
 
   const handleOpenRegister = async () => {
     if (initialBalance === "" || isNaN(Number(initialBalance))) {
-      return toast({ variant: "destructive", title: "Informe um saldo inicial válido" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -118,7 +118,7 @@ export default function CaixasPage() {
       setIsOpening(false)
       setInitialBalance(0)
     } catch {
-      toast({ variant: "destructive", title: "Erro ao abrir o caixa" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -130,11 +130,11 @@ export default function CaixasPage() {
 
   const handleCloseRegister = async () => {
     if (countedBalance === "" || isNaN(Number(countedBalance))) {
-      return toast({ variant: "destructive", title: "Informe o saldo apurado em gaveta" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
-    if (needsJustification && !closingNotes.trim()) {
-      return toast({ variant: "destructive", title: "Justificativa obrigatória", description: "O saldo da gaveta não bate com o sistema. Justifique." })
+    if (needsJustification && !closingNãotes.trim()) {
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -144,15 +144,15 @@ export default function CaixasPage() {
         closedAt: serverTimestamp(),
         finalBalance: Number(countedBalance),
         difference: difference,
-        notes: closingNotes.trim(),
+        notes: closingNãotes.trim(),
         updatedAt: serverTimestamp(),
       })
       toast({ title: "Caixa fechado com sucesso!" })
       setIsClosing(false)
       setCountedBalance("")
-      setClosingNotes("")
+      setClosingNãotes("")
     } catch {
-      toast({ variant: "destructive", title: "Erro ao fechar o caixa" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -164,7 +164,7 @@ export default function CaixasPage() {
     if (!timestamp) return "-"
     try {
       const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-      return format(date, "dd/MM/yyyy HH:mm")
+      return format(date, "dd/MM/yyyy HH:mm", { locale: ptBR })
     } catch {
       return "-"
     }
@@ -395,8 +395,8 @@ export default function CaixasPage() {
                 <Label className="text-destructive font-semibold">Justificativa da Quebra de Caixa *</Label>
                 <Textarea 
                   placeholder="Explique o motivo da diferença (ex: Troco errado, sangria não registrada...)" 
-                  value={closingNotes}
-                  onChange={(e) => setClosingNotes(e.target.value)}
+                  value={closingNãotes}
+                  onChange={(e) => setClosingNãotes(e.target.value)}
                   className="border-destructive/50 focus-visible:ring-destructive/50"
                 />
               </div>

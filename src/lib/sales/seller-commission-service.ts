@@ -1,16 +1,13 @@
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
-
-const prisma = new PrismaClient();
 
 export class SellerCommissionService {
   async processSaleCommission(tx: any, sale: any) {
-    // Busca configurações do usuário
-    const seller = await tx.user.findUnique({
-      where: { id: sale.sellerId },
-      include: { company: true }
+    // Busca o vendedor na tabela Seller
+    const seller = await tx.seller.findUnique({
+      where: { id: sale.sellerId }
     });
-    if (!seller || !seller.isSeller) return;
+    if (!seller || seller.status !== 'ACTIVE') return;
 
     const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
 
@@ -19,7 +16,7 @@ export class SellerCommissionService {
       const now = new Date();
       const activeGoals = await tx.sellerGoal.findMany({
         where: {
-          userId: seller.id,
+          sellerId: seller.id,
           periodStart: { lte: now },
           periodEnd: { gte: now }
         }
@@ -36,17 +33,17 @@ export class SellerCommissionService {
     // Se empresa habilita comissões, calcula e cria
     if (settings.enableCommissions) {
       let rate = 0;
-      if (seller.commissionRate && seller.commissionRate.toNumber() > 0) {
-        rate = seller.commissionRate.toNumber();
-      } else if (settings.defaultCommissionRate && settings.defaultCommissionRate.toNumber() > 0) {
-        rate = settings.defaultCommissionRate.toNumber();
+      if (seller.commissionRate && Number(seller.commissionRate) > 0) {
+        rate = Number(seller.commissionRate);
+      } else if (settings.defaultCommissionRate && Number(settings.defaultCommissionRate) > 0) {
+        rate = Number(settings.defaultCommissionRate);
       }
 
       if (rate > 0) {
-        const commissionAmount = sale.totalAmount * (rate / 100);
+        const commissionAmount = Number(sale.totalAmount) * (rate / 100);
         await tx.sellerCommission.create({
           data: {
-            userId: seller.id,
+            sellerId: seller.id,
             saleId: sale.id,
             amount: commissionAmount,
             status: "PENDING"
@@ -57,11 +54,10 @@ export class SellerCommissionService {
   }
 
   async rollbackSaleCommission(tx: any, sale: any) {
-    const seller = await tx.user.findUnique({
-      where: { id: sale.sellerId },
-      include: { company: true }
+    const seller = await tx.seller.findUnique({
+      where: { id: sale.sellerId }
     });
-    if (!seller || !seller.isSeller) return;
+    if (!seller || seller.status !== 'ACTIVE') return;
 
     const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
 
@@ -69,7 +65,7 @@ export class SellerCommissionService {
       const now = new Date(sale.createdAt); // Data original da venda
       const activeGoals = await tx.sellerGoal.findMany({
         where: {
-          userId: seller.id,
+          sellerId: seller.id,
           periodStart: { lte: now },
           periodEnd: { gte: now }
         }

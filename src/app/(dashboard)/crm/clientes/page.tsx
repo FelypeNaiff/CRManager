@@ -105,8 +105,8 @@ function calcIdade(dataNascimento: string): string {
   let anos = hoje.getFullYear() - nasc.getFullYear()
   let meses = hoje.getMonth() - nasc.getMonth()
   if (meses < 0) { anos--; meses += 12 }
-  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} mÃªs${meses !== 1 ? "es" : ""}`
-  return `${meses} mÃªs${meses !== 1 ? "es" : ""}`
+  if (anos > 0) return `${anos} ano${anos > 1 ? "s" : ""} e ${meses} mês${meses !== 1 ? "es" : ""}`
+  return `${meses} mês${meses !== 1 ? "es" : ""}`
 }
 
 const emptyFilhoForm = {
@@ -137,7 +137,7 @@ const emptyForm = {
   cidade: "",
   estado: "",
   cep: "",
-  origem: "Loja FÃ­sica",
+  origem: "Loja Física",
   vip: false,
   aceita_marketing: true,
   observacoes: "",
@@ -236,7 +236,7 @@ export default function ClientesPage() {
   const [isSavingQuickFilho, setIsSavingQuickFilho] = useState(false)
 
   // Quick Customer child addition fields
-  const [rapidoFilhoNome, setRapidoFilhoNome] = useState("")
+  const [rapidoFilhoNãome, setRapidoFilhoNãome] = useState("")
   const [rapidoFilhoIdade, setRapidoFilhoIdade] = useState("")
 
   // Mapping client IDs to their wallet balances
@@ -247,16 +247,29 @@ export default function ClientesPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = useCallback(async () => {
+  // Pagination states
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+
+  const tabParam = searchParams?.get("tab") || undefined
+
+  const loadData = useCallback(async (currentPage: number = page) => {
     setIsLoading(true)
     setError(null)
     try {
       const [custRes, tagsRes] = await Promise.all([
-        getCustomers(),
+        getCustomers({
+          page: currentPage,
+          pageSize: 50,
+          search: searchTerm,
+          status: statusFilter,
+          tab: tabParam
+        }),
         getTags()
       ])
 
-      if (custRes.success && custRes.data) {
+      if (custRes.success && custRes.data && custRes.metadata) {
         // Map postgres model to compatible frontend structure
         const mapped = custRes.data.map((c: any) => ({
           id: c.id,
@@ -275,6 +288,8 @@ export default function ClientesPage() {
           wallet: c.wallet
         }))
         setRawCustomers(mapped)
+        setTotalPages(custRes.metadata.totalPages)
+        setTotalCount(custRes.metadata.totalCount)
 
         // Build wallet balance mapping
         const wMap: Record<string, number> = {}
@@ -293,56 +308,45 @@ export default function ClientesPage() {
       }
     } catch (e: any) {
       console.error(e)
-      setError("NÃ£o foi possÃ­vel carregar os clientes. Tente atualizar a pÃ¡gina. Se o erro continuar, verifique a conexÃ£o com o banco.")
+      setError("Não foi possível carregar os clientes. Tente atualizar a página. Se o erro continuar, verifique a conexão com o banco.")
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [searchTerm, statusFilter, tabParam])
+
+  const lastLoadedRef = React.useRef({ page: 0, searchTerm: "", statusFilter: "", tab: "" })
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    const currentTab = tabParam || ""
+    const filtersChanged = 
+      searchTerm !== lastLoadedRef.current.searchTerm ||
+      statusFilter !== lastLoadedRef.current.statusFilter ||
+      currentTab !== lastLoadedRef.current.tab
+
+    let targetPage = page
+    if (filtersChanged) {
+      targetPage = 1
+      setPage(1)
+    }
+
+    if (
+      targetPage !== lastLoadedRef.current.page ||
+      searchTerm !== lastLoadedRef.current.searchTerm ||
+      statusFilter !== lastLoadedRef.current.statusFilter ||
+      currentTab !== lastLoadedRef.current.tab
+    ) {
+      lastLoadedRef.current = { page: targetPage, searchTerm, statusFilter, tab: currentTab }
+      loadData(targetPage)
+    }
+  }, [page, searchTerm, statusFilter, tabParam, loadData])
 
   const filteredCustomers = useMemo(() => {
-    if (!rawCustomers) return []
-    return rawCustomers.filter(c => {
-      const matchSearch = 
-        c.nome?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        c.whatsapp_principal?.includes(searchTerm) ||
-        c.cpf?.replace(/\D/g, "").includes(searchTerm.replace(/\D/g, ""))
-      
-      const matchStatus = statusFilter === "todos" || c.status === statusFilter
-      if (!matchSearch || !matchStatus) return false
-
-      const tabParam = searchParams?.get("tab")
-      if (tabParam === "aniversariantes") {
-        const currentMonth = new Date().getMonth() + 1
-        let isBirthday = false
-        if (c.data_nascimento) {
-          const bdayMonth = new Date(c.data_nascimento).getMonth() + 1
-          if (bdayMonth === currentMonth) isBirthday = true
-        }
-        if (!isBirthday && c.children) {
-          for (const child of c.children) {
-            if (child.birthDate) {
-              const childMonth = new Date(child.birthDate).getMonth() + 1
-              if (childMonth === currentMonth) {
-                isBirthday = true
-                break
-              }
-            }
-          }
-        }
-        if (!isBirthday) return false
-      }
-
-      return true
-    })
-  }, [rawCustomers, searchTerm, statusFilter, searchParams])
+    return rawCustomers || []
+  }, [rawCustomers])
 
   const handleSaveQuickFilho = async () => {
     if (!quickFilhoForm.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatÃ³rio", description: "Informe o nome da crianÃ§a." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!selectedCustomer) return
 
@@ -376,7 +380,7 @@ export default function ClientesPage() {
         toast({ variant: "destructive", title: "Erro ao cadastrar filho", description: res.error })
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao cadastrar filho" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSavingQuickFilho(false)
     }
@@ -391,7 +395,7 @@ export default function ClientesPage() {
     setFilhos([])
     setDeletedFilhos([])
     setIsCadastroRapido(rapido)
-    setRapidoFilhoNome("")
+    setRapidoFilhoNãome("")
     setRapidoFilhoIdade("")
     setIsFormOpen(true)
   }
@@ -415,7 +419,7 @@ export default function ClientesPage() {
       cidade: "",
       estado: "",
       cep: "",
-      origem: "Loja FÃ­sica",
+      origem: "Loja Física",
       vip: customer.status === 'vip',
       aceita_marketing: true,
       observacoes: customer.observacoes || "",
@@ -478,8 +482,7 @@ export default function ClientesPage() {
         })))
       }
 
-      // 3. Wallet details
-      await loadWalletData(customer.id)
+      // 3. Wallet details (Handled by useEffect on opening)
 
       // 5. Returns & Exchanges â€” using new SaleExchange + SaleReturn tables (Fase 1 migration)
       const returnsRes = await getCustomerExchangeReturns(customer.id)
@@ -527,10 +530,10 @@ export default function ClientesPage() {
   // Save Cliente form (and linked Filhos)
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      return toast({ variant: "destructive", title: "Nome obrigatÃ³rio", description: "Preencha o nome completo." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!form.whatsapp_principal.trim()) {
-      return toast({ variant: "destructive", title: "WhatsApp obrigatÃ³rio", description: "WhatsApp principal â”œÂ® de preenchimento obrigatÃ³rio." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     const cleanWhatsapp = form.whatsapp_principal.replace(/\D/g, "")
@@ -590,7 +593,7 @@ export default function ClientesPage() {
       const clientId = savedClient.id
       let batchFilhos = [...filhos]
 
-      if (isCadastroRapido && rapidoFilhoNome.trim()) {
+      if (isCadastroRapido && rapidoFilhoNãome.trim()) {
         let dataNascCalculada = ""
         if (rapidoFilhoIdade) {
           const anos = safeNumber(rapidoFilhoIdade)
@@ -601,7 +604,7 @@ export default function ClientesPage() {
         }
 
         batchFilhos = [{
-          nome: rapidoFilhoNome.trim(),
+          nome: rapidoFilhoNãome.trim(),
           data_nascimento: dataNascCalculada,
           sexo: "M",
           tamanho_roupa: "2",
@@ -639,7 +642,7 @@ export default function ClientesPage() {
       setIsFormOpen(false)
     } catch (e) {
       console.error(e)
-      toast({ variant: "destructive", title: "Erro ao salvar", description: "NÃ£o foi possÃ­vel salvar o cadastro. Verifique os campos obrigatÃ³rios e tente novamente." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -657,7 +660,7 @@ export default function ClientesPage() {
         toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
       }
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsDeleteOpen(false)
       setDeletingId(null)
@@ -667,10 +670,10 @@ export default function ClientesPage() {
   const handleSaveWalletAdjustment = async (authId?: string) => {
     const safeAdjust = safeNumber(adjustAmount);
     if (!safeAdjust || safeAdjust <= 0) {
-      return toast({ variant: "destructive", title: "Valor invÃ¡lido" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!adjustReason.trim()) {
-      return toast({ variant: "destructive", title: "ObservaÃ§Ã£o obrigatÃ³ria", description: "VocÃª deve informar o motivo do ajuste manual." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!walletInfo) return
 
@@ -691,6 +694,7 @@ export default function ClientesPage() {
         const freshData = rawCustomers?.find(c => c.id === selectedCustomer.id)
         if (freshData) {
           handleOpenDetails(freshData)
+          await loadWalletData(selectedCustomer.id)
         }
         setIsAdjustingWallet(false)
         setAdjustAmount("")
@@ -707,21 +711,21 @@ export default function ClientesPage() {
       }
     } catch (e) {
       console.error(e)
-      toast({ variant: "destructive", title: "Erro ao processar ajuste" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSavingWallet(false)
     }
   }
 
   // Update client tags list
-  const handleUpdateTags = async (tagNome: string) => {
+  const handleUpdateTags = async (tagNãome: string) => {
     if (!selectedCustomer) return
-    const tagObj = availableTags.find(t => t.name === tagNome)
+    const tagObj = availableTags.find(t => t.name === tagNãome)
     if (!tagObj) return
 
     try {
-      if (selectedTags.includes(tagNome)) {
-        const relToDelete = selectedCustomer.tagRelations?.find((r: any) => r.tag?.name === tagNome)
+      if (selectedTags.includes(tagNãome)) {
+        const relToDelete = selectedCustomer.tagRelations?.find((r: any) => r.tag?.name === tagNãome)
         if (relToDelete) {
           await removeTagFromCustomer(selectedCustomer.id, relToDelete.tagId)
         }
@@ -737,7 +741,7 @@ export default function ClientesPage() {
       }
       toast({ title: "Tags atualizadas" })
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao salvar tags" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
   }
 
@@ -747,9 +751,9 @@ export default function ClientesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold tracking-tight text-slate-800 flex items-center gap-2">
-            <User className="h-8 w-8 text-indigo-600" /> Clientes e ResponsÃ¡veis
+            <User className="h-8 w-8 text-indigo-600" /> Clientes e Responsáveis
           </h1>
-          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsÃ¡veis, filhos, tags e extrato de saldo.</p>
+          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsáveis, filhos, tags e extrato de saldo.</p>
         </div>
         {can('CLIENTES', 'CREATE') && (
           <div className="flex flex-wrap items-center gap-2">
@@ -808,7 +812,7 @@ export default function ClientesPage() {
         <div className="text-center py-20 border-2 border-dashed rounded-2xl bg-slate-50/50">
           <User className="h-12 w-12 mx-auto text-muted-foreground/30 mb-3" />
           <p className="text-slate-600 font-semibold text-base">Nenhum cliente encontrado</p>
-          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou cadastre um novo cliente/responsÃ¡vel.</p>
+          <p className="text-muted-foreground text-sm mt-1">Refine a busca ou cadastre um novo cliente/responsável.</p>
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
@@ -854,7 +858,7 @@ export default function ClientesPage() {
                 {/* Balance display */}
                 <div className="bg-slate-50 p-2.5 rounded-lg flex items-center justify-between border">
                   <span className="text-slate-400 font-semibold uppercase text-[9px] flex items-center gap-1">
-                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> CrÃ©dito
+                    <Wallet className="h-3.5 w-3.5 text-indigo-500" /> Crédito
                   </span>
                   <strong className="text-indigo-600 text-sm">
                     R$ {(walletsMap[customer.id] || 0).toFixed(2)}
@@ -896,22 +900,52 @@ export default function ClientesPage() {
         </div>
       )}
 
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white px-4 py-3 border rounded-xl shadow-sm mt-4">
+          <div className="text-xs text-muted-foreground">
+            Página <span className="font-semibold text-slate-700">{page}</span> de{" "}
+            <span className="font-semibold text-slate-700">{totalPages}</span> ({totalCount} cliente(s))
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="text-xs font-semibold"
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="text-xs font-semibold"
+            >
+              Próximo
+            </Button>
+          </div>
+        </div>
+      )}
+
       {/* DIALOG ADD/EDIT CUSTOMER */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-800">
-              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente Responsâ”œÃ­vel"}
+              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Nãovo Cliente Responsável"}
             </DialogTitle>
             <DialogDescription>
-              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentaâ”œÂºâ”œÃºo."}
+              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentaâ”œºâ”œúo."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-3 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="cnome">Nome Completo *</Label>
+                <Label htmlFor="cnome">Nãome Completo *</Label>
                 <Input id="cnome" placeholder="Ex: Felipe Naiff" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
               </div>
               <div className="space-y-1">
@@ -926,7 +960,7 @@ export default function ClientesPage() {
                 <Input id="cwhats" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_principal} onChange={e => setForm({ ...form, whatsapp_principal: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="cwhats2">WhatsApp Secundâ”œÃ­rio</Label>
+                <Label htmlFor="cwhats2">WhatsApp Secundâ”œírio</Label>
                 <Input id="cwhats2" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_secundario} onChange={e => setForm({ ...form, whatsapp_secundario: e.target.value })} />
               </div>
             </div>
@@ -948,7 +982,7 @@ export default function ClientesPage() {
                 <h3 className="font-bold text-slate-800 text-sm">Vincular Filhos / Dependentes</h3>
                 
                 {filhos.length === 0 ? (
-                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsÃ¡vel.</p>
+                  <p className="text-muted-foreground italic">Nenhum filho cadastrado para este responsável.</p>
                 ) : (
                   <div className="space-y-3">
                     {filhos.map((filho, idx) => (
@@ -958,7 +992,7 @@ export default function ClientesPage() {
                         </Button>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <Label>Nome do Filho *</Label>
+                            <Label>Nãome do Filho *</Label>
                             <Input placeholder="Ex: Arthur Naiff" value={filho.nome} onChange={e => handleFilhoChange(idx, "nome", e.target.value)} />
                           </div>
                           <div className="space-y-1">
@@ -984,7 +1018,7 @@ export default function ClientesPage() {
                             </select>
                           </div>
                           <div className="space-y-1">
-                            <Label>CalÃ§ado</Label>
+                            <Label>Calçado</Label>
                             <Input placeholder="Ex: 24" value={filho.tamanho_calcado} onChange={e => handleFilhoChange(idx, "tamanho_calcado", e.target.value)} />
                           </div>
                         </div>
@@ -999,11 +1033,11 @@ export default function ClientesPage() {
               </>
             ) : (
               <div className="bg-indigo-50/30 p-3 rounded-lg border space-y-3">
-                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro RÃ¡pido do Primeiro Filho</h4>
+                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Nome do Filho</Label>
-                    <Input placeholder="Ex: Lucas" value={rapidoFilhoNome} onChange={e => setRapidoFilhoNome(e.target.value)} />
+                    <Label>Nãome do Filho</Label>
+                    <Input placeholder="Ex: Lucas" value={rapidoFilhoNãome} onChange={e => setRapidoFilhoNãome(e.target.value)} />
                   </div>
                   <div className="space-y-1">
                     <Label>Idade Aproximada (Anos)</Label>
@@ -1016,8 +1050,8 @@ export default function ClientesPage() {
             <Separator />
             
             <div className="space-y-2">
-              <Label>ObservaÃ§Ãµes de Atendimento</Label>
-              <Textarea placeholder="HistÃ³rico de alergias, marcas preferidas, restriÃ§Ãµes..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
+              <Label>Observações de Atendimento</Label>
+              <Textarea placeholder="Histórico de alergias, marcas preferidas, restrições..." value={form.observacoes} onChange={e => setForm({ ...form, observacoes: e.target.value })} />
             </div>
 
             <div className="flex items-center gap-6 bg-slate-50 p-3 rounded-lg border">
@@ -1036,7 +1070,7 @@ export default function ClientesPage() {
             <Button variant="outline" onClick={() => setIsFormOpen(false)}>Cancelar</Button>
             <Button className="bg-indigo-600 hover:bg-indigo-500 text-white" onClick={handleSave} disabled={isSaving}>
               {isSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-              {editingCustomer ? "Salvar Alteraâ”œÂºâ”œÃes" : "Concluir Cadastro"}
+              {editingCustomer ? "Salvar Alterações" : "Concluir Cadastro"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1048,7 +1082,7 @@ export default function ClientesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-bold text-slate-800">Inativar Ficha do Cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja arquivar este cliente? O saldo atual da carteira permanecerâ”œÃ­ congelado, mas o cadastro nâ”œÃºo constarâ”œÃ­ nas listagens de vendas ativas.
+              Deseja arquivar este cliente? O saldo atual da carteira permanecerâ”œí congelado, mas o cadastro nâ”œúo constarâ”œí nas listagens de vendas ativas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1080,25 +1114,25 @@ export default function ClientesPage() {
 
           <Tabs defaultValue="ficha" className="w-full mt-4">
             <TabsList className="bg-white border w-full justify-start gap-1 p-1">
-              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Bâ”œÃ­sica</TabsTrigger>
+              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Bâ”œísica</TabsTrigger>
               <TabsTrigger value="filhos" className="flex items-center gap-1.5"><Baby className="h-4 w-4 text-emerald-600" /> Dependentes ({filhos.length})</TabsTrigger>
-              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> CrÃ©ditos/Carteira</TabsTrigger>
+              <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Créditos/Carteira</TabsTrigger>
               <TabsTrigger value="trocas" className="flex items-center gap-1.5">Trocas ({returnsHistory.length})</TabsTrigger>
-              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> HistÃ³rico CRM ({historyLogs.length})</TabsTrigger>
+              <TabsTrigger value="historico" className="flex items-center gap-1.5"><History className="h-4 w-4" /> Histórico CRM ({historyLogs.length})</TabsTrigger>
             </TabsList>
 
-            {/* TAB: Ficha Bâ”œÃ­sica */}
+            {/* TAB: Ficha Bâ”œísica */}
             <TabsContent value="ficha" className="space-y-4 pt-4 text-xs">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-3">
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">CPF</span>
-                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Nâ”œÃºo informado"}</span>
+                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Nâ”œúo informado"}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">Data de Nascimento</span>
                     <span className="text-slate-800 font-medium block mt-1">
-                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Nâ”œÃºo informada"}
+                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Nâ”œúo informada"}
                     </span>
                   </div>
                 </div>
@@ -1106,13 +1140,13 @@ export default function ClientesPage() {
                 <div className="space-y-3">
                   {selectedCustomer?.observacoes && (
                     <div className="bg-slate-50 p-3 rounded-lg border">
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Notas de Atendimento</span>
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Nãotas de Atendimento</span>
                       <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{selectedCustomer?.observacoes}</p>
                     </div>
                   )}
 
                   <div className="bg-slate-50 p-3 rounded-lg border space-y-2">
-                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentaâ”œÂºâ”œÃºo</span>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentaâ”œºâ”œúo</span>
                     
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {availableTags.map((tag) => {
@@ -1141,15 +1175,15 @@ export default function ClientesPage() {
             {/* TAB: Dependentes */}
             <TabsContent value="filhos" className="space-y-4 pt-4 text-xs">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-sm">Crianâ”œÂºas Associadas</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Crianâ”œºas Associadas</h3>
                 <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 h-8 text-[11px]" onClick={() => setIsQuickAddFilhoOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Adicionar Crianâ”œÂºa
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Crianâ”œºa
                 </Button>
               </div>
 
               {filhos.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
-                  Sem crianÃ§as vinculadas a este responsÃ¡vel.
+                  Sem crianças vinculadas a este responsável.
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -1164,7 +1198,7 @@ export default function ClientesPage() {
                             <p className="font-bold text-slate-800">{filho.nome}</p>
                             {filho.data_nascimento && (
                               <p className="text-[10px] text-slate-400 mt-0.5">
-                                {new Date(filho.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR")} â”¬Ã€ {calcIdade(filho.data_nascimento)}
+                                {new Date(filho.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR")} à {calcIdade(filho.data_nascimento)}
                               </p>
                             )}
                           </div>
@@ -1179,7 +1213,7 @@ export default function ClientesPage() {
                         </Badge>
                         {filho.tamanho_calcado && (
                           <Badge variant="outline" className="text-[8px] h-4 bg-indigo-50 text-indigo-700 border-indigo-100">
-                            CalÃ§ado: {filho.tamanho_calcado}
+                            Calçado: {filho.tamanho_calcado}
                           </Badge>
                         )}
                       </div>
@@ -1189,12 +1223,12 @@ export default function ClientesPage() {
               )}
             </TabsContent>
             
-            {/* TAB: Carteira de CrÃ©ditos */}
+            {/* TAB: Carteira de Créditos */}
             <TabsContent value="carteira" className="space-y-4 pt-4 text-xs">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="bg-indigo-50/50 p-4 border border-indigo-100 rounded-xl flex flex-col justify-between">
                   <div>
-                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo DisponÃ­vel</span>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Saldo Disponível</span>
                     <strong className="text-2xl text-indigo-600 block mt-1">R$ {walletInfo?.saldo_atual?.toFixed(2) || "0.00"}</strong>
                   </div>
                   {can('CARTEIRA', 'UPDATE') && (
@@ -1205,12 +1239,12 @@ export default function ClientesPage() {
                 </div>
 
                 <div className="bg-emerald-50/50 p-4 border border-emerald-100 rounded-xl">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total CrÃ©ditos (Filtro)</span>
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Créditos (Filtro)</span>
                   <strong className="text-2xl text-emerald-600 block mt-1">R$ {walletInfo?.total_creditos?.toFixed(2) || "0.00"}</strong>
                 </div>
 
                 <div className="bg-rose-50/50 p-4 border border-rose-100 rounded-xl">
-                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total DÃ©bitos (Filtro)</span>
+                  <span className="text-slate-400 font-semibold block uppercase text-[10px]">Total Débitos (Filtro)</span>
                   <strong className="text-2xl text-rose-600 block mt-1">R$ {walletInfo?.total_debitos?.toFixed(2) || "0.00"}</strong>
                 </div>
               </div>
@@ -1218,7 +1252,7 @@ export default function ClientesPage() {
               {/* Filtros */}
               <div className="bg-slate-50 p-3 rounded-xl border grid grid-cols-2 md:grid-cols-4 gap-3 mt-4">
                 <div>
-                  <label className="text-[10px] font-bold text-slate-500 block mb-1">InÃ­cio</label>
+                  <label className="text-[10px] font-bold text-slate-500 block mb-1">Início</label>
                   <Input
                     type="date"
                     className="h-8 text-xs bg-white"
@@ -1243,13 +1277,13 @@ export default function ClientesPage() {
                     onChange={e => setWalletFilterType(e.target.value)}
                   >
                     <option value="ALL">Todos os Tipos</option>
-                    <option value="CREDIT">CrÃ©dito (Manual)</option>
-                    <option value="DEBIT">DÃ©bito</option>
-                    <option value="BONUS">BÃ´nus</option>
+                    <option value="CREDIT">Crédito (Manual)</option>
+                    <option value="DEBIT">Débito</option>
+                    <option value="BONUS">Bônus</option>
                     <option value="ADJUSTMENT">Ajuste</option>
                     <option value="REFUND">Reembolso</option>
                     <option value="EXCHANGE">Troca</option>
-                    <option value="EXPIRATION">ExpiraÃ§Ã£o</option>
+                    <option value="EXPIRATION">Expiração</option>
                   </select>
                 </div>
                 <div>
@@ -1262,16 +1296,16 @@ export default function ClientesPage() {
                     <option value="ALL">Todas as Origens</option>
                     <option value="sale">Vendas</option>
                     <option value="exchange">Trocas</option>
-                    <option value="return">DevoluÃ§Ãµes</option>
+                    <option value="return">Devoluções</option>
                     <option value="manual">Ajustes Manuais</option>
                   </select>
                 </div>
               </div>
 
               <div className="space-y-2 mt-4">
-                <h4 className="font-bold text-slate-800 text-sm">HistÃ³rico do Extrato</h4>
+                <h4 className="font-bold text-slate-800 text-sm">Histórico do Extrato</h4>
                 {walletHistory.length === 0 ? (
-                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentaÃ§Ã£o registrada.</p>
+                  <p className="text-muted-foreground italic text-center py-6">Nenhuma movimentação registrada.</p>
                 ) : (
                   <div className="border rounded-xl divide-y bg-white max-h-64 overflow-y-auto">
                     {walletHistory.map((tx, idx) => {
@@ -1291,7 +1325,7 @@ export default function ClientesPage() {
                                 </span>
                               )}
                             </div>
-                            <p className="text-[10px] font-medium text-slate-800 mt-1">{tx.description || "Sem descriÃ§Ã£o"}</p>
+                            <p className="text-[10px] font-medium text-slate-800 mt-1">{tx.description || "Sem descrição"}</p>
                             <span className="text-[9px] text-slate-400 block mt-0.5">
                               Saldos: R$ {tx.balanceBefore?.toFixed(2)} &rarr; R$ {tx.balanceAfter?.toFixed(2)}
                             </span>
@@ -1312,9 +1346,9 @@ export default function ClientesPage() {
               </div>
             </TabsContent>
 
-            {/* TAB: Trocas e DevoluÃ§Ãµes */}
+            {/* TAB: Trocas e Devoluções */}
             <TabsContent value="trocas" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">HistÃ³rico de Trocas (PDV)</h3>
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Trocas (PDV)</h3>
               {returnsHistory.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
                   Nenhuma troca registrada para este comprador.
@@ -1325,7 +1359,7 @@ export default function ClientesPage() {
                     <div key={idx} className="p-3 flex items-center justify-between">
                       <div>
                         <strong className="text-slate-800">Troca #{item.venda_id?.substring(0,8) || item.id?.substring(0,8)}</strong>
-                        <p className="text-[10px] text-muted-foreground mt-0.5">Responsâ”œÃ­vel: {item.vendedor_nome || "Balcâ”œÃºo"}</p>
+                        <p className="text-[10px] text-muted-foreground mt-0.5">Responsável: {item.vendedor_nome || "Balcão"}</p>
                       </div>
                       <div className="text-right">
                         <strong className="text-indigo-600">R$ {(safeNumber(item.valor_credito ?? item.valor) ?? 0).toFixed(2)}</strong>
@@ -1339,12 +1373,12 @@ export default function ClientesPage() {
               )}
             </TabsContent>
 
-            {/* TAB: HistÃ³rico CRM */}
+            {/* TAB: Histórico CRM */}
             <TabsContent value="historico" className="space-y-4 pt-4 text-xs">
-              <h3 className="font-bold text-slate-800 text-sm">HistÃ³rico de Auditoria do Cliente</h3>
+              <h3 className="font-bold text-slate-800 text-sm">Histórico de Auditoria do Cliente</h3>
               {historyLogs.length === 0 ? (
                 <div className="text-center py-8 border rounded-lg bg-slate-50/40 text-muted-foreground">
-                  Sem registros de histâ”œâ”‚rico.
+                  Sem registros de histórico.
                 </div>
               ) : (
                 <div className="border rounded-xl divide-y bg-white">
@@ -1377,11 +1411,11 @@ export default function ClientesPage() {
       <Dialog open={isQuickAddFilhoOpen} onOpenChange={setIsQuickAddFilhoOpen}>
         <DialogContent className="max-w-md bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800">Vincular Novo Filho</DialogTitle>
+            <DialogTitle className="text-base font-bold text-slate-800">Vincular Nãovo Filho</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>Nome Completo</Label>
+              <Label>Nãome Completo</Label>
               <Input placeholder="Ex: Arthur" value={quickFilhoForm.nome} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, nome: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1408,7 +1442,7 @@ export default function ClientesPage() {
                 </select>
               </div>
               <div className="space-y-1">
-                <Label>CalÃ§ado</Label>
+                <Label>Calçado</Label>
                 <Input placeholder="Ex: 24" value={quickFilhoForm.tamanho_calcado} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, tamanho_calcado: e.target.value })} />
               </div>
             </div>
@@ -1431,14 +1465,14 @@ export default function ClientesPage() {
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>Aâ”œÂºâ”œÃºo</Label>
+              <Label>Ação</Label>
               <Select value={adjustType} onValueChange={(v: any) => setAdjustType(v)}>
                 <SelectTrigger className="h-9">
                   <SelectValue placeholder="Selecionar" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ENTRADA">Adicionar CrÃ©dito (Entrada)</SelectItem>
-                  <SelectItem value="SAIDA">Debitar CrÃ©dito (Saâ”œÂ¡da)</SelectItem>
+                  <SelectItem value="ENTRADA">Adicionar Crédito (Entrada)</SelectItem>
+                  <SelectItem value="SAIDA">Debitar Crédito (Saída)</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1466,8 +1500,8 @@ export default function ClientesPage() {
         onOpenChange={setShowAuthDialog}
         authorizationId={authorizationId}
         authorizationType={adjustType === "ENTRADA" ? "WALLET_CREDIT" : "WALLET_DEBIT"}
-        title="AutorizaÃ§Ã£o de Ajuste"
-        description="Este ajuste manual de saldo exige aprovaÃ§Ã£o de um gerente."
+        title="Autorização de Ajuste"
+        description="Este ajuste manual de saldo exige aprovação de um gerente."
         amount={safeNumber(adjustAmount) ?? 0}
         onAuthorized={(auth) => handleSaveWalletAdjustment(auth.id)}
       />

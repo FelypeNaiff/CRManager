@@ -99,7 +99,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
       const res = await updateRolePermissionsAction(params.grupoId, payload);
       
       if (res.success) {
-        toast({ title: 'Sucesso', description: 'Matriz de permissões salva com sucesso!' });
+        toast({ title: "Sucesso", description: "Operação realizada com sucesso." });
         setInitialPermissions(permissions);
       } else {
         toast({ title: 'Acesso Negado', description: res.error, variant: 'destructive' });

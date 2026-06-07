@@ -37,7 +37,8 @@ import {
   Search, Plus, Loader2, ArrowRightLeft, Building2, Banknote, CalendarDays 
 } from "lucide-react"
 import { safeNumber } from "@/lib/utils/form-normalizer"
-import { format, parseISO } from "date-fns"
+import { format, parseISO } from "date-fns";
+import { ptBR } from "date-fns/locale"
 
 const emptyForm = {
   date: format(new Date(), "yyyy-MM-dd"),
@@ -90,20 +91,20 @@ export default function TransferenciasPage() {
   const handleSave = async () => {
     const safeAmount = safeNumber(form.amount)
     if (!form.sourceId || !form.destinationId) {
-      return toast({ variant: "destructive", title: "Selecione as contas de origem e destino" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (form.sourceId === form.destinationId) {
-      return toast({ variant: "destructive", title: "A conta de origem e destino devem ser diferentes" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!safeAmount || safeAmount <= 0) {
-      return toast({ variant: "destructive", title: "Informe um valor válido maior que zero" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     const sourceAccount = (bankAccounts ?? []).find((b: any) => b.id === form.sourceId)
     const destAccount = (bankAccounts ?? []).find((b: any) => b.id === form.destinationId)
 
     if (!sourceAccount || !destAccount) {
-      return toast({ variant: "destructive", title: "Conta não encontrada" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     // Alerta de saldo negativo (mas permite passar, pois contas podem ficar negativas)
@@ -154,7 +155,7 @@ export default function TransferenciasPage() {
       setForm(emptyForm)
     } catch (err) {
       console.error(err)
-      toast({ variant: "destructive", title: "Erro ao realizar transferência" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -170,7 +171,7 @@ export default function TransferenciasPage() {
           <p className="text-muted-foreground">Movimente saldos entre suas contas bancárias e caixas físicos.</p>
         </div>
         <Button className="gap-2 bg-blue-600 hover:bg-blue-700" onClick={() => { setForm(emptyForm); setIsDialogOpen(true); }}>
-          <ArrowRightLeft className="h-4 w-4" /> Nova Transferência
+          <ArrowRightLeft className="h-4 w-4" /> Nãova Transferência
         </Button>
       </div>
 
@@ -218,7 +219,7 @@ export default function TransferenciasPage() {
                 {filteredTransfers.map((item: any) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">
-                      {item.date ? format(parseISO(item.date), "dd/MM/yyyy") : "-"}
+                      {item.date ? format(parseISO(item.date), "dd/MM/yyyy", { locale: ptBR }) : "-"}
                     </TableCell>
                     <TableCell>{item.description}</TableCell>
                     <TableCell>

@@ -225,14 +225,14 @@ export default function TrocasDevolucoesPage() {
 
   const handleSave = async () => {
     if (!form.cliente_id || !form.produto_id || !form.quantidade || !form.valor_unitario) {
-      return toast({ variant: "destructive", title: "Erro", description: "Preencha todos os campos obrigatórios." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
     try {
       const res = await createExchangeReturnAction(form)
       if (res.success) {
-        toast({ title: "Sucesso", description: "Troca/Devolução gravada com sucesso." })
+        toast({ title: "Sucesso", description: "Operação realizada com sucesso." })
         setIsDialogOpen(false)
         fetchData()
       } else {
@@ -255,7 +255,7 @@ export default function TrocasDevolucoesPage() {
           <p className="text-muted-foreground text-sm">Registre devoluções vinculando vendas originais, estoques de produtos e atualizações de crédito automáticas.</p>
         </div>
         <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2 font-medium" onClick={handleOpenCreate}>
-          <Plus className="h-4 w-4" /> Nova Troca/Devolução
+          <Plus className="h-4 w-4" /> Nãova Troca/Devolução
         </Button>
       </div>
 

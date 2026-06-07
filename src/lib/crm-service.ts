@@ -87,7 +87,7 @@ export const CrmService = {
         cliente_id: clienteId,
         tenant_id: tenantId,
         tipo_acao: `CADASTRO_${collectionName.toUpperCase()}`,
-        descricao: `Novo registro de ${this.getModuloName(collectionName)} adicionado ao cliente.`,
+        descricao: `Nãovo registro de ${this.getModuloName(collectionName)} adicionado ao cliente.`,
         activeProfile
       });
     }

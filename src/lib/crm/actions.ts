@@ -7,6 +7,7 @@ import { safeDate } from '../utils/form-normalizer';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
+import { unstable_cache, revalidateTag } from 'next/cache';
 
 
 
@@ -44,29 +45,118 @@ const WalletAdjustmentSchema = z.object({
 
 // ─── Customer Actions ───
 
-export async function getCustomers() {
+export interface GetCustomersParams {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  status?: string;
+  tab?: string;
+  tag?: string;
+}
+
+export async function getCustomers(params?: GetCustomersParams) {
   const session = await requirePermission('CLIENTES', 'VIEW');
   try {
-    const list = await prisma.customer.findMany({
-      where: {
-        companyId: session.companyId,
-        status: { not: 'arquivado' },
-      },
-      include: {
-        children: true,
-        tagRelations: {
-          include: { tag: true },
+    const page = Math.max(1, params?.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize || 50));
+    const skip = (page - 1) * pageSize;
+
+    const whereClause: any = {
+      companyId: session.companyId,
+    };
+
+    // Filter status
+    if (params?.status && params.status !== 'todos') {
+      whereClause.status = params.status;
+    } else {
+      whereClause.status = { not: 'arquivado' };
+    }
+
+    // Filter search
+    if (params?.search) {
+      const q = params.search.trim();
+      whereClause.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { email: { contains: q, mode: 'insensitive' } },
+        { cpf: { contains: q, mode: 'insensitive' } }
+      ];
+    }
+
+    // Filter tags
+    if (params?.tag) {
+      whereClause.tagRelations = {
+        some: {
+          tag: {
+            name: params.tag
+          }
+        }
+      };
+    }
+
+    // Filter aniversariantes of the current month
+    if (params?.tab === 'aniversariantes') {
+      const currentMonth = new Date().getMonth() + 1;
+      
+      // Query children born in the current month using EXTRACT(MONTH) in raw SQL
+      const childrenMatching = await prisma.$queryRaw<{ customer_id: string }[]>`
+        SELECT DISTINCT customer_id 
+        FROM customer_children cc
+        JOIN customers c ON cc.customer_id = c.id
+        WHERE c.company_id = ${session.companyId}
+          AND EXTRACT(MONTH FROM cc.birth_date) = ${currentMonth}
+      `;
+      const customerIdsFromChildren = childrenMatching.map(cc => cc.customer_id);
+
+      whereClause.AND = [
+        {
+          OR: [
+            { birthMonth: currentMonth },
+            { id: { in: customerIdsFromChildren } }
+          ]
+        }
+      ];
+    }
+
+    const [list, total] = await Promise.all([
+      prisma.customer.findMany({
+        where: whereClause,
+        include: {
+          children: true,
+          tagRelations: {
+            include: { tag: true },
+          },
+          wallet: true,
         },
-        wallet: true,
-      },
-      orderBy: { name: 'asc' },
-    });
-    return { success: true, data: serializePrisma(list) };
+        orderBy: { name: 'asc' },
+        skip,
+        take: pageSize,
+      }),
+      prisma.customer.count({
+        where: whereClause
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      success: true,
+      data: serializePrisma(list),
+      metadata: {
+        totalCount: total,
+        currentPage: page,
+        pageSize,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      }
+    };
   } catch (error: any) {
     console.error('Error fetching customers:', error);
     return { success: false, error: 'Erro ao buscar clientes.' };
   }
 }
+
 
 export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
   const session = await requirePermission('CLIENTES', 'CREATE');
@@ -427,23 +517,16 @@ export async function getBirthdayList(month: number) {
       orderBy: { name: 'asc' },
     });
 
-    // 2. Fetch children whose birthday matches and parent is active
-    const childrenRaw = await prisma.customerChild.findMany({
-      where: {
-        customer: {
-          companyId: session.companyId,
-          status: { not: 'arquivado' },
-        },
-      },
-      include: { customer: true },
-    });
-
-    // Filter children manually on JS for database independence of birthDate parts
-    const matchingChildren = childrenRaw.filter((child) => {
-      if (!child.birthDate) return false;
-      const childMonth = new Date(child.birthDate).getMonth() + 1; // getMonth is 0-indexed
-      return childMonth === month;
-    });
+    // 2. Fetch children whose birthday matches and parent is active via database EXTRACT MONTH
+    const matchingChildren = await prisma.$queryRaw<any[]>`
+      SELECT cc.id, cc.name, cc.birth_date as "birthDate", c.name as "customerName", c.phone as "customerPhone"
+      FROM customer_children cc
+      JOIN customers c ON cc.customer_id = c.id
+      WHERE c.company_id = ${session.companyId}
+        AND c.status <> 'arquivado'
+        AND EXTRACT(MONTH FROM cc.birth_date) = ${month}
+      ORDER BY cc.name ASC
+    `;
 
     return {
       success: true,
@@ -456,8 +539,8 @@ export async function getBirthdayList(month: number) {
       })),
       children: matchingChildren.map((c) => ({
         id: c.id,
-        name: `${c.name} (Filho de ${c.customer.name})`,
-        phone: c.customer.phone,
+        name: `${c.name} (Filho de ${c.customerName})`,
+        phone: c.customerPhone,
         type: 'Filho',
         day: c.birthDate ? new Date(c.birthDate).getDate() : null,
       })),
@@ -536,23 +619,74 @@ export async function deleteTag(id: string) {
   }
 }
 
-export async function getWallets() {
+export interface GetWalletsParams {
+  page?: number;
+  pageSize?: number;
+  filter?: string;
+  search?: string;
+}
+
+export async function getWallets(params?: GetWalletsParams) {
   const session = await requirePermission('CLIENTES', 'VIEW');
   try {
-    const list = await prisma.customerWallet.findMany({
-      where: {
-        customer: { companyId: session.companyId, status: { not: 'arquivado' } }
-      },
-      include: {
-        customer: true,
-        // Use new WalletTransaction ledger instead of legacy movements
-        transactions: {
-          orderBy: { createdAt: 'desc' },
-          take: 10
-        }
+    const page = Math.max(1, params?.page || 1);
+    const pageSize = Math.min(100, Math.max(1, params?.pageSize || 50));
+    const skip = (page - 1) * pageSize;
+
+    const whereClause: any = {
+      customer: {
+        companyId: session.companyId,
+        status: { not: 'arquivado' }
       }
-    });
-    return { success: true, data: serializePrisma(list) };
+    };
+
+    // Filter "com-saldo"
+    if (params?.filter === 'com-saldo') {
+      whereClause.balance = { gt: 0 };
+    }
+
+    // Filter search by customer name, phone, or CPF
+    if (params?.search) {
+      const q = params.search.trim();
+      whereClause.customer.OR = [
+        { name: { contains: q, mode: 'insensitive' } },
+        { phone: { contains: q, mode: 'insensitive' } },
+        { cpf: { contains: q, mode: 'insensitive' } }
+      ];
+    }
+
+    const [list, total] = await Promise.all([
+      prisma.customerWallet.findMany({
+        where: whereClause,
+        include: {
+          customer: true,
+          transactions: {
+            orderBy: { createdAt: 'desc' },
+            take: 10
+          }
+        },
+        skip,
+        take: pageSize
+      }),
+      prisma.customerWallet.count({
+        where: whereClause
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / pageSize);
+
+    return {
+      success: true,
+      data: serializePrisma(list),
+      metadata: {
+        totalCount: total,
+        currentPage: page,
+        pageSize,
+        totalPages,
+        hasNextPage: page < totalPages,
+        hasPreviousPage: page > 1,
+      }
+    };
   } catch (error: any) {
     console.error('Error fetching wallets:', error);
     return { success: false, error: 'Erro ao buscar carteiras.' };
@@ -655,33 +789,52 @@ export async function getCustomerExchangeReturns(customerId: string) {
 
 
 
-export async function getSegmentationData() {
-  const session = await requirePermission('CLIENTES', 'VIEW');
-  try {
+const getCachedSegmentationData = unstable_cache(
+  async (companyId: string) => {
+    const salesGrouped = await prisma.sale.groupBy({
+      by: ['customerId'],
+      where: {
+        companyId: companyId,
+        status: { not: 'CANCELLED' },
+        customerId: { not: null }
+      },
+      _sum: {
+        totalAmount: true
+      },
+      _count: {
+        id: true
+      },
+      _max: {
+        createdAt: true
+      }
+    });
+
+    const salesMap = new Map<string, typeof salesGrouped[0]>();
+    salesGrouped.forEach(sg => {
+      if (sg.customerId) {
+        salesMap.set(sg.customerId, sg);
+      }
+    });
+
     const clients = await prisma.customer.findMany({
-      where: { companyId: session.companyId, status: { not: 'arquivado' } },
+      where: { companyId: companyId, status: { not: 'arquivado' } },
       include: {
         children: true,
         tagRelations: { include: { tag: true } },
         wallet: true,
-        sales: { select: { id: true, totalAmount: true, createdAt: true }, where: { status: { not: 'CANCELLED' } } }
       }
     });
 
     const tags = await prisma.customerTag.findMany({
-      where: { companyId: session.companyId }
+      where: { companyId: companyId }
     });
 
     const stats: Record<string, any> = {};
     clients.forEach(c => {
-      let total = 0;
-      let count = 0;
-      let last: Date | null = null;
-      c.sales.forEach(s => {
-        total += Number(s.totalAmount);
-        count++;
-        if (!last || s.createdAt > last) last = s.createdAt;
-      });
+      const summary = salesMap.get(c.id);
+      const total = Number(summary?._sum?.totalAmount || 0);
+      const count = summary?._count?.id || 0;
+      const last = summary?._max?.createdAt || null;
 
       stats[c.id] = {
         totalComprado: total,
@@ -704,7 +857,17 @@ export async function getSegmentationData() {
       data_nascimento: c.birthDay ? new Date(c.birthYear || new Date().getFullYear(), (c.birthMonth || 1) - 1, c.birthDay) : null,
     }));
 
-    return { success: true, data: serializePrisma({ clientes: mappedClients, stats, tags }) };
+    return serializePrisma({ clientes: mappedClients, stats, tags });
+  },
+  ["crm-segmentation-data"],
+  { tags: ["crm-segmentation", "customers"] }
+);
+
+export async function getSegmentationData() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const data = await getCachedSegmentationData(session.companyId);
+    return { success: true, data };
   } catch (error: any) {
     console.error('Error fetching segmentation data:', error);
     return { success: false, error: 'Erro ao buscar dados para segmentacao.' };
@@ -769,6 +932,11 @@ export async function createExchangeReturnAction(data: any) {
         condition: data.destino_produto === 'avaria' ? 'DAMAGED' : (data.destino_produto === 'descarte' ? 'DISCARD' : 'RESALE')
       }]
     });
+    
+    // Purge cache tags on change
+    revalidateTag("sales-reports");
+    revalidateTag("crm-segmentation");
+    
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error("Error creating exchange return:", error);

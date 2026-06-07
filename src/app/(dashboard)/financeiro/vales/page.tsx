@@ -119,7 +119,7 @@ export default function ValesPage() {
 
   const handleSave = async () => {
     if (!form.employeeName.trim() || !form.amount || !form.bankAccountId) {
-      return toast({ variant: "destructive", title: "Preencha funcionário, valor e conta bancária" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -175,7 +175,7 @@ export default function ValesPage() {
       setForm(emptyForm)
     } catch (err) {
       console.error(err)
-      toast({ variant: "destructive", title: "Erro ao emitir vale" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -191,7 +191,7 @@ export default function ValesPage() {
     if (!selectedVale) return
     const amountToDiscount = safeNumber(discountAmount) ?? 0
     if (amountToDiscount <= 0 || amountToDiscount > selectedVale.remainingBalance) {
-      return toast({ variant: "destructive", title: "Valor de desconto inválido" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -211,7 +211,7 @@ export default function ValesPage() {
       setIsDiscountDialogOpen(false)
       setSelectedVale(null)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao aplicar desconto" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -227,7 +227,7 @@ export default function ValesPage() {
           <p className="text-muted-foreground">Emissão e controle de descontos em folha de pagamento.</p>
         </div>
         <Button className="gap-2 bg-indigo-600 hover:bg-indigo-700" onClick={() => { setForm(emptyForm); setIsDialogOpen(true); }}>
-          <Plus className="h-4 w-4" /> Emitir Novo Vale
+          <Plus className="h-4 w-4" /> Emitir Nãovo Vale
         </Button>
       </div>
 
@@ -289,7 +289,7 @@ export default function ValesPage() {
                   <TableBody>
                     {filteredVales.map((item: any) => (
                       <TableRow key={item.id} className={item.status === 'FULLY_DISCOUNTED' ? 'opacity-60 bg-muted/30' : ''}>
-                        <TableCell className="font-medium">{format(parseISO(item.date), "dd/MM/yyyy")}</TableCell>
+                        <TableCell className="font-medium">{format(parseISO(item.date), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
                         <TableCell className="font-bold">{item.employeeName}</TableCell>
                         <TableCell>{item.type}</TableCell>
                         <TableCell className="text-right font-semibold">{formatCurrency(item.amount)}</TableCell>
@@ -375,7 +375,7 @@ export default function ValesPage() {
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Nome do Funcionário *</Label>
+              <Label>Nãome do Funcionário *</Label>
               <Input placeholder="Ex: João Silva" value={form.employeeName} onChange={(e) => setForm({...form, employeeName: e.target.value})} />
             </div>
             

@@ -57,7 +57,7 @@ export default function ConfiguracoesPerfisAcessoPage() {
           <h1 className="text-3xl font-bold">Perfis de Acesso</h1>
           <p className="mt-2 text-muted-foreground">Configure perfis e atribua permissões e usuários vinculados.</p>
         </div>
-        <Button className="bg-primary text-white">+ Novo perfil</Button>
+        <Button className="bg-primary text-white">+ Nãovo perfil</Button>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-3">
@@ -65,7 +65,7 @@ export default function ConfiguracoesPerfisAcessoPage() {
           <h2 className="text-xl font-semibold mb-4">Criar / editar perfil</h2>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="nome">Nome do perfil</Label>
+              <Label htmlFor="nome">Nãome do perfil</Label>
               <Input id="nome" value={form.nome} onChange={(e) => setForm({ ...form, nome: e.target.value })} />
             </div>
             <div className="grid gap-2">
@@ -87,7 +87,7 @@ export default function ConfiguracoesPerfisAcessoPage() {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="usuariosVinculados">Usuários vinculados</Label>
-                <Input id="usuariosVinculados" value={form.usuariosVinculados} onChange={(e) => setForm({ ...form, usuariosVinculados: e.target.value })} placeholder="Nomes ou IDs" />
+                <Input id="usuariosVinculados" value={form.usuariosVinculados} onChange={(e) => setForm({ ...form, usuariosVinculados: e.target.value })} placeholder="Nãomes ou IDs" />
               </div>
             </div>
             <div>

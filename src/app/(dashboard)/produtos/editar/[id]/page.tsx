@@ -144,7 +144,7 @@ export default function EditarProdutoPage() {
         }
       } catch (error) {
         console.error(error)
-        toast({ variant: "destructive", title: "Erro ao carregar produto" })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       } finally {
         setIsLoading(false)
       }
@@ -189,7 +189,7 @@ export default function EditarProdutoPage() {
 
   const handleSave = async () => {
     if (!form.nome.trim()) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "O produto precisa ter um nome." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -239,7 +239,7 @@ export default function EditarProdutoPage() {
       router.push("/produtos")
     } catch (error) {
       console.error(error)
-      toast({ variant: "destructive", title: "Erro ao salvar produto." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -286,7 +286,7 @@ export default function EditarProdutoPage() {
             </Alert>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="nome">Nome do Produto *</Label>
+                <Label htmlFor="nome">Nãome do Produto *</Label>
                 <Input id="nome" placeholder="Ex: Camiseta Algodão Básica" value={form.nome} onChange={(e) => handleFieldChange("nome", e.target.value)} />
               </div>
               <div className="space-y-2">

@@ -105,7 +105,7 @@ export class AuthorizationService {
       throw new Error('PIN de autorização inválido.');
     }
 
-    // Now check RBAC rules
+    // Nãow check RBAC rules
     return await this.canAuthorizeAction(
       authorizationType,
       requesterId,

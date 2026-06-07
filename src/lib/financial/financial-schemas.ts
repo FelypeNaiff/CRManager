@@ -3,7 +3,7 @@ import { z } from 'zod';
 // ─── Bank Account ─────────────────────────────────────────────────────────────
 
 export const BankAccountSchema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório').max(100),
+  name: z.string().min(1, 'Nãome é obrigatório').max(100),
   bankName: z.string().max(100).optional().nullable(),
   accountNumber: z.string().max(50).optional().nullable(),
   agency: z.string().max(20).optional().nullable(),
@@ -17,7 +17,7 @@ export type BankAccountInput = z.infer<typeof BankAccountSchema>;
 // ─── Cost Center ──────────────────────────────────────────────────────────────
 
 export const CostCenterSchema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório').max(100),
+  name: z.string().min(1, 'Nãome é obrigatório').max(100),
   code: z.string().max(20).optional().nullable(),
   description: z.string().max(500).optional().nullable(),
 });
@@ -29,7 +29,7 @@ export type CostCenterInput = z.infer<typeof CostCenterSchema>;
 export const FinancialAccountSchema = z.object({
   parentId: z.string().uuid().optional().nullable(),
   code: z.string().min(1, 'Código é obrigatório').max(20),
-  name: z.string().min(1, 'Nome é obrigatório').max(100),
+  name: z.string().min(1, 'Nãome é obrigatório').max(100),
   type: z.enum(['INCOME', 'EXPENSE'], { required_error: 'Tipo é obrigatório' }),
   acceptsEntries: z.boolean().default(true),
 });
@@ -39,7 +39,7 @@ export type FinancialAccountInput = z.infer<typeof FinancialAccountSchema>;
 // ─── Payment Method ───────────────────────────────────────────────────────────
 
 export const PaymentMethodSchema = z.object({
-  name: z.string().min(1, 'Nome é obrigatório').max(100),
+  name: z.string().min(1, 'Nãome é obrigatório').max(100),
   type: z.enum(['CASH', 'DEBIT_CARD', 'CREDIT_CARD', 'PIX', 'BANK_TRANSFER', 'STORE_CREDIT', 'CHECK', 'OTHER']),
   allowsInstallments: z.boolean().default(false),
   autoReceive: z.boolean().default(false),

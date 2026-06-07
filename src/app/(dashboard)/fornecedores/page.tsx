@@ -126,7 +126,7 @@ export default function FornecedoresPage() {
 
   const handleSave = async () => {
     if (!form.nomeFornecedor.trim()) {
-      toast({ variant: "destructive", title: "Nome obrigatório", description: "Preencha o Nome do Fornecedor." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     
@@ -151,7 +151,7 @@ export default function FornecedoresPage() {
       setIsDialogOpen(false)
       setForm(emptyForm)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar", description: "Não foi possível salvar o fornecedor." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -163,7 +163,7 @@ export default function FornecedoresPage() {
       await deleteDoc(doc(db, "fornecedores", deletingId))
       toast({ title: "Fornecedor excluído" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setDeletingId(null)
       setIsDeleteOpen(false)
@@ -292,7 +292,7 @@ export default function FornecedoresPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Fornecedor" : "Novo Fornecedor"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Fornecedor" : "Nãovo Fornecedor"}</DialogTitle>
             <DialogDescription>Preencha os dados do fornecedor.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4">
@@ -302,7 +302,7 @@ export default function FornecedoresPage() {
             </div>
             
             <div className="space-y-2">
-              <Label htmlFor="nomeFornecedor">Nome do Fornecedor *</Label>
+              <Label htmlFor="nomeFornecedor">Nãome do Fornecedor *</Label>
               <Input id="nomeFornecedor" {...field("nomeFornecedor")} />
             </div>
             <div className="space-y-2">
@@ -359,7 +359,7 @@ export default function FornecedoresPage() {
               <h3 className="text-sm font-semibold text-foreground uppercase tracking-wide mb-3">Produtos que vende</h3>
               <div className="space-y-2">
                 <div className="flex flex-wrap gap-3">
-                  {["Normal", "Moda Praia", "Jeans", "Pijamas", "Acessórios", "Calçados"].map((produto) => (
+                  {["Nãormal", "Moda Praia", "Jeans", "Pijamas", "Acessórios", "Calçados"].map((produto) => (
                     <label key={produto} className="flex items-center gap-2 cursor-pointer">
                       <input
                         type="checkbox"

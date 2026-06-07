@@ -1,6 +1,5 @@
-import { PrismaClient, SaleStatus } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { SaleStatus, Prisma } from "@prisma/client";
+import { prisma } from '@/lib/prisma';
 
 export interface ReportFilters {
   companyId: string;
@@ -29,54 +28,86 @@ export class CommercialReportService {
   async getDashboardMetrics(filters: ReportFilters) {
     const dateFilter = this.getDateFilter(filters);
     
-    const sales = await prisma.sale.findMany({
+    const aggregated = await prisma.sale.aggregate({
       where: {
         companyId: filters.companyId,
+        status: { not: "CANCELLED" },
         ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
         ...dateFilter,
       },
-      include: { items: true, payments: true }
+      _sum: {
+        subtotal: true,
+        discountAmount: true,
+        totalAmount: true
+      },
+      _count: {
+        id: true
+      }
     });
 
-    let grossRevenue = 0;
-    let netRevenue = 0;
-    let totalDiscount = 0;
-    let totalCost = 0;
-    let totalSalesCount = 0;
+    const grossRevenue = aggregated._sum.subtotal ? Number(aggregated._sum.subtotal) : 0;
+    const totalDiscount = aggregated._sum.discountAmount ? Number(aggregated._sum.discountAmount) : 0;
+    const netRevenue = aggregated._sum.totalAmount ? Number(aggregated._sum.totalAmount) : 0;
+    const totalSalesCount = aggregated._count.id || 0;
+
+    const sellerCondition = filters.sellerId ? Prisma.sql`AND s.seller_id = ${filters.sellerId}` : Prisma.empty;
+    const startCondition = filters.startDate ? Prisma.sql`AND s.created_at >= ${filters.startDate}` : Prisma.empty;
+    const endCondition = filters.endDate ? Prisma.sql`AND s.created_at <= ${filters.endDate}` : Prisma.empty;
+
+    const costRes = await prisma.$queryRaw<any[]>`
+      SELECT COALESCE(SUM(si.cost_price_at_sale * si.quantity), 0) as "totalCost"
+      FROM sale_items si
+      JOIN sales s ON si.sale_id = s.id
+      WHERE s.company_id = ${filters.companyId}
+        AND s.status <> 'CANCELLED'
+        ${sellerCondition}
+        ${startCondition}
+        ${endCondition}
+    `;
+    const totalCost = Number(costRes[0]?.totalCost || 0);
+
+    const paymentsGrouped = await prisma.salePayment.groupBy({
+      by: ['paymentMethodId'],
+      where: {
+        sale: {
+          companyId: filters.companyId,
+          status: { not: 'CANCELLED' },
+          ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
+          ...dateFilter
+        },
+        status: { in: ['PAID', 'PENDING'] }
+      },
+      _sum: {
+        amount: true
+      }
+    });
 
     const paymentsByType: Record<string, number> = {};
-
-    for (const sale of sales) {
-      if (sale.status !== "CANCELLED") {
-        totalSalesCount++;
-        grossRevenue += sale.subtotal.toNumber();
-        totalDiscount += sale.discountAmount.toNumber();
-        netRevenue += sale.totalAmount.toNumber();
-        
-        for (const item of sale.items) {
-          totalCost += (item.costPriceAtSale.toNumber() * item.quantity.toNumber());
-        }
-
-        for (const pay of sale.payments) {
-          if (pay.status === "PAID" || pay.status === "PENDING") { // simplified assumption for metrics
-            paymentsByType[pay.paymentMethodId] = (paymentsByType[pay.paymentMethodId] || 0) + pay.amount.toNumber();
-          }
-        }
-      }
-    }
-
-    const salesForMetrics = await prisma.sale.findMany({
-      where: { companyId: filters.companyId, ...dateFilter },
-      select: { id: true }
+    paymentsGrouped.forEach(pg => {
+      paymentsByType[pg.paymentMethodId] = pg._sum.amount ? Number(pg._sum.amount) : 0;
     });
-    const saleIdsForMetrics = salesForMetrics.map(s => s.id);
 
-    const exchangesCount = await prisma.saleExchange.count({
-      where: { originalSaleId: { in: saleIdsForMetrics } }
-    });
-    const returnsCount = await prisma.saleReturn.count({
-      where: { originalSaleId: { in: saleIdsForMetrics } }
-    });
+    const exchangesRes = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(se.id) as "count"
+      FROM sale_exchanges se
+      JOIN sales s ON se.original_sale_id = s.id
+      WHERE s.company_id = ${filters.companyId}
+        ${sellerCondition}
+        ${startCondition}
+        ${endCondition}
+    `;
+    const exchangesCount = Number(exchangesRes[0]?.count || 0);
+
+    const returnsRes = await prisma.$queryRaw<any[]>`
+      SELECT COUNT(sr.id) as "count"
+      FROM sale_returns sr
+      JOIN sales s ON sr.original_sale_id = s.id
+      WHERE s.company_id = ${filters.companyId}
+        ${sellerCondition}
+        ${startCondition}
+        ${endCondition}
+    `;
+    const returnsCount = Number(returnsRes[0]?.count || 0);
 
     const totalReturns = returnsCount;
     const totalExchanges = exchangesCount;
@@ -132,50 +163,48 @@ export class CommercialReportService {
 
   // 3. Relatório de Produtos Mais Vendidos
   async getTopProductsReport(filters: ReportFilters) {
-    const dateFilter = this.getDateFilter(filters);
-    
-    const saleItems = await prisma.saleItem.findMany({
-      where: {
-        sale: {
-          companyId: filters.companyId,
-          status: { not: "CANCELLED" },
-          ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
-          ...dateFilter,
-        }
-      },
-      include: { variant: { include: { product: true } } }
-    });
+    const sellerCondition = filters.sellerId ? Prisma.sql`AND s.seller_id = ${filters.sellerId}` : Prisma.empty;
+    const startCondition = filters.startDate ? Prisma.sql`AND s.created_at >= ${filters.startDate}` : Prisma.empty;
+    const endCondition = filters.endDate ? Prisma.sql`AND s.created_at <= ${filters.endDate}` : Prisma.empty;
 
-    const productsMap = new Map<string, any>();
+    const topProducts = await prisma.$queryRaw<any[]>`
+      SELECT 
+        si.variant_id as "variantId",
+        pv.product_id as "productId",
+        MAX(si.product_name_snapshot) as "productName",
+        MAX(si.variant_name_snapshot) as "variantName",
+        MAX(si.sku_snapshot) as "sku",
+        CAST(pv.current_stock AS double precision) as "currentStock",
+        CAST(SUM(si.quantity) AS double precision) as "quantitySold",
+        CAST(SUM(si.total_price) AS double precision) as "revenue",
+        CAST(SUM(si.cost_price_at_sale * si.quantity) AS double precision) as "cost"
+      FROM sale_items si
+      JOIN sales s ON si.sale_id = s.id
+      JOIN product_variants pv ON si.variant_id = pv.id
+      WHERE s.company_id = ${filters.companyId}
+        AND s.status <> 'CANCELLED'
+        ${sellerCondition}
+        ${startCondition}
+        ${endCondition}
+      GROUP BY si.variant_id, pv.product_id, pv.current_stock
+    `;
 
-    for (const item of saleItems) {
-      if (!item.variant) continue;
-      const key = item.variantId;
-      if (!productsMap.has(key)) {
-        productsMap.set(key, {
-          productId: item.variant.productId,
-          productName: item.productNameSnapshot,
-          variantName: item.variantNameSnapshot,
-          sku: item.skuSnapshot,
-          quantitySold: 0,
-          revenue: 0,
-          cost: 0,
-          currentStock: item.variant.currentStock,
-        });
-      }
-      
-      const p = productsMap.get(key);
-      p.quantitySold += item.quantity.toNumber();
-      p.revenue += item.totalPrice.toNumber();
-      p.cost += (item.costPriceAtSale.toNumber() * item.quantity.toNumber());
-    }
-
-    const result = Array.from(productsMap.values()).map(p => {
-      const margin = p.revenue - p.cost;
+    const result = topProducts.map(p => {
+      const revenue = p.revenue || 0;
+      const cost = p.cost || 0;
+      const margin = revenue - cost;
       return {
-        ...p,
+        variantId: p.variantId,
+        productId: p.productId,
+        productName: p.productName,
+        variantName: p.variantName,
+        sku: p.sku,
+        quantitySold: p.quantitySold || 0,
+        revenue,
+        cost,
+        currentStock: p.currentStock || 0,
         margin,
-        marginPercent: p.revenue > 0 ? (margin / p.revenue) * 100 : 0
+        marginPercent: revenue > 0 ? (margin / revenue) * 100 : 0
       };
     });
 
@@ -286,7 +315,7 @@ export class CommercialReportService {
     const reasonsMap = new Map<string, number>();
     const itemsMap = new Map<string, number>();
 
-    const parseNotesAndItems = (notes: string | null, type: "EXCHANGE" | "RETURN", date: Date, id: string, amount: number) => {
+    const parseNãotesAndItems = (notes: string | null, type: "EXCHANGE" | "RETURN", date: Date, id: string, amount: number) => {
       let reason = "Não informado";
       let itemsList: any[] = [];
       try {
@@ -317,11 +346,11 @@ export class CommercialReportService {
     };
 
     const mappedExchanges = exchanges.map(ex => 
-      parseNotesAndItems(ex.notes, "EXCHANGE", ex.createdAt, ex.id, Number(ex.creditGenerated))
+      parseNãotesAndItems(ex.notes, "EXCHANGE", ex.createdAt, ex.id, Number(ex.creditGenerated))
     );
 
     const mappedReturns = returns.map(ret => 
-      parseNotesAndItems(ret.notes, "RETURN", ret.createdAt, ret.id, Number(ret.totalAmount))
+      parseNãotesAndItems(ret.notes, "RETURN", ret.createdAt, ret.id, Number(ret.totalAmount))
     );
 
     const combinedList = [...mappedExchanges, ...mappedReturns].sort((a, b) => 

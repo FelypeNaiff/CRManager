@@ -1,10 +1,7 @@
 'use server';
-import { serializePrisma } from '@/lib/serialize';
 
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "@/lib/prisma";
 import { CreateSellerGoalInput, createSellerGoalSchema } from "../seller-schemas";
-
-const prisma = new PrismaClient();
 
 export async function createSellerGoalAction(data: CreateSellerGoalInput) {
   try {

@@ -80,10 +80,10 @@ export default function CertificadoDigitalPage() {
 
   const handleTestCertificado = () => {
     if (!form.nome_arquivo && form.tipo === "A1") {
-      return toast({ variant: "destructive", title: "Nenhum arquivo", description: "Faça o upload do certificado A1 primeiro." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!form.senha_certificado) {
-      return toast({ variant: "destructive", title: "Senha Ausente", description: "Informe a senha para testar a comunicação." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     
     setIsTesting(true)
@@ -116,7 +116,7 @@ export default function CertificadoDigitalPage() {
   }
 
   const handleSave = async () => {
-    if (!activeProfile?.empresaId || !db) return toast({ variant: "destructive", title: "Sessão inválida" })
+    if (!activeProfile?.empresaId || !db) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
 
     const dataToValidate = {
       ...form,
@@ -157,7 +157,7 @@ export default function CertificadoDigitalPage() {
 
       toast({ title: "Certificado Digital atualizado com sucesso!" })
     } catch (error) {
-      toast({ variant: "destructive", title: "Erro ao salvar", description: "Verifique sua conexão." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -210,7 +210,7 @@ export default function CertificadoDigitalPage() {
             ]} 
           />
           <ConfigInputField 
-            label="Nome de Identificação" 
+            label="Nãome de Identificação" 
             id="nome_cert"
             placeholder="Ex: Certificado Empresa 2026"
             value={form.nome_certificado} 

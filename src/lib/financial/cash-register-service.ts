@@ -63,6 +63,12 @@ export async function openCashRegister(input: any) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Travar a empresa correspondente para serializar a abertura de caixa (ordem: Company -> CashRegister)
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM companies WHERE id = $1 FOR UPDATE`,
+        session.companyId
+      );
+
       // Verificar se já existe caixa aberto para esta empresa
       const existingOpen = await tx.cashRegister.findFirst({
         where: { companyId: session.companyId, status: 'OPEN' },
@@ -129,6 +135,12 @@ export async function closeCashRegister(registerId: string, input: any) {
 
   try {
     const result = await prisma.$transaction(async (tx) => {
+      // Travar o caixa para evitar fechamento duplo ou movimentações concorrentes
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
+        registerId
+      );
+
       const register = await tx.cashRegister.findFirst({
         where: { id: registerId, companyId: session.companyId },
         include: { movements: true },
@@ -213,6 +225,12 @@ export async function addCashMovement(input: any) {
 
   try {
     const movement = await prisma.$transaction(async (tx) => {
+      // Travar o caixa para evitar movimentações em caixas concorrentemente fechados
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
+        parsed.data.cashRegisterId
+      );
+
       const register = await tx.cashRegister.findFirst({
         where: { id: parsed.data.cashRegisterId, companyId: session.companyId },
       });

@@ -39,7 +39,7 @@ export default function SelecionarPerfilPage() {
         }
       } catch (error) {
         console.error("Erro ao carregar perfis do Prisma:", error)
-        toast({ variant: "destructive", title: "Erro", description: "Falha de conexão com o banco de dados." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       } finally {
         setIsLoadingUsers(false)
       }
@@ -94,7 +94,7 @@ export default function SelecionarPerfilPage() {
       router.push("/dashboard")
     } catch (error) {
       console.error("Erro ao validar PIN no servidor:", error)
-      toast({ variant: "destructive", title: "Erro", description: "Não foi possível autenticar o perfil no servidor." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       setIsSelecting(null)
     }
   }

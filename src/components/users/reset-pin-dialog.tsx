@@ -25,7 +25,7 @@ export default function ResetPinDialog({ isOpen, onClose, userId }: ResetPinDial
       const res = await resetUserPinAction(userId);
       if (res.success && res.tempPin) {
         setGeneratedPin(res.tempPin);
-        toast({ title: 'Sucesso', description: 'PIN resetado. Copie o PIN temporário abaixo.' });
+        toast({ title: "Sucesso", description: "Operação realizada com sucesso." });
       } else {
         toast({ title: 'Erro', description: res.error || 'Falha ao resetar PIN', variant: 'destructive' });
       }

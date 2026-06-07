@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 const CompanyFormSchema = z.object({
   razaoSocial: z.string().min(2, 'Razão Social inválida (mínimo 2 caracteres)'),
-  nomeFantasia: z.string().min(2, 'Nome Fantasia inválido (mínimo 2 caracteres)'),
+  nomeFantasia: z.string().min(2, 'Nãome Fantasia inválido (mínimo 2 caracteres)'),
   cnpjCpf: z.string().min(11, 'CNPJ/CPF inválido (mínimo 11 caracteres)'),
   inscricaoEstadual: z.string().optional().nullable().or(z.literal('')),
   inscricaoMunicipal: z.string().optional().nullable().or(z.literal('')),

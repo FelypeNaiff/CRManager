@@ -79,7 +79,7 @@ export default function TrocasPage() {
       }
     } catch (err) {
       console.error(err);
-      toast({ variant: "destructive", title: "Erro na busca", description: "Houve um erro ao buscar a venda." });
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." });
     } finally {
       setLoadingSale(false);
     }
@@ -109,7 +109,7 @@ export default function TrocasPage() {
   const handleSubmitExchange = async (authId?: string) => {
     const itemsToExchange = exchangeItems.filter(i => i.quantity > 0);
     if (itemsToExchange.length === 0) {
-      toast({ variant: "destructive", title: "Nenhum item selecionado", description: "Informe ao menos um item com quantidade maior que zero." });
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." });
       return;
     }
 
@@ -222,7 +222,7 @@ export default function TrocasPage() {
                             value={item.condition}
                             onChange={e => handleUpdateItemCondition(item.variantId, e.target.value as any)}
                           >
-                            <option value="RESALE">Novo (Revenda)</option>
+                            <option value="RESALE">Nãovo (Revenda)</option>
                             <option value="DAMAGED">Avariado</option>
                             <option value="DISCARD">Descarte</option>
                           </select>

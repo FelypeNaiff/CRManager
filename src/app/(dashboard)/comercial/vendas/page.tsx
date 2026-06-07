@@ -53,7 +53,7 @@ export default function VendasPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Vendas</h1>
         <Link href="/comercial/vendas/nova">
-          <Button><Plus className="w-4 h-4 mr-2" /> Nova Venda</Button>
+          <Button><Plus className="w-4 h-4 mr-2" /> Nãova Venda</Button>
         </Link>
       </div>
 
@@ -106,7 +106,7 @@ export default function VendasPage() {
                     <tr key={sale.id} className="border-t">
                       <td className="p-4">{new Date(sale.createdAt).toLocaleDateString("pt-BR")}</td>
                       <td className="p-4">{sale.customerNameSnapshot || "Cliente Avulso"}</td>
-                      <td className="p-4">{sale.seller?.nome || "Sistema"}</td>
+                      <td className="p-4">{sale.seller?.name || "Sistema"}</td>
                       <td className="p-4">{sale.status}</td>
                       <td className="p-4">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(sale.totalAmount))}

@@ -16,7 +16,7 @@ export interface ActiveProfileSession {
   permissions: Record<string, boolean>;
 }
 
-/** Nome do cookie de sessão do perfil ativo */
+/** Nãome do cookie de sessão do perfil ativo */
 const SESSION_COOKIE = '@crmanager:activeProfileSession';
 
 /**

@@ -1,24 +1,23 @@
-import { PrismaClient, AuthorizationType } from "@prisma/client";
+import { AuthorizationType } from "@prisma/client";
 import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
 import { authorizationService } from "../auth/authorization-service";
 import { receivablesService } from "../financial/receivables-service";
 import { getPaginationArgs, buildPaginatedResult, PaginationParams } from "../performance/pagination";
+import { prisma } from "@/lib/prisma";
 
 import bcrypt from "bcryptjs";
 
-const prisma = new PrismaClient();
-
 export class SalesService {
-  async createSale(data: CreateSaleInput) {
+  async createSale(data: CreateSaleInput, operatorUserId: string) {
     return prisma.$transaction(async (tx) => {
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
 
-      const seller = await tx.user.findUnique({ where: { id: data.sellerId }, include: { role: true } });
-      if (!seller || !seller.isSeller) throw new Error("Vendedor inválido.");
+      const seller = await tx.seller.findUnique({ where: { id: data.sellerId } });
+      if (!seller) throw new Error("Vendedor inválido.");
 
       if (data.customerId) {
         const customer = await tx.customer.findUnique({ where: { id: data.customerId } });
@@ -42,13 +41,21 @@ export class SalesService {
         }
       }
 
+      // Travar Caixa se informado (ordem de trava: CashRegister -> ProductVariant)
+      if (data.cashRegisterId) {
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
+          data.cashRegisterId
+        );
+      }
+
       // Validar Cliente Obrigatório
-      const blockNoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
-      if (blockNoCustomer && !data.customerId) {
+      const blockNãoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
+      if (blockNãoCustomer && !data.customerId) {
         throw new Error("Cliente é obrigatório para finalizar a venda.");
       }
 
-      // Etapa 1.5: Validar Desconto (Fase 6F e Sprint CONFIG-03)
+      // Etapa 1.5: Validar Desconto
       let authorizedByUserId: string | null = null;
       let maxAllowed = 0;
       const discountPercentage = data.subtotal > 0 ? (data.discountAmount / data.subtotal) * 100 : 0;
@@ -56,7 +63,7 @@ export class SalesService {
       if (data.discountAmount > 0 && data.subtotal > 0) {
         const policy = await OperationalSettingsService.validateDiscountPolicy({
           companyId: data.companyId,
-          userId: data.sellerId,
+          userId: operatorUserId,
           discountPercent: discountPercentage,
           saleTotal: data.totalAmount
         }, tx);
@@ -76,7 +83,7 @@ export class SalesService {
                 companyId: data.companyId,
                 type: AuthorizationType.DISCOUNT,
                 module: 'PDV',
-                requestedByUserId: data.sellerId,
+                requestedByUserId: operatorUserId,
                 percentage: discountPercentage,
                 amount: data.discountAmount,
                 reason: data.authReason || 'Desconto excede o limite',
@@ -92,9 +99,23 @@ export class SalesService {
         }
       }
 
-      // Etapa 2: Validar estoque disponível
+      // Etapa 2: Validar estoque disponível em lote com trava pessimista
+      const variantIds = [...new Set(data.items.map(item => item.variantId))].sort();
+      if (variantIds.length > 0) {
+        const placeholders = variantIds.map((_, idx) => `$${idx + 1}`).join(", ");
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM product_variants WHERE id IN (${placeholders}) FOR UPDATE`,
+          ...variantIds
+        );
+      }
+
+      const variants = await tx.productVariant.findMany({
+        where: { id: { in: variantIds } }
+      });
+      const variantMap = new Map(variants.map(v => [v.id, v]));
+
       for (const item of data.items) {
-        const variant = await tx.productVariant.findUnique({ where: { id: item.variantId } });
+        const variant = variantMap.get(item.variantId);
         if (!variant) throw new Error(`Variante ${item.variantId} não encontrada.`);
 
         const hasNegativeStock = variant.availableStock.toNumber() < item.quantity;
@@ -115,6 +136,8 @@ export class SalesService {
           status: "PAID",
           subtotal: data.subtotal,
           discountAmount: data.discountAmount,
+          globalDiscountType: data.globalDiscountType,
+          globalDiscountValue: data.globalDiscountValue,
           totalAmount: data.totalAmount,
           notes: data.notes,
           customerNameSnapshot: data.customerNameSnapshot,
@@ -128,6 +151,8 @@ export class SalesService {
               barcodeSnapshot: item.barcodeSnapshot,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
+              discountType: item.discountType,
+              discountValue: item.discountValue,
               discount: item.discount,
               totalPrice: item.totalPrice,
               costPriceAtSale: item.costPriceAtSale,
@@ -177,18 +202,18 @@ export class SalesService {
       // Etapa 4: Processar Pagamentos e Financeiro
       await receivablesService.generateReceivablesFromSale(sale.id, tx);
 
-      // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant
-      for (const item of data.items) {
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: item.variantId,
-            quantity: item.quantity,
-            type: "SALE",
-            userId: data.sellerId,
-            reason: `Venda #${sale.id}`
-          }
-        });
+      // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant em lote
+      await tx.inventoryMovement.createMany({
+        data: data.items.map(item => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          type: "SALE",
+          userId: data.sellerId,
+          reason: `Venda #${sale.id}`
+        }))
+      });
 
+      for (const item of data.items) {
         await tx.productVariant.update({
           where: { id: item.variantId },
           data: {
@@ -229,12 +254,36 @@ export class SalesService {
 
   async cancelSale(data: CancelSaleInput) {
     return prisma.$transaction(async (tx) => {
+      // Travar a venda alvo para evitar concorrência no cancelamento
+      await tx.$queryRawUnsafe(
+        `SELECT id FROM sales WHERE id = $1 FOR UPDATE`,
+        data.saleId
+      );
+
       const sale = await tx.sale.findUnique({ 
         where: { id: data.saleId },
         include: { items: true } 
       });
       if (!sale) throw new Error("Venda não encontrada.");
       if (sale.status === "CANCELLED") throw new Error("Venda já está cancelada.");
+
+      // Travar o caixa associado, se houver
+      if (sale.cashRegisterId) {
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
+          sale.cashRegisterId
+        );
+      }
+
+      // Travar as variantes em ordem alfabética para o estorno de estoque
+      const variantIds = [...new Set(sale.items.map(item => item.variantId))].sort();
+      if (variantIds.length > 0) {
+        const placeholders = variantIds.map((_, idx) => `$${idx + 1}`).join(", ");
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM product_variants WHERE id IN (${placeholders}) FOR UPDATE`,
+          ...variantIds
+        );
+      }
 
       const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
 
@@ -248,11 +297,6 @@ export class SalesService {
       const diffMin = diffMs / (1000 * 60);
 
       // Se ultrapassar o tempo limite e o cancelamento exige autorização, ou se exige autorização globalmente
-      const canceller = await tx.user.findUnique({
-        where: { id: data.cancelledByUserId },
-        include: { role: { include: { permissions: true } } }
-      });
-
       const isTimeLimitExceeded = diffMin > settings.cancellationTimeLimit;
       const needsAuthorization = settings.requireAuthorizationToCancelSale || isTimeLimitExceeded;
 
@@ -294,18 +338,18 @@ export class SalesService {
       // Estornar Contas a Receber e Saldo de Carteira / Dinheiro
       await receivablesService.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
 
-      // Criar InventoryMovement tipo CANCELLATION e devolver estoque
-      for (const item of sale.items) {
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: item.variantId,
-            quantity: item.quantity,
-            type: "CANCELLATION",
-            userId: data.cancelledByUserId,
-            reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
-          }
-        });
+      // Criar InventoryMovement tipo CANCELLATION e devolver estoque em lote
+      await tx.inventoryMovement.createMany({
+        data: sale.items.map(item => ({
+          variantId: item.variantId,
+          quantity: item.quantity,
+          type: "CANCELLATION",
+          userId: data.cancelledByUserId,
+          reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
+        }))
+      });
 
+      for (const item of sale.items) {
         await tx.productVariant.update({
           where: { id: item.variantId },
           data: {

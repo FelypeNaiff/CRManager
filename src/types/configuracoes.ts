@@ -18,7 +18,7 @@ const baseConfigSchema = z.object({
 export const minhaEmpresaSchema = baseConfigSchema.extend({
   tipo_pessoa: z.enum(["PJ", "PF"]).default("PJ"),
   razao_social: z.string().min(1, "Razão Social é obrigatória"),
-  nome_fantasia: z.string().min(1, "Nome Fantasia é obrigatório"),
+  nome_fantasia: z.string().min(1, "Nãome Fantasia é obrigatório"),
   cnpj_cpf: z.string().min(11, "Documento inválido"),
   inscricao_estadual: z.string().optional(),
   ie_isento: z.boolean().default(false),
@@ -61,7 +61,7 @@ export const minhaEmpresaSchema = baseConfigSchema.extend({
   // Filiais
   filiais: z.array(z.object({
     id: z.string().optional(),
-    nome_filial: z.string().min(1, "Nome da filial obrigatório"),
+    nome_filial: z.string().min(1, "Nãome da filial obrigatório"),
     cnpj: z.string().optional(),
     codigo_interno: z.string().optional(),
     responsavel: z.string().optional(),
@@ -116,8 +116,8 @@ export const configuracoesGeraisSchema = baseConfigSchema.extend({
 
   movimentacoes: z.object({
     formato_pedido_a4: z.enum(["PDF", "HTML"]).default("PDF"),
-    tamanho_fonte_a4: z.string().default("Normal"),
-    tamanho_fonte_cupom: z.string().default("Normal"),
+    tamanho_fonte_a4: z.string().default("Nãormal"),
+    tamanho_fonte_cupom: z.string().default("Nãormal"),
     
     introducao_orcamento: z.string().optional(),
     observacoes_orcamento: z.string().optional(),
@@ -246,7 +246,7 @@ export type CertificadoDigital = z.infer<typeof certificadoDigitalSchema>;
 // ============================================================================
 
 export const usuarioSchema = baseConfigSchema.extend({
-  nome: z.string().min(1, "Nome é obrigatório"),
+  nome: z.string().min(1, "Nãome é obrigatório"),
   email: z.string().email("E-mail inválido"),
   telefone: z.string().optional(),
   cargo: z.string().optional(),
@@ -260,7 +260,7 @@ export const usuarioSchema = baseConfigSchema.extend({
 export type Usuario = z.infer<typeof usuarioSchema>;
 
 export const grupoUsuarioSchema = baseConfigSchema.extend({
-  nome: z.string().min(1, "Nome do grupo é obrigatório"),
+  nome: z.string().min(1, "Nãome do grupo é obrigatório"),
   descricao: z.string().optional(),
   status: z.enum(["ATIVO", "INATIVO"]).default("ATIVO"),
   is_admin: z.boolean().default(false), // Flag para override de permissões (Root admin)

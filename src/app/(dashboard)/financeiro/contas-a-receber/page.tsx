@@ -198,7 +198,7 @@ export default function ContasAReceberPage() {
 
   const handleSave = async () => {
     if (!form.description.trim() || !form.amount || !form.dueDate) {
-      return toast({ variant: "destructive", title: "Preencha os campos obrigatórios (Descrição, Valor e Vencimento)" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -261,7 +261,7 @@ export default function ContasAReceberPage() {
       setIsDialogOpen(false)
       setForm(emptyForm)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -291,7 +291,7 @@ export default function ContasAReceberPage() {
       await batch.commit()
       toast({ title: "Conta excluída e auditada" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setActionItem(null)
       setActionReason("")
@@ -312,7 +312,7 @@ export default function ContasAReceberPage() {
 
   const handleConfirmPayment = async () => {
     if (!actionItem || !paymentForm.receiptDate || !paymentForm.bankAccountId) {
-      return toast({ variant: "destructive", title: "Data e Conta Bancária são obrigatórios" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -365,7 +365,7 @@ export default function ContasAReceberPage() {
       setIsPaymentOpen(false)
       setActionItem(null)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao confirmar recebimento" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -430,7 +430,7 @@ export default function ContasAReceberPage() {
       await batch.commit()
       toast({ title: "Recebimento estornado e auditado" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao estornar recebimento" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsReverseOpen(false)
       setActionItem(null)
@@ -457,7 +457,7 @@ export default function ContasAReceberPage() {
           <p className="text-muted-foreground">Gerencie seus recebimentos, faturamento e cobranças de clientes.</p>
         </div>
         <Button className="gap-2" onClick={openNewDialog}>
-          <Plus className="h-4 w-4" /> Nova Conta a Receber
+          <Plus className="h-4 w-4" /> Nãova Conta a Receber
         </Button>
       </div>
 
@@ -551,7 +551,7 @@ export default function ContasAReceberPage() {
                   return (
                     <TableRow key={item.id} className={item.status === 'PAID' ? 'opacity-70 bg-muted/30' : ''}>
                       <TableCell className="font-medium whitespace-nowrap">
-                        {format(parseISO(item.dueDate), "dd/MM/yyyy")}
+                        {format(parseISO(item.dueDate), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{item.description}</div>
@@ -615,7 +615,7 @@ export default function ContasAReceberPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Conta a Receber" : "Nova Conta a Receber"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Conta a Receber" : "Nãova Conta a Receber"}</DialogTitle>
             <DialogDescription>Preencha os detalhes do recebimento esperado.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">

@@ -80,7 +80,7 @@ export default function RoleFormModal({ isOpen, onClose, roleId, onSuccess }: Ro
     
     // Validations
     if (!form.name || form.name.length < 2) {
-      return toast({ title: 'Atenção', description: 'Nome inválido', variant: 'destructive' });
+      return toast({ title: 'Atenção', description: 'Nãome inválido', variant: 'destructive' });
     }
 
     setSaving(true);
@@ -118,7 +118,7 @@ export default function RoleFormModal({ isOpen, onClose, roleId, onSuccess }: Ro
     <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Editar Grupo' : 'Novo Grupo'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Grupo' : 'Nãovo Grupo'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Edite as definições e comissões padrão deste grupo.' : 'Crie um novo perfil operacional.'}
           </DialogDescription>
@@ -132,7 +132,7 @@ export default function RoleFormModal({ isOpen, onClose, roleId, onSuccess }: Ro
         ) : (
           <form onSubmit={handleSave} className="space-y-4 pt-4">
             <ConfigInputField
-              label="Nome do Grupo *"
+              label="Nãome do Grupo *"
               id="name"
               value={form.name}
               onChange={(e) => setForm({ ...form, name: e.target.value })}

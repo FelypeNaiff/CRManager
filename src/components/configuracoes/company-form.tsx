@@ -114,7 +114,7 @@ export default function CompanyForm() {
       newErrors.razaoSocial = 'Razão Social é obrigatória';
     }
     if (!form.nomeFantasia.trim()) {
-      newErrors.nomeFantasia = 'Nome Fantasia é obrigatório';
+      newErrors.nomeFantasia = 'Nãome Fantasia é obrigatório';
     }
     if (!form.cnpjCpf.trim()) {
       newErrors.cnpjCpf = 'CNPJ/CPF é obrigatório';
@@ -340,7 +340,7 @@ export default function CompanyForm() {
 
                   <div className="space-y-1">
                     <ConfigInputField
-                      label="Nome Fantasia *"
+                      label="Nãome Fantasia *"
                       id="nomeFantasia"
                       value={form.nomeFantasia}
                       onChange={(e) => setForm({ ...form, nomeFantasia: e.target.value })}
@@ -425,7 +425,7 @@ export default function CompanyForm() {
                     options={[
                       { label: '1 - Simples Nacional', value: '1' },
                       { label: '2 - Simples Nacional - excesso de sublimite de receita bruta', value: '2' },
-                      { label: '3 - Regime Normal (Lucro Presumido ou Real)', value: '3' },
+                      { label: '3 - Regime Nãormal (Lucro Presumido ou Real)', value: '3' },
                     ]}
                   />
 
@@ -588,7 +588,7 @@ export default function CompanyForm() {
               >
                 <div className="space-y-4">
                   <ConfigInputField
-                    label="Nome Exibido no Sistema"
+                    label="Nãome Exibido no Sistema"
                     id="nomeExibido"
                     value={form.nomeExibido}
                     onChange={(e) => setForm({ ...form, nomeExibido: e.target.value })}

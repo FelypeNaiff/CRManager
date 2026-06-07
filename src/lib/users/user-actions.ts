@@ -8,7 +8,7 @@ import { hashPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-servi
 import { z } from 'zod';
 
 const UserCreateSchema = z.object({
-  name: z.string().min(2, 'Nome é obrigatório (mínimo 2 caracteres)'),
+  name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
   email: z.string().email('E-mail inválido'),
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
@@ -19,7 +19,7 @@ const UserCreateSchema = z.object({
 });
 
 const UserUpdateSchema = z.object({
-  name: z.string().min(2, 'Nome é obrigatório (mínimo 2 caracteres)').optional(),
+  name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)').optional(),
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   commissionRate: z.number().min(0).max(100).optional(),
@@ -246,7 +246,7 @@ export async function resetUserPinAction(userId: string) {
  * Change a user's authorization PIN (by the user themselves)
  */
 export async function changeUserPinAction(userId: string, currentPin: string, newPin: string) {
-  // Normally we would get the user id from the session (the user changing their own pin)
+  // Nãormally we would get the user id from the session (the user changing their own pin)
   // For the sake of this config flow, if an admin is forcing the change, they can provide it.
   const session = await requirePermission('USUARIOS', 'UPDATE'); 
   try {
@@ -268,7 +268,7 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
     }
 
     if (!newPin || newPin.length < 4 || newPin.length > 8) {
-      return { success: false, error: 'Novo PIN deve ter entre 4 e 8 dígitos.' };
+      return { success: false, error: 'Nãovo PIN deve ter entre 4 e 8 dígitos.' };
     }
 
     const newHash = await hashPin(newPin);

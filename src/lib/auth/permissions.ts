@@ -70,7 +70,7 @@ export async function requireAdmin(): Promise<ActiveProfileSession> {
       companyId: session.companyId,
       userId: session.userId,
       action: 'UPDATE',
-      module: 'SISTEMA' as any, // Not real module, just log
+      module: 'SISTEMA' as any, // Nãot real module, just log
       recordId: session.userId,
       details: 'Tentativa bloqueada por proteção administrativa.',
     });

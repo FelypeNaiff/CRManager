@@ -70,6 +70,7 @@ model Company {
   users                                User[]
   sales                                Sale[]
   exchangeReturns                      ExchangeReturn[]
+  sellers                              Seller[]
 
   @@map("companies")
 }
@@ -118,9 +119,6 @@ model User {
   permitirAcesso              Boolean                @default(true) @map("permitir_acesso")
   authorizationPinHash        String?                @map("authorization_pin_hash")
   pinResetRequired            Boolean                @default(false) @map("pin_reset_required")
-  isSeller                    Boolean                @default(false) @map("is_seller")
-  sellerCode                  String?                @map("seller_code")
-  commissionRate              Decimal                @default(0.00) @map("commission_rate") @db.Decimal(5, 2)
   maxDiscountPercentage       Decimal?               @map("max_discount_percentage") @db.Decimal(5, 2)
   pinLastChangedAt            DateTime?              @map("pin_last_changed_at")
   createdAt                   DateTime               @default(now()) @map("created_at")
@@ -133,13 +131,12 @@ model User {
   company                     Company                @relation(fields: [companyId], references: [id])
   role                        Role?                  @relation(fields: [roleId], references: [id])
   inventoryMovements          InventoryMovement[]
-  sales                       Sale[]                 @relation("SaleSeller")
   cancelledSales              Sale[]                 @relation("SaleCancelledBy")
   saleAuthorizationsRequested SaleAuthorization[]    @relation("AuthRequestedBy")
   saleAuthorizationsApproved  SaleAuthorization[]    @relation("AuthApprovedBy")
-  sellerGoals                 SellerGoal[]
-  sellerCommissions           SellerCommission[]
 
+  @@index([companyId, status])
+  @@index([companyId, name])
   @@map("users")
 }
 
@@ -155,6 +152,9 @@ model ActivityLog {
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   user      User     @relation(fields: [userId], references: [id])
 
+  @@index([companyId, createdAt])
+  @@index([companyId, module, action])
+  @@index([userId, createdAt])
   @@map("activity_logs")
 }
 
@@ -188,6 +188,9 @@ model Customer {
 
   // Cada telefone deve ser único por empresa
   @@unique([companyId, phone])
+  @@index([companyId, status])
+  @@index([companyId, name])
+  @@index([companyId, createdAt])
   @@map("customers")
 }
 
@@ -205,6 +208,8 @@ model CustomerChild {
   updatedAt        DateTime  @updatedAt @map("updated_at")
   customer         Customer  @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
+  @@index([customerId])
+  @@index([birthDate])
   @@map("customer_children")
 }
 
@@ -258,6 +263,8 @@ model CustomerWalletMovement {
   createdAt        DateTime       @default(now()) @map("created_at")
   wallet           CustomerWallet @relation(fields: [walletId], references: [id], onDelete: Cascade)
 
+  @@index([walletId, createdAt])
+  @@index([walletId, type])
   @@map("customer_wallet_movements")
 }
 
@@ -269,6 +276,7 @@ model CustomerHistory {
   createdAt   DateTime @default(now()) @map("created_at")
   customer    Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
+  @@index([customerId, createdAt])
   @@map("customer_histories")
 }
 
@@ -280,6 +288,7 @@ model CustomerInteraction {
   createdAt  DateTime @default(now()) @map("created_at")
   customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
+  @@index([customerId, createdAt])
   @@map("customer_interactions")
 }
 
@@ -395,6 +404,7 @@ model ProductPriceHistory {
   changedAt       DateTime @default(now()) @map("changed_at")
   product         Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
 
+  @@index([productId, changedAt])
   @@map("product_price_histories")
 }
 
@@ -733,11 +743,13 @@ model Sale {
   sellerId       String  @map("seller_id")
   cashRegisterId String? @map("cash_register_id")
 
-  status         SaleStatus @default(PENDING)
-  subtotal       Decimal    @db.Decimal(15, 2)
-  discountAmount Decimal    @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
-  totalAmount    Decimal    @db.Decimal(15, 2)
-  notes          String?
+  status              SaleStatus @default(PENDING)
+  subtotal            Decimal    @db.Decimal(15, 2)
+  globalDiscountType  String?    @map("global_discount_type")
+  globalDiscountValue Decimal?   @map("global_discount_value") @db.Decimal(15, 2)
+  discountAmount      Decimal    @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
+  totalAmount         Decimal    @db.Decimal(15, 2)
+  notes               String?
 
   customerNameSnapshot  String? @map("customer_name_snapshot")
   customerPhoneSnapshot String? @map("customer_phone_snapshot")
@@ -751,7 +763,7 @@ model Sale {
 
   company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer     Customer?     @relation(fields: [customerId], references: [id])
-  seller       User          @relation("SaleSeller", fields: [sellerId], references: [id])
+  seller       Seller        @relation("SaleSeller", fields: [sellerId], references: [id])
   cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id])
   cancelledBy  User?         @relation("SaleCancelledBy", fields: [cancelledByUserId], references: [id])
 
@@ -777,10 +789,12 @@ model SaleItem {
   skuSnapshot         String  @map("sku_snapshot")
   barcodeSnapshot     String? @map("barcode_snapshot")
 
-  quantity   Decimal @db.Decimal(10, 2)
-  unitPrice  Decimal @map("unit_price") @db.Decimal(15, 2)
-  discount   Decimal @default(0.00) @db.Decimal(15, 2)
-  totalPrice Decimal @map("total_price") @db.Decimal(15, 2)
+  quantity      Decimal  @db.Decimal(10, 2)
+  unitPrice     Decimal  @map("unit_price") @db.Decimal(15, 2)
+  discountType  String?  @map("discount_type")
+  discountValue Decimal? @map("discount_value") @db.Decimal(15, 2)
+  discount      Decimal  @default(0.00) @db.Decimal(15, 2)
+  totalPrice    Decimal  @map("total_price") @db.Decimal(15, 2)
 
   costPriceAtSale Decimal @map("cost_price_at_sale") @db.Decimal(15, 2)
   salePriceAtSale Decimal @map("sale_price_at_sale") @db.Decimal(15, 2)
@@ -807,6 +821,9 @@ model SalePayment {
   sale          Sale          @relation(fields: [saleId], references: [id], onDelete: Cascade)
   paymentMethod PaymentMethod @relation(fields: [paymentMethodId], references: [id])
 
+  @@index([saleId])
+  @@index([paymentMethodId])
+  @@index([status])
   @@map("sale_payments")
 }
 
@@ -826,33 +843,38 @@ model SaleAuthorization {
   requestedBy  User  @relation("AuthRequestedBy", fields: [requestedByUserId], references: [id])
   authorizedBy User? @relation("AuthApprovedBy", fields: [authorizedByUserId], references: [id])
 
+  @@index([saleId])
+  @@index([status])
+  @@index([type])
   @@map("sale_authorizations")
 }
 
 model SellerGoal {
   id             String   @id @default(uuid())
-  userId         String   @map("user_id")
+  sellerId       String   @map("seller_id")
   periodStart    DateTime @map("period_start")
   periodEnd      DateTime @map("period_end")
   targetAmount   Decimal  @map("target_amount") @db.Decimal(15, 2)
   achievedAmount Decimal  @default(0.00) @map("achieved_amount") @db.Decimal(15, 2)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
 
-  @@index([userId, periodStart, periodEnd])
+  @@index([sellerId, periodStart, periodEnd])
   @@map("seller_goals")
 }
 
 model SellerCommission {
-  id     String                 @id @default(uuid())
-  userId String                 @map("user_id")
-  saleId String                 @map("sale_id")
-  amount Decimal                @db.Decimal(15, 2)
-  status SellerCommissionStatus @default(PENDING)
+  id       String                 @id @default(uuid())
+  sellerId String                 @map("seller_id")
+  saleId   String                 @map("sale_id")
+  amount   Decimal                @db.Decimal(15, 2)
+  status   SellerCommissionStatus @default(PENDING)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sale Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+  seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
+  sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
+  @@index([sellerId, status])
+  @@index([saleId])
   @@map("seller_commissions")
 }
 
@@ -871,6 +893,9 @@ model ExchangeReturn {
   company Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   items   ExchangeReturnItem[]
 
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+  @@index([customerId])
   @@map("exchange_returns")
 }
 
@@ -975,6 +1000,7 @@ model WalletTransaction {
 
   @@index([customerId])
   @@index([saleId])
+  @@index([walletId, createdAt])
   @@map("wallet_transactions")
 }
 
@@ -1071,5 +1097,32 @@ model ActionAuthorization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
+  @@index([companyId, status, type])
+  @@index([companyId, createdAt])
   @@map("action_authorizations")
+}
+
+model Seller {
+  id             String   @id @default(uuid())
+  companyId      String   @map("company_id")
+  name           String
+  nickname       String?
+  phone          String?
+  cpf            String?
+  email          String?
+  status         String   @default("ACTIVE")
+  commissionRate Decimal  @default(0.00) @map("commission_rate") @db.Decimal(5, 2)
+  goal           Decimal? @db.Decimal(15, 2)
+  notes          String?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  company     Company            @relation(fields: [companyId], references: [id])
+  sales       Sale[]             @relation("SaleSeller")
+  goals       SellerGoal[]
+  commissions SellerCommission[]
+
+  @@index([companyId, status])
+  @@index([companyId, name])
+  @@map("sellers")
 }

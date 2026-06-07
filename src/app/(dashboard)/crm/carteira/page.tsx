@@ -52,21 +52,31 @@ export default function CarteiraSaldosPage() {
   const [isLoadingWallets, setIsLoadingWallets] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const loadData = useCallback(async () => {
+  // Pagination states
+  const [page, setPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalCount, setTotalCount] = useState(0)
+
+  const loadData = useCallback(async (currentPage: number = page) => {
     setIsLoadingWallets(true)
     setError(null)
     try {
-      const res = await getWallets()
-      if (res.success && res.data) {
+      const res = await getWallets({
+        page: currentPage,
+        pageSize: 50,
+        filter: filterParam || undefined,
+        search: searchTerm
+      })
+      if (res.success && res.data && res.metadata) {
         // Map to compatible frontend structure
         const mapped = res.data.map((w: any) => ({
           id: w.id,
           cliente_id: w.customerId,
           saldo_atual: Number(w.balance),
-          total_creditos_gerados: w.movements
+          total_creditos_gerados: (w.transactions || [])
             .filter((m: any) => m.type === 'credit')
             .reduce((sum: number, m: any) => sum + Number(m.amount), 0),
-          total_creditos_utilizados: w.movements
+          total_creditos_utilizados: (w.transactions || [])
             .filter((m: any) => m.type === 'debit')
             .reduce((sum: number, m: any) => sum + Number(m.amount), 0),
           clientName: w.customer?.name || "Cliente Desconhecido",
@@ -74,6 +84,8 @@ export default function CarteiraSaldosPage() {
           clientCpf: w.customer?.cpf || ""
         }))
         setWallets(mapped)
+        setTotalPages(res.metadata.totalPages)
+        setTotalCount(res.metadata.totalCount)
       } else {
         setError(res.error || "Erro ao carregar carteiras.")
       }
@@ -83,25 +95,35 @@ export default function CarteiraSaldosPage() {
     } finally {
       setIsLoadingWallets(false)
     }
-  }, [])
+  }, [searchTerm, filterParam])
+
+  const lastLoadedRef = React.useRef({ page: 0, searchTerm: "", filterParam: "" })
 
   useEffect(() => {
-    loadData()
-  }, [loadData])
+    const currentFilter = filterParam || ""
+    const filtersChanged = 
+      searchTerm !== lastLoadedRef.current.searchTerm ||
+      currentFilter !== lastLoadedRef.current.filterParam
+
+    let targetPage = page
+    if (filtersChanged) {
+      targetPage = 1
+      setPage(1)
+    }
+
+    if (
+      targetPage !== lastLoadedRef.current.page ||
+      searchTerm !== lastLoadedRef.current.searchTerm ||
+      currentFilter !== lastLoadedRef.current.filterParam
+    ) {
+      lastLoadedRef.current = { page: targetPage, searchTerm, filterParam: currentFilter }
+      loadData(targetPage)
+    }
+  }, [page, searchTerm, filterParam, loadData])
 
   const filteredWallets = useMemo(() => {
-    if (!wallets) return []
-    return wallets.filter(w => {
-      const matchSearch = 
-        w.clientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        w.clientPhone.includes(searchTerm) ||
-        w.clientCpf.replace(/\D/g, "").includes(searchTerm.replace(/\D/g, ""))
-      
-      const matchFilter = filterParam === "com-saldo" ? (w.saldo_atual || 0) > 0 : true
-      
-      return matchSearch && matchFilter
-    })
-  }, [wallets, searchTerm, filterParam])
+    return wallets || []
+  }, [wallets])
 
   const openAdjustDialog = (wallet: any) => {
     setSelectedWallet(wallet)
@@ -139,10 +161,10 @@ export default function CarteiraSaldosPage() {
   const handleSaveAdjustment = async () => {
     const safeAdjust = safeNumber(adjustAmount)
     if (!safeAdjust || safeAdjust <= 0) {
-      return toast({ variant: "destructive", title: "Valor inválido" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!adjustReason.trim()) {
-      return toast({ variant: "destructive", title: "Motivo obrigatório" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!selectedWallet) return
 
@@ -163,7 +185,7 @@ export default function CarteiraSaldosPage() {
         toast({ variant: "destructive", title: "Erro ao ajustar saldo", description: res.error })
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Erro ao atualizar" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -262,6 +284,36 @@ export default function CarteiraSaldosPage() {
               </CardContent>
             </Card>
           ))}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between bg-white px-4 py-3 border rounded-xl shadow-sm mt-4">
+          <div className="text-xs text-muted-foreground">
+            Página <span className="font-semibold text-slate-700">{page}</span> de{" "}
+            <span className="font-semibold text-slate-700">{totalPages}</span> ({totalCount} carteira(s))
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page === 1}
+              className="text-xs font-semibold"
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page === totalPages}
+              className="text-xs font-semibold"
+            >
+              Próximo
+            </Button>
+          </div>
         </div>
       )}
 

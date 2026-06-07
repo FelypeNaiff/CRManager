@@ -1,5 +1,5 @@
 /**
- * Normalizes an object so that it can be safely compared using JSON.stringify
+ * Nãormalizes an object so that it can be safely compared using JSON.stringify
  * This solves issues with:
  * - undefined values (omitted in JSON.stringify)
  * - null vs empty string

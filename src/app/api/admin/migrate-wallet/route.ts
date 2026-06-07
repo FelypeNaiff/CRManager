@@ -42,8 +42,7 @@ export async function GET() {
   try {
     await requireAdmin();
 
-    const { PrismaClient } = await import('@prisma/client');
-    const prisma = new PrismaClient();
+    const { prisma } = await import('@/lib/prisma');
 
     const [
       legacyExchangeReturnsCount,
@@ -58,8 +57,6 @@ export async function GET() {
       prisma.saleReturn.count(),
       prisma.walletTransaction.count(),
     ]);
-
-    await prisma.$disconnect();
 
     return NextResponse.json({
       success: true,

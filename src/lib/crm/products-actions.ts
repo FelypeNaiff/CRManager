@@ -611,7 +611,7 @@ export async function createInventoryMovement(input: any) {
       action: 'CRIAR',
       module: 'ESTOQUE',
       recordId: movement.id,
-      details: `Movimentação de estoque (${type}) de ${quantity} unidades criada para o produto "${product.name}". Novo saldo disponível: ${newAvailableStock}.`,
+      details: `Movimentação de estoque (${type}) de ${quantity} unidades criada para o produto "${product.name}". Nãovo saldo disponível: ${newAvailableStock}.`,
     });
 
     const movementWithVariant = await prisma.inventoryMovement.findUnique({

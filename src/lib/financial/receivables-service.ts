@@ -39,6 +39,12 @@ export class ReceivablesService {
           throw new Error("Cliente não identificado para usar o saldo da carteira.");
         }
         
+        // Pessimistic lock on the wallet (ordem: CashRegister -> CustomerWallet)
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`,
+          sale.customerId
+        );
+
         const wallet = await tx.customerWallet.findUnique({
           where: { customerId: sale.customerId }
         });
@@ -122,7 +128,7 @@ export class ReceivablesService {
       }
 
       // 3. PIX ou Débito com liquidação imediata (settlementDays = 0)
-      if (pm.settlementDays === 0 || pm.type === PaymentMethodType.PIX) {
+      if ((pm.settlementDays === 0 && (payment.installments || 1) <= 1) || pm.type === PaymentMethodType.PIX) {
         // Criar a transação financeira (Income)
         const finTx = await tx.financialTransaction.create({
           data: {
@@ -381,6 +387,12 @@ export class ReceivablesService {
       // 6. Reverter débitos na Carteira (Creditar de volta)
       if (pm.type === PaymentMethodType.CUSTOMER_WALLET) {
         if (!sale.customerId) continue;
+
+        // Pessimistic lock on the wallet
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`,
+          sale.customerId
+        );
 
         const wallet = await tx.customerWallet.findUnique({
           where: { customerId: sale.customerId }

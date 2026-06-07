@@ -88,7 +88,7 @@ function PaymentMethodsTab({ db }: { db: any }) {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) return toast({ variant: "destructive", title: "Nome obrigatório" })
+    if (!form.name.trim()) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     setIsSaving(true)
     try {
       const dataToSave = {
@@ -136,7 +136,7 @@ function PaymentMethodsTab({ db }: { db: any }) {
           <Input placeholder="Buscar..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <Button onClick={() => { setEditingItem(null); setForm({name:"", feePercentage:0, feeFixed:0, receiptDays:0}); setIsDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Nova Forma
+          <Plus className="h-4 w-4 mr-2" /> Nãova Forma
         </Button>
       </div>
 
@@ -146,7 +146,7 @@ function PaymentMethodsTab({ db }: { db: any }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Nãome</TableHead>
                   <TableHead>Taxa (%)</TableHead>
                   <TableHead>Taxa Fixa (R$)</TableHead>
                   <TableHead>Recebimento (Dias)</TableHead>
@@ -199,11 +199,11 @@ function PaymentMethodsTab({ db }: { db: any }) {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Forma de Pagamento" : "Nova Forma de Pagamento"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Forma de Pagamento" : "Nãova Forma de Pagamento"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Nome *</Label>
+              <Label>Nãome *</Label>
               <Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} disabled={editingItem?.isSystem} />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -278,7 +278,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.code.trim()) return toast({ variant: "destructive", title: "Código e Nome são obrigatórios" })
+    if (!form.name.trim() || !form.code.trim()) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     setIsSaving(true)
     try {
       const dataToSave = {
@@ -326,7 +326,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
           <Input placeholder="Buscar por código ou nome..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <Button onClick={() => { setEditingItem(null); setForm({code:"", name:"", type:"EXPENSE", parentId:""}); setIsDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Nova Conta
+          <Plus className="h-4 w-4 mr-2" /> Nãova Conta
         </Button>
       </div>
 
@@ -337,7 +337,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
               <TableHeader>
                 <TableRow>
                   <TableHead>Código</TableHead>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Nãome</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -391,7 +391,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Categoria" : "Nova Categoria"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Categoria" : "Nãova Categoria"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="grid grid-cols-2 gap-4">
@@ -411,7 +411,7 @@ function ChartOfAccountsTab({ db }: { db: any }) {
               </div>
             </div>
             <div className="space-y-2">
-              <Label>Nome *</Label>
+              <Label>Nãome *</Label>
               <Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} disabled={editingItem?.isSystem} />
             </div>
             <div className="space-y-2">
@@ -478,7 +478,7 @@ function CostCentersTab({ db }: { db: any }) {
   }
 
   const handleSave = async () => {
-    if (!form.name.trim()) return toast({ variant: "destructive", title: "Nome obrigatório" })
+    if (!form.name.trim()) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     setIsSaving(true)
     try {
       const dataToSave = {
@@ -523,7 +523,7 @@ function CostCentersTab({ db }: { db: any }) {
           <Input placeholder="Buscar..." className="pl-10" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
         </div>
         <Button onClick={() => { setEditingItem(null); setForm({name:"", description:""}); setIsDialogOpen(true); }}>
-          <Plus className="h-4 w-4 mr-2" /> Novo Centro de Custo
+          <Plus className="h-4 w-4 mr-2" /> Nãovo Centro de Custo
         </Button>
       </div>
 
@@ -533,7 +533,7 @@ function CostCentersTab({ db }: { db: any }) {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Nome</TableHead>
+                  <TableHead>Nãome</TableHead>
                   <TableHead>Descrição</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -575,11 +575,11 @@ function CostCentersTab({ db }: { db: any }) {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Centro de Custo" : "Novo Centro de Custo"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Centro de Custo" : "Nãovo Centro de Custo"}</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4 py-4">
             <div className="space-y-2">
-              <Label>Nome *</Label>
+              <Label>Nãome *</Label>
               <Input value={form.name} onChange={(e) => setForm({...form, name: e.target.value})} placeholder="Ex: Matriz, Loja 1, Marketing" />
             </div>
             <div className="space-y-2">

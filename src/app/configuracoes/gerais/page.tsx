@@ -154,7 +154,7 @@ export default function ConfiguracoesGeraisPage() {
           
           <div className="space-y-4">
             <div className="grid gap-2">
-              <Label>Nome / Razão Social</Label>
+              <Label>Nãome / Razão Social</Label>
               <Input
                 value={form.nomeEmpresa}
                 onChange={(e) => setForm({ ...form, nomeEmpresa: e.target.value })}
@@ -276,7 +276,7 @@ export default function ConfiguracoesGeraisPage() {
           </section>
 
           <section className="rounded-2xl border bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold mb-4">Notificações Inteligentes</h2>
+            <h2 className="text-xl font-semibold mb-4">Nãotificações Inteligentes</h2>
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <Label>Avisos por E-mail</Label>

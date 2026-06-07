@@ -21,7 +21,7 @@ export default function ImportarPlanilhaPage() {
   const colunasPadrao = [
     "Código",
     "Qtd. Estoque",
-    "Nome do produto *",
+    "Nãome do produto *",
     "Preço de compra",
     "Preço de venda",
     "Código de barras (GTIN/EAN)",
@@ -34,7 +34,7 @@ export default function ImportarPlanilhaPage() {
   ]
 
   const fornecedorHeadersPadrao = [
-    "Nome do Fornecedor *",
+    "Nãome do Fornecedor *",
     "CNPJ / CPF",
     "WhatsApp",
     "Telefone",
@@ -66,7 +66,7 @@ export default function ImportarPlanilhaPage() {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0]
       if (selectedFile.size > 2 * 1024 * 1024) {
-        toast({ variant: "destructive", title: "Arquivo muito grande", description: "O tamanho máximo permitido é 2MB." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
         return
       }
       setFile(selectedFile)
@@ -190,11 +190,11 @@ export default function ImportarPlanilhaPage() {
 
   const handleImportar = async () => {
     if (!file) {
-      toast({ variant: "destructive", title: "Atenção", description: "Selecione um arquivo primeiro." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
     if (!db) {
-      toast({ variant: "destructive", title: "Erro", description: "Banco de dados não conectado." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -214,7 +214,7 @@ export default function ImportarPlanilhaPage() {
       const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
 
       if (rows.length <= 1) {
-        toast({ variant: "destructive", title: "Planilha vazia", description: "A planilha não contém dados." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
         setIsImporting(false)
         return
       }
@@ -224,7 +224,7 @@ export default function ImportarPlanilhaPage() {
       const dataRows = rows.slice(1).filter(r => r.length > 0 && r.some((c: any) => c))
 
       if (dataRows.length > 1000) {
-        toast({ variant: "destructive", title: "Limite excedido", description: "O limite máximo é de 1000 itens por planilha." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
         setIsImporting(false)
         return
       }
@@ -253,17 +253,17 @@ export default function ImportarPlanilhaPage() {
         const nome = idx.nome !== -1 ? row[idx.nome]?.toString().trim() : ""
 
         if (!nome) {
-          errorsList.push(`Linha ${i + 2}: Nome do produto é obrigatório.`)
+          errorsList.push(`Linha ${i + 2}: Nãome do produto é obrigatório.`)
           continue
         }
 
-        const fornecedorNome = idx.fornecedor !== -1 ? row[idx.fornecedor]?.toString().trim() : ""
+        const fornecedorNãome = idx.fornecedor !== -1 ? row[idx.fornecedor]?.toString().trim() : ""
         let fornecedorId = ""
-        if (fornecedorNome) {
-          fornecedorId = await getFornecedorId(fornecedorNome)
+        if (fornecedorNãome) {
+          fornecedorId = await getFornecedorId(fornecedorNãome)
           if (!fornecedorId) {
             const newFornecedorRef = await addDoc(collection(db, "fornecedores"), {
-              nomeFornecedor: fornecedorNome,
+              nomeFornecedor: fornecedorNãome,
               ativo: true,
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
@@ -272,13 +272,13 @@ export default function ImportarPlanilhaPage() {
           }
         }
 
-        const grupoNome = idx.grupo !== -1 ? row[idx.grupo]?.toString().trim() : ""
+        const grupoNãome = idx.grupo !== -1 ? row[idx.grupo]?.toString().trim() : ""
         let grupoId = ""
-        if (grupoNome) {
-          grupoId = await getGrupoId(grupoNome)
+        if (grupoNãome) {
+          grupoId = await getGrupoId(grupoNãome)
           if (!grupoId) {
             const newGrupoRef = await addDoc(collection(db, "gruposProdutos"), {
-              nome: grupoNome,
+              nome: grupoNãome,
               descricao: "",
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
@@ -287,15 +287,15 @@ export default function ImportarPlanilhaPage() {
           }
         }
 
-        const tamanhoNome = idx.tamanho !== -1 ? row[idx.tamanho]?.toString().trim() : ""
+        const tamanhoNãome = idx.tamanho !== -1 ? row[idx.tamanho]?.toString().trim() : ""
         let tamanhoId = ""
-        if (tamanhoNome) {
-          tamanhoId = await getGradeId(tamanhoNome)
+        if (tamanhoNãome) {
+          tamanhoId = await getGradeId(tamanhoNãome)
           if (!tamanhoId) {
             const newGradeRef = await addDoc(collection(db, "gradesVariacoes"), {
-              nome: tamanhoNome,
+              nome: tamanhoNãome,
               tipo: "tamanho",
-              valores: [tamanhoNome],
+              valores: [tamanhoNãome],
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             })
@@ -303,15 +303,15 @@ export default function ImportarPlanilhaPage() {
           }
         }
 
-        const corNome = idx.cor !== -1 ? row[idx.cor]?.toString().trim() : ""
+        const corNãome = idx.cor !== -1 ? row[idx.cor]?.toString().trim() : ""
         let corId = ""
-        if (corNome) {
-          corId = await getGradeId(corNome)
+        if (corNãome) {
+          corId = await getGradeId(corNãome)
           if (!corId) {
             const newGradeRef = await addDoc(collection(db, "gradesVariacoes"), {
-              nome: corNome,
+              nome: corNãome,
               tipo: "cor",
-              valores: [corNome],
+              valores: [corNãome],
               createdAt: serverTimestamp(),
               updatedAt: serverTimestamp(),
             })
@@ -332,9 +332,9 @@ export default function ImportarPlanilhaPage() {
           lucroUtilizado: 0,
           
           estoqueAtual: idx.estoque !== -1 ? parseNumber(row[idx.estoque]) : 0,
-          possuiVariacoes: tamanhoNome || corNome ? "Sim" : "Não",
-          tamanho: tamanhoNome,
-          cor: corNome,
+          possuiVariacoes: tamanhoNãome || corNãome ? "Sim" : "Não",
+          tamanho: tamanhoNãome,
+          cor: corNãome,
           
           fornecedorId,
           grupo: grupoId,
@@ -361,7 +361,7 @@ export default function ImportarPlanilhaPage() {
 
     } catch (error) {
       console.error(error)
-      toast({ variant: "destructive", title: "Erro na leitura", description: "Ocorreu um erro ao ler a planilha. Verifique o formato." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsImporting(false)
     }

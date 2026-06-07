@@ -81,7 +81,7 @@ export function AuthorizationDialog({
       });
 
       if (appRes.success) {
-        toast({ title: 'Sucesso', description: 'Operação autorizada com sucesso!' });
+        toast({ title: "Sucesso", description: "Operação realizada com sucesso." });
         onAuthorized(appRes.authorization);
         onOpenChange(false);
       } else {

@@ -1,9 +1,6 @@
 'use server';
 import { serializePrisma } from '@/lib/serialize';
-
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from '@/lib/prisma';
 
 export async function searchVariantsAction(companyId: string, query: string) {
   try {
@@ -25,6 +22,7 @@ export async function searchVariantsAction(companyId: string, query: string) {
         sku: true,
         barcode: true,
         name: true,
+        costPrice: true,
         salePrice: true,
         availableStock: true,
         productId: true,

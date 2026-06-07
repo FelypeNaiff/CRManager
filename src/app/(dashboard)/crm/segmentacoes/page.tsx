@@ -27,7 +27,8 @@ import {
   AlertCircle
 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { format } from "date-fns"
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale"
 import { getSegmentationData } from "@/lib/crm/actions"
 
 const MESES = [
@@ -41,7 +42,7 @@ const MESES = [
   { val: "8", label: "Agosto" },
   { val: "9", label: "Setembro" },
   { val: "10", label: "Outubro" },
-  { val: "11", label: "Novembro" },
+  { val: "11", label: "Nãovembro" },
   { val: "12", label: "Dezembro" },
 ]
 
@@ -192,21 +193,21 @@ export default function SegmentacoesPage() {
     setSelectedTagsFilter([])
   }
 
-  const handleToggleTagFilter = (tagNome: string) => {
-    if (selectedTagsFilter.includes(tagNome)) {
-      setSelectedTagsFilter(selectedTagsFilter.filter(t => t !== tagNome))
+  const handleToggleTagFilter = (tagNãome: string) => {
+    if (selectedTagsFilter.includes(tagNãome)) {
+      setSelectedTagsFilter(selectedTagsFilter.filter(t => t !== tagNãome))
     } else {
-      setSelectedTagsFilter([...selectedTagsFilter, tagNome])
+      setSelectedTagsFilter([...selectedTagsFilter, tagNãome])
     }
   }
 
   const handleExportCsv = () => {
     if (filteredClients.length === 0) {
-      toast({ variant: "destructive", title: "Nenhum cliente elegível", description: "Não há contatos para exportar." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
-    const headers = ["Nome", "WhatsApp", "VIP", "Saldo Carteira", "Filhos", "Ticket Médio"]
+    const headers = ["Nãome", "WhatsApp", "VIP", "Saldo Carteira", "Filhos", "Ticket Médio"]
     const rows = filteredClients.map((c: any) => {
       const statsObj = clientStats[c.id]
       const kidsList = statsObj?.filhos.map((k: any) => `${k.nome} (${k.tamanho_roupa || 'N/A'})`).join(" | ") || ""
@@ -235,7 +236,7 @@ export default function SegmentacoesPage() {
 
   const handleCreateCampaign = () => {
     if (filteredClients.length === 0) {
-      toast({ variant: "destructive", title: "Erro", description: "Não é possível criar uma campanha com público vazio." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -562,7 +563,7 @@ export default function SegmentacoesPage() {
                             R$ {(statsObj?.ticketMedio || 0).toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right text-slate-400 whitespace-nowrap">
-                            {statsObj?.ultimaCompra ? format(new Date(statsObj.ultimaCompra), "dd/MM/yyyy") : "-"}
+                            {statsObj?.ultimaCompra ? format(new Date(statsObj.ultimaCompra), "dd/MM/yyyy", { locale: ptBR }) : "-"}
                           </TableCell>
                         </TableRow>
                       )

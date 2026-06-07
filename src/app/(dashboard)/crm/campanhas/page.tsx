@@ -25,7 +25,8 @@ import {
 import { toast } from "@/hooks/use-toast"
 import { getCustomers, listCampaigns, createCampaignAction } from "@/lib/crm/actions"
 import { usePermissions } from "@/hooks/use-permissions"
-import { format } from "date-fns"
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale"
 
 export default function CampanhasPage() {
   const { can } = usePermissions()
@@ -35,7 +36,7 @@ export default function CampanhasPage() {
   const [activeTab, setActiveTab] = useState("nova")
 
   // Campaign creation state
-  const [campanhaNome, setCampanhaNome] = useState("")
+  const [campanhaNãome, setCampanhaNãome] = useState("")
   const [activeSegment, setActiveSegment] = useState<any>(null)
   const [mensagemTemplate, setMensagemTemplate] = useState(
     "Olá {{nome}}, temos novidades especiais na Trupe Kids para você! Aproveite nosso bazar de inverno com descontos exclusivos."
@@ -91,20 +92,20 @@ export default function CampanhasPage() {
   }, [clientes, activeSegment])
 
   const handleLaunchCampaign = async () => {
-    if (!campanhaNome.trim()) {
-      return toast({ variant: "destructive", title: "Erro", description: "O nome da campanha é obrigatório." })
+    if (!campanhaNãome.trim()) {
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (segmentClients.length === 0) {
-      return toast({ variant: "destructive", title: "Erro", description: "O público de envio está vazio. Selecione um segmento válido." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
     if (!mensagemTemplate.trim()) {
-      return toast({ variant: "destructive", title: "Erro", description: "Digite a mensagem do template." })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSendingSim(true)
     try {
       const res = await createCampaignAction({
-        name: campanhaNome,
+        name: campanhaNãome,
         message: mensagemTemplate,
         integration: integrationDest,
         clients: segmentClients.map(c => c.id)
@@ -115,7 +116,7 @@ export default function CampanhasPage() {
           title: "Campanha disparada!", 
           description: `Sucesso: ${segmentClients.length} mensagens enviadas na simulação via ${integrationDest}.` 
         })
-        setCampanhaNome("")
+        setCampanhaNãome("")
         setMensagemTemplate("Olá {{nome}}, temos novidades especiais na Trupe Kids...")
         localStorage.removeItem("crm_active_segment")
         setActiveSegment(null)
@@ -124,7 +125,7 @@ export default function CampanhasPage() {
         toast({ variant: "destructive", title: "Erro", description: res.error })
       }
     } catch (e: any) {
-      toast({ variant: "destructive", title: "Erro", description: "Erro ao disparar simulação de campanha." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSendingSim(false)
     }
@@ -133,7 +134,7 @@ export default function CampanhasPage() {
   const handleExportSegment = () => {
     if (segmentClients.length === 0) return
 
-    const headers = ["Nome", "WhatsApp", "Mensagem Personalizada"]
+    const headers = ["Nãome", "WhatsApp", "Mensagem Personalizada"]
     const rows = segmentClients.map(c => {
       const personalMsg = mensagemTemplate.replace("{{nome}}", c.name || "Cliente")
       return [
@@ -177,7 +178,7 @@ export default function CampanhasPage() {
                 : "border-transparent text-slate-400 hover:text-slate-600"
             }`}
           >
-            <Plus className="h-4 w-4" /> Nova Campanha
+            <Plus className="h-4 w-4" /> Nãova Campanha
           </button>
         )}
         <button
@@ -204,11 +205,11 @@ export default function CampanhasPage() {
               <CardContent className="space-y-4 pt-4">
                 
                 <div className="space-y-2">
-                  <Label className="font-semibold text-slate-600 text-xs">Nome Interno da Campanha</Label>
+                  <Label className="font-semibold text-slate-600 text-xs">Nãome Interno da Campanha</Label>
                   <Input 
                     placeholder="Ex: Oferta de Inverno VIP" 
-                    value={campanhaNome}
-                    onChange={e => setCampanhaNome(e.target.value)}
+                    value={campanhaNãome}
+                    onChange={e => setCampanhaNãome(e.target.value)}
                     className="h-10 text-xs bg-slate-50"
                   />
                 </div>
@@ -283,7 +284,7 @@ export default function CampanhasPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EVOLUTION_API">Evolution API (Node)</SelectItem>
+                      <SelectItem value="EVOLUTION_API">Evolution API (Nãode)</SelectItem>
                       <SelectItem value="Z_API">Z-API (Oficial)</SelectItem>
                       <SelectItem value="WHATSAPP_CLOUD">WhatsApp Cloud API (Meta)</SelectItem>
                       <SelectItem value="N8N">Webhook N8N Automations</SelectItem>

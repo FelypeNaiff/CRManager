@@ -39,7 +39,7 @@ export async function GET(
 
     const data = await response.json();
     
-    // Normalize properties
+    // Nãormalize properties
     const normalizedData = {
       cep: data.cep || cleanCep,
       logradouro: data.street || '',

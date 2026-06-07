@@ -303,8 +303,8 @@ export const OperationalSettingsService = {
     const settings = await this.getOrCreateOperationalSettings(params.companyId, client);
 
     // Cliente Obrigatório
-    const blockNoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
-    if (blockNoCustomer && !params.hasCustomer) {
+    const blockNãoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
+    if (blockNãoCustomer && !params.hasCustomer) {
       return {
         allowed: false,
         reason: 'Operação bloqueada: Cliente é obrigatório para concluir a venda.',

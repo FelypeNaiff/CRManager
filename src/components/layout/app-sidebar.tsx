@@ -110,14 +110,14 @@ const navItems = [
         title: "Trocas e Devoluções", 
         icon: Repeat,
         items: [
-          { title: "Nova Troca/Devolução", url: "/crm/trocas?tab=nova" },
+          { title: "Nãova Troca/Devolução", url: "/crm/trocas?tab=nova" },
           { title: "Em Aberto", url: "/crm/trocas?tab=aberto" },
           { title: "Finalizadas", url: "/crm/trocas?tab=finalizadas" },
           { title: "Créditos Gerados", url: "/crm/trocas?tab=creditos" },
           { title: "Histórico", url: "/crm/trocas?tab=historico" },
         ]
       },
-      { title: "Vendedores", url: "/vendedores", icon: Briefcase },
+      { title: "Vendedores", url: "/comercial/vendedores", icon: Briefcase },
     ],
   },
   {
@@ -234,7 +234,7 @@ export function AppSidebar() {
 
     return navItems.filter(item => {
       // Para itens com submenus, checa se tem acesso ao modulo principal
-      // No caso de Financeiro, Configuracoes, CRM, etc, usamos a URL padrao ou titulo para checar
+      // Não caso de Financeiro, Configuracoes, CRM, etc, usamos a URL padrao ou titulo para checar
       let basePath = item.url
       if (!basePath && item.items && item.items.length > 0) {
         // Pega a URL do primeiro submenu para testar

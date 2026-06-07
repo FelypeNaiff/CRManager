@@ -129,7 +129,7 @@ export default function TrocaIdPage({ params }: { params: Promise<{ id: string }
                         value={returnItem.condition}
                         onChange={e => handleUpdateItem(item.variantId, "condition", e.target.value)}
                       >
-                        <option value="RESALE">Novo (Revenda)</option>
+                        <option value="RESALE">Nãovo (Revenda)</option>
                         <option value="DAMAGED">Avariado</option>
                         <option value="DISCARD">Descarte</option>
                       </select>

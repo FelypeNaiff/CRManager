@@ -12,8 +12,8 @@ export function RequirePermission({
 }: {
   module: PermissionModule;
   action: PermissionAction;
-  children: React.ReactNode;
-  fallback?: React.ReactNode;
+  children: React.ReactNãode;
+  fallback?: React.ReactNãode;
 }) {
   const { can, isLoading, isAdmin } = usePermissions();
 

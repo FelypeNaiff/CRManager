@@ -31,7 +31,8 @@ export default function PDVPage() {
   const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
   const [selectedSeller, setSelectedSeller] = useState<string>("");
   const [sellers, setSellers] = useState<any[]>([]);
-  const [globalDiscount, setGlobalDiscount] = useState<number>(0);
+  const [globalDiscountType, setGlobalDiscountType] = useState<"PERCENTAGE" | "AMOUNT">("AMOUNT");
+  const [globalDiscountValue, setGlobalDiscountValue] = useState<number>(0);
 
   // Payments State
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
@@ -103,6 +104,8 @@ export default function PDVPage() {
         barcodeSnapshot: variant.barcode,
         quantity: 1,
         unitPrice: Number(variant.salePrice),
+        discountType: "AMOUNT",
+        discountValue: 0,
         discount: 0,
         costPriceAtSale: Number(variant.costPrice || 0),
         salePriceAtSale: Number(variant.salePrice),
@@ -133,14 +136,38 @@ export default function PDVPage() {
     setCartItems(prev => prev.filter(i => i.variantId !== variantId));
   };
 
+  const updateItemDiscountType = (variantId: string, type: "PERCENTAGE" | "AMOUNT") => {
+    setCartItems(prev => prev.map(i => {
+      if (i.variantId === variantId) {
+        const val = i.discountValue;
+        const discountAmount = type === "PERCENTAGE" ? (val / 100) * i.unitPrice : val;
+        return { ...i, discountType: type, discount: discountAmount };
+      }
+      return i;
+    }));
+  };
+
   const updateItemDiscount = (variantId: string, val: string) => {
-    setCartItems(prev => prev.map(i => i.variantId === variantId ? { ...i, discount: Number(val) } : i));
+    const numVal = Number(val);
+    setCartItems(prev => prev.map(i => {
+      if (i.variantId === variantId) {
+        const discountAmount = i.discountType === "PERCENTAGE" ? (numVal / 100) * i.unitPrice : numVal;
+        return { ...i, discountValue: numVal, discount: discountAmount };
+      }
+      return i;
+    }));
   };
 
   // Math
   const subtotal = cartItems.reduce((acc, i) => acc + (i.unitPrice * i.quantity), 0);
   const itemsDiscount = cartItems.reduce((acc, i) => acc + (i.discount * i.quantity), 0);
-  const total = subtotal - itemsDiscount - globalDiscount;
+  
+  const subtotalAfterItems = subtotal - itemsDiscount;
+  const globalDiscount = globalDiscountType === "PERCENTAGE" 
+    ? (globalDiscountValue / 100) * subtotalAfterItems 
+    : globalDiscountValue;
+
+  const total = subtotalAfterItems - globalDiscount;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remainingToPay = total - totalPaid;
 
@@ -197,8 +224,8 @@ export default function PDVPage() {
     if (!selectedSeller) return alert("Selecione um vendedor!");
     
     // Check if customer is required by operational settings
-    const blockNoCustomer = settings && (!settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale);
-    if (blockNoCustomer && !selectedCustomer) {
+    const blockNãoCustomer = settings && (!settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale);
+    if (blockNãoCustomer && !selectedCustomer) {
       return alert("Operação não permitida: É obrigatório identificar o cliente para fechar a venda.");
     }
 
@@ -214,6 +241,8 @@ export default function PDVPage() {
       customerNameSnapshot: selectedCustomer?.name,
       subtotal,
       discountAmount: itemsDiscount + globalDiscount,
+      globalDiscountType,
+      globalDiscountValue,
       totalAmount: total,
       items: cartItems.map(i => ({
         ...i,
@@ -235,7 +264,7 @@ export default function PDVPage() {
       setCartItems([]);
       setPayments([]);
       setSelectedCustomer(null);
-      setGlobalDiscount(0);
+      setGlobalDiscountValue(0);
       setShowPinModal(false);
       setAuthPin("");
       setAuthReason("");
@@ -263,7 +292,7 @@ export default function PDVPage() {
             onChange={e => setSelectedSeller(e.target.value)}
           >
             <option value="">Selecione Vendedor...</option>
-            {sellers.map(s => <option key={s.id} value={s.id}>{s.nome}</option>)}
+            {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
           </select>
           <Link href="/comercial/vendas"><Button variant="outline" size="sm">Voltar</Button></Link>
         </div>
@@ -276,7 +305,7 @@ export default function PDVPage() {
           <Card className="shrink-0">
             <CardContent className="p-4 flex gap-2">
               <Input 
-                placeholder="Código de barras, SKU ou Nome do Produto..." 
+                placeholder="Código de barras, SKU ou Nãome do Produto..." 
                 value={productQuery}
                 onChange={e => setProductQuery(e.target.value)}
                 onKeyDown={e => e.key === 'Enter' && handleSearchProduct()}
@@ -337,13 +366,23 @@ export default function PDVPage() {
                       </td>
                       <td className="p-2 text-right">{formatCurrency(item.unitPrice)}</td>
                       <td className="p-2">
-                        <Input 
-                          type="number" 
-                          min={0} max={item.unitPrice} 
-                          className="h-7 text-right text-xs" 
-                          value={item.discount}
-                          onChange={(e) => updateItemDiscount(item.variantId, e.target.value)}
-                        />
+                        <div className="flex gap-1">
+                          <select 
+                            className="h-7 text-xs border rounded bg-slate-50 px-1"
+                            value={item.discountType}
+                            onChange={(e) => updateItemDiscountType(item.variantId, e.target.value as any)}
+                          >
+                            <option value="AMOUNT">R$</option>
+                            <option value="PERCENTAGE">%</option>
+                          </select>
+                          <Input 
+                            type="number" 
+                            min={0} max={item.discountType === "PERCENTAGE" ? 100 : item.unitPrice} 
+                            className="h-7 text-right text-xs w-16" 
+                            value={item.discountValue}
+                            onChange={(e) => updateItemDiscount(item.variantId, e.target.value)}
+                          />
+                        </div>
                       </td>
                       <td className="p-2 text-right font-bold">{formatCurrency((item.unitPrice - item.discount) * item.quantity)}</td>
                       <td className="p-2 text-center">
@@ -415,12 +454,20 @@ export default function PDVPage() {
                 <div className="flex justify-between text-red-300"><span>Descontos Itens:</span> <span>- {formatCurrency(itemsDiscount)}</span></div>
                 <div className="flex justify-between items-center text-red-300">
                   <span>Desconto Global:</span> 
-                  <div className="w-24">
+                  <div className="flex gap-1 w-32">
+                    <select 
+                      className="h-7 text-xs border-slate-600 bg-slate-700 rounded px-1 text-white"
+                      value={globalDiscountType}
+                      onChange={(e) => setGlobalDiscountType(e.target.value as any)}
+                    >
+                      <option value="AMOUNT">R$</option>
+                      <option value="PERCENTAGE">%</option>
+                    </select>
                     <Input 
                       type="number" 
-                      className="h-7 text-right bg-slate-700 border-slate-600 text-white" 
-                      value={globalDiscount}
-                      onChange={e => setGlobalDiscount(Number(e.target.value))}
+                      className="h-7 text-right bg-slate-700 border-slate-600 text-white w-full" 
+                      value={globalDiscountValue}
+                      onChange={e => setGlobalDiscountValue(Number(e.target.value))}
                     />
                   </div>
                 </div>
@@ -557,7 +604,7 @@ export default function PDVPage() {
         <AuthorizationDialog
           open={showPinModal}
           onOpenChange={setShowPinModal}
-          authorizationId={authPin} // Note: state variable is named authPin, but it holds the authorizationId
+          authorizationId={authPin} // Nãote: state variable is named authPin, but it holds the authorizationId
           authorizationType="DISCOUNT"
           title="Desconto acima do limite"
           description="O desconto aplicado excede o seu limite de alçada. Solicite a aprovação gerencial."
@@ -568,7 +615,7 @@ export default function PDVPage() {
           }}
           onRejected={() => {
             alert('A autorização de desconto foi rejeitada.');
-            setGlobalDiscount(0);
+            setGlobalDiscountValue(0);
             setShowPinModal(false);
           }}
         />

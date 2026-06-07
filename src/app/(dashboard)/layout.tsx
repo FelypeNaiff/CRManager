@@ -33,7 +33,7 @@ interface SessionData {
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNode
+  children: React.ReactNãode
 }) {
   const { activeProfile, isLoadingProfile, loginProfile, logoutProfile } = useProfile()
   const router = useRouter()
@@ -70,7 +70,7 @@ export default function DashboardLayout({
               permissions: (sess as any).permissions,
             })
           } else {
-            // No valid session — redirect to login
+            // Não valid session — redirect to login
             window.location.replace('/login')
           }
         } else {

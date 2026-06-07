@@ -6,7 +6,7 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 /**
- * Normaliza um objeto para comparação segura, tratando Dates, Decimals e campos undefined.
+ * Nãormaliza um objeto para comparação segura, tratando Dates, Decimals e campos undefined.
  * Remove nulls/undefineds, converte Date para string ISO e numbers/decimals para string.
  */
 export function normalizeFormDataForComparison(data: any): any {

@@ -1,14 +1,12 @@
 'use server';
-import { serializePrisma } from '@/lib/serialize';
 
-import { PrismaClient } from "@prisma/client";
-
-const prisma = new PrismaClient();
+import { prisma } from "@/lib/prisma";
 
 export async function listSellersAction(companyId: string) {
   try {
-    const sellers = await prisma.user.findMany({
-      where: { companyId, isSeller: true }
+    const sellers = await prisma.seller.findMany({
+      where: { companyId, status: 'ACTIVE' },
+      orderBy: { name: 'asc' }
     });
     return { success: true, sellers };
   } catch (error: any) {

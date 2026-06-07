@@ -85,7 +85,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
     
     // Validations
     if (!form.name || form.name.length < 2) {
-      return toast({ title: 'Atenção', description: 'Nome inválido', variant: 'destructive' });
+      return toast({ title: 'Atenção', description: 'Nãome inválido', variant: 'destructive' });
     }
     if (!isEditing) {
       if (!form.email || !form.email.includes('@')) {
@@ -136,7 +136,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
     <Dialog open={isOpen} onOpenChange={(val) => !val && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>{isEditing ? 'Editar Usuário' : 'Novo Usuário'}</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Usuário' : 'Nãovo Usuário'}</DialogTitle>
           <DialogDescription>
             {isEditing ? 'Modifique os dados do usuário abaixo.' : 'Preencha os dados para criar um novo usuário e definir seu PIN operacional.'}
           </DialogDescription>
@@ -151,7 +151,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
           <form onSubmit={handleSave} className="space-y-4 pt-4">
             <div className="grid grid-cols-2 gap-4">
               <ConfigInputField
-                label="Nome *"
+                label="Nãome *"
                 id="name"
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}

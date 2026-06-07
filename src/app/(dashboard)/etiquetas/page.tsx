@@ -24,7 +24,7 @@ export default function EtiquetasPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 border shadow-sm rounded-sm">
         <div className="flex items-center gap-1">
           <Button className="btn-erp-green gap-1 h-8 rounded-sm px-3 text-[13px]">
-            <Plus className="h-3.5 w-3.5" /> Nova Etiqueta
+            <Plus className="h-3.5 w-3.5" /> Nãova Etiqueta
           </Button>
         </div>
         <div className="flex items-center gap-1 w-full sm:w-auto">

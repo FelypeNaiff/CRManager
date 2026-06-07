@@ -281,7 +281,7 @@ export default function FluxoCaixaPage() {
                   return (
                     <TableRow key={item.id + item.isRealized}>
                       <TableCell className="font-medium whitespace-nowrap">
-                        {format(parseISO(item.displayDate), "dd/MM/yyyy")}
+                        {format(parseISO(item.displayDate), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
                       <TableCell>{item.description}</TableCell>
                       <TableCell className="text-muted-foreground text-sm">

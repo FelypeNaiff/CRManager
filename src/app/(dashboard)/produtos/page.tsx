@@ -230,7 +230,7 @@ export default function ProdutosPage() {
           toast({ variant: "destructive", title: res.error || "Erro ao excluir produto." })
         }
       } catch (err) {
-        toast({ variant: "destructive", title: "Erro ao excluir produto." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       }
     }
   }
@@ -310,7 +310,7 @@ export default function ProdutosPage() {
         setIsStockModalOpen(false)
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao atualizar estoque." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -341,7 +341,7 @@ export default function ProdutosPage() {
         toast({ variant: "destructive", title: res.error || "Erro ao clonar produto." })
       }
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao clonar produto." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -403,7 +403,7 @@ export default function ProdutosPage() {
               <div className="px-2 py-1.5 text-sm font-semibold">Gerenciar colunas</div>
               <DropdownMenuSeparator />
               <DropdownMenuCheckboxItem checked={cols.codigo} onCheckedChange={(v) => setCols(p => ({...p, codigo: v}))}>Código</DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem checked={cols.nome} onCheckedChange={(v) => setCols(p => ({...p, nome: v}))}>Nome</DropdownMenuCheckboxItem>
+              <DropdownMenuCheckboxItem checked={cols.nome} onCheckedChange={(v) => setCols(p => ({...p, nome: v}))}>Nãome</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={cols.valor} onCheckedChange={(v) => setCols(p => ({...p, valor: v}))}>Valor</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={cols.estoque} onCheckedChange={(v) => setCols(p => ({...p, estoque: v}))}>Estoque</DropdownMenuCheckboxItem>
               <DropdownMenuCheckboxItem checked={cols.cadastrado} onCheckedChange={(v) => setCols(p => ({...p, cadastrado: v}))}>Cadastrado em</DropdownMenuCheckboxItem>
@@ -448,8 +448,8 @@ export default function ProdutosPage() {
             </Select>
           </div>
           <div className="space-y-1.5">
-            <Label className="text-xs font-semibold text-gray-700">Nome</Label>
-            <Input value={advFilters.nome} onChange={e => setAdvFilters(p => ({...p, nome: e.target.value}))} className="h-8 text-[13px] bg-white border-gray-300" placeholder="Nome do produto" />
+            <Label className="text-xs font-semibold text-gray-700">Nãome</Label>
+            <Input value={advFilters.nome} onChange={e => setAdvFilters(p => ({...p, nome: e.target.value}))} className="h-8 text-[13px] bg-white border-gray-300" placeholder="Nãome do produto" />
           </div>
           <div className="space-y-1.5">
             <Label className="text-xs font-semibold text-gray-700">Código</Label>
@@ -501,7 +501,7 @@ export default function ProdutosPage() {
             <thead className="text-foreground uppercase bg-gray-50 border-b border-gray-200">
               <tr>
                 {cols.codigo && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('codigo')}>Código {renderSortIcon('codigo')}</th>}
-                {cols.nome && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('nome')}>Nome {renderSortIcon('nome')}</th>}
+                {cols.nome && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('nome')}>Nãome {renderSortIcon('nome')}</th>}
                 {cols.valor && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('valor')}>Valor {renderSortIcon('valor')}</th>}
                 {cols.estoque && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('estoque')}>Estoque {renderSortIcon('estoque')}</th>}
                 {cols.cadastrado && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('cadastrado')}>Cadastrado em {renderSortIcon('cadastrado')}</th>}
@@ -638,7 +638,7 @@ export default function ProdutosPage() {
           isOpen={isMovimentacoesOpen}
           onClose={() => setIsMovimentacoesOpen(false)}
           produtoId={selectedProdutoForMov.id}
-          produtoNome={selectedProdutoForMov.nome}
+          produtoNãome={selectedProdutoForMov.nome}
         />
       )}
 
@@ -691,7 +691,7 @@ export default function ProdutosPage() {
               <TabsContent value="geral" className="space-y-4 mt-4">
                 <div className="grid grid-cols-2 gap-4 p-4 border rounded-sm bg-gray-50">
                   <div>
-                    <p className="text-xs font-semibold text-muted-foreground uppercase">Nome</p>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase">Nãome</p>
                     <p className="font-medium text-sm">{viewingProduto.nome}</p>
                   </div>
                   <div>
@@ -742,7 +742,7 @@ export default function ProdutosPage() {
                         <tr>
                           <th className="p-2">Data</th>
                           <th className="p-2 text-right">Valor Antigo</th>
-                          <th className="p-2 text-right">Valor Novo</th>
+                          <th className="p-2 text-right">Valor Nãovo</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -750,7 +750,7 @@ export default function ProdutosPage() {
                           <tr key={h.id || idx} className="border-b">
                             <td className="p-2 text-muted-foreground">{h.dataAlteracao?.seconds ? new Date(h.dataAlteracao.seconds * 1000).toLocaleString('pt-BR') : "-"}</td>
                             <td className="p-2 text-right text-red-600">R$ {Number(h.valorAntigo || 0).toFixed(2)}</td>
-                            <td className="p-2 text-right text-green-600 font-medium">R$ {Number(h.valorNovo || 0).toFixed(2)}</td>
+                            <td className="p-2 text-right text-green-600 font-medium">R$ {Number(h.valorNãovo || 0).toFixed(2)}</td>
                           </tr>
                         ))}
                       </tbody>

@@ -179,7 +179,7 @@ export default function ContasAPagarPage() {
   const handleCurrentMonth = () => setCurrentDate(new Date())
 
   const handleSaveCategory = async () => {
-    if (!newCategoryName.trim() || !newCategoryCode.trim()) return toast({ variant: "destructive", title: "Código e Nome são obrigatórios" })
+    if (!newCategoryName.trim() || !newCategoryCode.trim()) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     try {
       const docRef = await addDoc(collection(db!, "chart_of_accounts"), {
         code: newCategoryCode,
@@ -196,12 +196,12 @@ export default function ContasAPagarPage() {
       setNewCategoryName("")
       setNewCategoryCode("")
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao salvar categoria" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
   }
 
   const handleSaveCostCenter = async () => {
-    if (!newCostCenterName.trim()) return toast({ variant: "destructive", title: "Nome obrigatório" })
+    if (!newCostCenterName.trim()) return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     try {
       const docRef = await addDoc(collection(db!, "cost_centers"), {
         name: newCostCenterName,
@@ -214,7 +214,7 @@ export default function ContasAPagarPage() {
       setIsNewCostCenterOpen(false)
       setNewCostCenterName("")
     } catch (e) {
-      toast({ variant: "destructive", title: "Erro ao salvar centro de custo" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
   }
 
@@ -246,7 +246,7 @@ export default function ContasAPagarPage() {
 
   const handleSave = async () => {
     if (!form.description.trim() || !form.amount || !form.dueDate) {
-      return toast({ variant: "destructive", title: "Preencha os campos obrigatórios (Descrição, Valor e Vencimento)" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -310,7 +310,7 @@ export default function ContasAPagarPage() {
       setIsDialogOpen(false)
       setForm(emptyForm)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -340,7 +340,7 @@ export default function ContasAPagarPage() {
       await batch.commit()
       toast({ title: "Conta excluída e auditada" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao excluir" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setActionItem(null)
       setActionReason("")
@@ -361,7 +361,7 @@ export default function ContasAPagarPage() {
 
   const handleConfirmPayment = async () => {
     if (!actionItem || !paymentForm.paymentDate || !paymentForm.bankAccountId) {
-      return toast({ variant: "destructive", title: "Data e Conta Bancária são obrigatórios" })
+      return toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     }
 
     setIsSaving(true)
@@ -414,7 +414,7 @@ export default function ContasAPagarPage() {
       setIsPaymentOpen(false)
       setActionItem(null)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao confirmar pagamento" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -479,7 +479,7 @@ export default function ContasAPagarPage() {
       await batch.commit()
       toast({ title: "Pagamento estornado e auditado" })
     } catch {
-      toast({ variant: "destructive", title: "Erro ao estornar pagamento" })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsReverseOpen(false)
       setActionItem(null)
@@ -506,7 +506,7 @@ export default function ContasAPagarPage() {
           <p className="text-muted-foreground">Gerencie seus compromissos, despesas e pagamentos a fornecedores.</p>
         </div>
         <Button className="gap-2" onClick={openNewDialog}>
-          <Plus className="h-4 w-4" /> Nova Conta a Pagar
+          <Plus className="h-4 w-4" /> Nãova Conta a Pagar
         </Button>
       </div>
 
@@ -600,7 +600,7 @@ export default function ContasAPagarPage() {
                   return (
                     <TableRow key={item.id} className={item.status === 'PAID' ? 'opacity-70 bg-muted/30' : ''}>
                       <TableCell className="font-medium whitespace-nowrap">
-                        {format(parseISO(item.dueDate), "dd/MM/yyyy")}
+                        {format(parseISO(item.dueDate), "dd/MM/yyyy", { locale: ptBR })}
                       </TableCell>
                       <TableCell>
                         <div className="font-medium">{item.description}</div>
@@ -664,7 +664,7 @@ export default function ContasAPagarPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{editingItem ? "Editar Conta a Pagar" : "Nova Conta a Pagar"}</DialogTitle>
+            <DialogTitle>{editingItem ? "Editar Conta a Pagar" : "Nãova Conta a Pagar"}</DialogTitle>
             <DialogDescription>Preencha os detalhes do compromisso financeiro.</DialogDescription>
           </DialogHeader>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 py-4 max-h-[60vh] overflow-y-auto px-1">
@@ -799,11 +799,11 @@ export default function ContasAPagarPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Mini-modal para Nova Categoria */}
+      {/* Mini-modal para Nãova Categoria */}
       <Dialog open={isNewCategoryOpen} onOpenChange={setIsNewCategoryOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Nova Categoria</DialogTitle>
+            <DialogTitle>Nãova Categoria</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
@@ -811,7 +811,7 @@ export default function ContasAPagarPage() {
               <Input value={newCategoryCode} onChange={(e) => setNewCategoryCode(e.target.value)} />
             </div>
             <div className="space-y-2">
-              <Label>Nome *</Label>
+              <Label>Nãome *</Label>
               <Input value={newCategoryName} onChange={(e) => setNewCategoryName(e.target.value)} />
             </div>
           </div>
@@ -822,15 +822,15 @@ export default function ContasAPagarPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Mini-modal para Novo Centro de Custo */}
+      {/* Mini-modal para Nãovo Centro de Custo */}
       <Dialog open={isNewCostCenterOpen} onOpenChange={setIsNewCostCenterOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Novo Centro de Custo</DialogTitle>
+            <DialogTitle>Nãovo Centro de Custo</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label>Nome *</Label>
+              <Label>Nãome *</Label>
               <Input value={newCostCenterName} onChange={(e) => setNewCostCenterName(e.target.value)} />
             </div>
           </div>

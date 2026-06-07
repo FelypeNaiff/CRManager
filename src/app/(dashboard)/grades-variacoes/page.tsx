@@ -43,7 +43,7 @@ export default function GradesVariacoesPage() {
 
   const handleSave = async () => {
     if (!form.valores.trim()) {
-      toast({ variant: "destructive", title: "Erro", description: "Variação é obrigatória." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       return
     }
 
@@ -70,7 +70,7 @@ export default function GradesVariacoesPage() {
       }
       setIsDialogOpen(false)
     } catch (err) {
-      toast({ variant: "destructive", title: "Erro ao salvar grade." })
+      toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
     } finally {
       setIsSaving(false)
     }
@@ -82,7 +82,7 @@ export default function GradesVariacoesPage() {
         await deleteDoc(doc(db, "gradesVariacoes", id))
         toast({ title: "Grade excluída com sucesso." })
       } catch (err) {
-        toast({ variant: "destructive", title: "Erro ao excluir grade." })
+        toast({ variant: "destructive", title: "Erro", description: "Ocorreu um erro ao processar sua solicitação." })
       }
     }
   }
@@ -131,7 +131,7 @@ export default function GradesVariacoesPage() {
           <table className="w-full text-[13px]">
             <thead>
               <tr className="bg-gray-100 border-b">
-                <th className="text-left p-3 font-semibold">Nome</th>
+                <th className="text-left p-3 font-semibold">Nãome</th>
                 <th className="text-left p-3 font-semibold">Valores</th>
                 <th className="text-center p-3 font-semibold">Ações</th>
               </tr>
@@ -168,7 +168,7 @@ export default function GradesVariacoesPage() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editingId ? "Editar Grade" : "Nova Grade de Variação"}</DialogTitle>
+            <DialogTitle>{editingId ? "Editar Grade" : "Nãova Grade de Variação"}</DialogTitle>
             <DialogDescription>Preencha as informações da grade</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

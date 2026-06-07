@@ -24,12 +24,12 @@ interface Movimentacao {
 
 interface MovimentacoesModalProps {
   produtoId: string
-  produtoNome: string
+  produtoNãome: string
   isOpen: boolean
   onClose: () => void
 }
 
-export function MovimentacoesModal({ produtoId, produtoNome, isOpen, onClose }: MovimentacoesModalProps) {
+export function MovimentacoesModal({ produtoId, produtoNãome, isOpen, onClose }: MovimentacoesModalProps) {
   const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
   const [isLoading, setIsLoading] = useState(false)
 
@@ -94,7 +94,7 @@ export function MovimentacoesModal({ produtoId, produtoNome, isOpen, onClose }: 
         </DialogHeader>
 
         <div className="py-2">
-          <p className="text-sm font-semibold mb-4 text-slate-700">Produto: <span className="font-normal text-slate-600">{produtoNome}</span></p>
+          <p className="text-sm font-semibold mb-4 text-slate-700">Produto: <span className="font-normal text-slate-600">{produtoNãome}</span></p>
 
           <div className="border rounded-sm overflow-hidden text-[13px]">
             <table className="w-full text-left">

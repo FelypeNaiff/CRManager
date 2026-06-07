@@ -1,19 +1,19 @@
 import { z } from 'zod';
 
 export const ProductCategorySchema = z.object({
-  name: z.string().min(1, 'Nome da categoria é obrigatório'),
+  name: z.string().min(1, 'Nãome da categoria é obrigatório'),
   description: z.string().optional().nullable(),
 });
 
 export const SupplierSchema = z.object({
-  name: z.string().min(1, 'Nome do fornecedor é obrigatório'),
+  name: z.string().min(1, 'Nãome do fornecedor é obrigatório'),
   cnpjCpf: z.string().optional().nullable(),
   email: z.string().email('E-mail inválido').optional().or(z.literal('')).nullable(),
   phone: z.string().optional().nullable(),
 });
 
 export const ProductVariantInputSchema = z.object({
-  name: z.string().min(1, 'Nome da variação é obrigatório'),
+  name: z.string().min(1, 'Nãome da variação é obrigatório'),
   sku: z.string().min(1, 'SKU é obrigatório'),
   barcode: z.string().optional().nullable(),
   barcodeType: z.string().optional().nullable(),
@@ -23,7 +23,7 @@ export const ProductVariantInputSchema = z.object({
 });
 
 export const ProductSchema = z.object({
-  name: z.string().min(1, 'Nome do produto é obrigatório'),
+  name: z.string().min(1, 'Nãome do produto é obrigatório'),
   internalCode: z.string().min(1, 'Código interno é obrigatório'),
   description: z.string().optional().nullable(),
   categoryId: z.string().optional().nullable(),

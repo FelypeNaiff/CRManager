@@ -7,7 +7,7 @@ import { writeActivityLog } from '@/lib/auth/activity-log';
 import { z } from 'zod';
 
 const RoleFormSchema = z.object({
-  name: z.string().min(2, 'Nome é obrigatório (mínimo 2 caracteres)'),
+  name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
   description: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   isAdmin: z.boolean().default(false),

@@ -9,7 +9,7 @@ import { getInventoryMovements } from "@/lib/crm/products-actions"
 interface Movimentacao {
   id: string
   produtoId: string
-  produtoNome?: string
+  produtoNãome?: string
   dataHora: any
   entidade: string
   tipo: "Entrada" | "Saída"
@@ -47,7 +47,7 @@ export default function MovimentacoesPage() {
           return {
             id: m.id,
             produtoId: m.variant.product.name,
-            produtoNome: m.variant.product.name,
+            produtoNãome: m.variant.product.name,
             dataHora: {
               seconds: Math.floor(new Date(m.createdAt).getTime() / 1000)
             },
@@ -155,7 +155,7 @@ export default function MovimentacoesPage() {
                 filteredData.map((mov) => (
                   <tr key={mov.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
                     <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{formatData(mov.dataHora)}</td>
-                    <td className="px-3 py-2.5 font-medium">{mov.produtoId}</td> {/* Aqui deveria ser mov.produtoNome */}
+                    <td className="px-3 py-2.5 font-medium">{mov.produtoId}</td> {/* Aqui deveria ser mov.produtoNãome */}
                     <td className="px-3 py-2.5">{mov.entidade || "-"}</td>
                     <td className="px-3 py-2.5">
                       <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${mov.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
