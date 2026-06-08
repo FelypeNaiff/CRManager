@@ -22,7 +22,7 @@ const ProfileContext = createContext<ProfileContextType | undefined>(undefined)
 
 const PROFILE_STORAGE_KEY = '@crmanager:activeProfile'
 
-export function ProfileProvider({ children }: { children: React.ReactNãode }) {
+export function ProfileProvider({ children }: { children: React.ReactNode }) {
   const [activeProfile, setActiveProfile] = useState<Profile | null>(null)
   const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 

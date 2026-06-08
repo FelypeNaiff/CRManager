@@ -56,6 +56,9 @@ async function runFinancialAuditTests() {
     user = targetUser;
   }
 
+  let originalSellerStatus: string | null = null;
+  let originalSellerCommRate: number | null = null;
+
   // Setup Seller (associated with user.id to pass foreign keys)
   let seller = await prisma.seller.findUnique({ where: { id: user.id } });
   let createdSeller = false;
@@ -70,6 +73,16 @@ async function runFinancialAuditTests() {
       }
     });
     createdSeller = true;
+  } else {
+    originalSellerStatus = seller.status;
+    originalSellerCommRate = seller.commissionRate.toNumber();
+    seller = await prisma.seller.update({
+      where: { id: seller.id },
+      data: {
+        status: "ACTIVE",
+        commissionRate: 5.0
+      }
+    });
   }
 
   // Setup Operational Settings
@@ -441,9 +454,166 @@ async function runFinancialAuditTests() {
   console.log("  [PASS] Seller commission correctly marked as CANCELLED.\n");
 
   // ===========================================================================
+  // CASE 6: Real Simulated Sale with Authorizations (Discount & Cancellation)
+  // ===========================================================================
+  console.log("CASE 6: E2E Simulated Sale with Authorizations (Discount & Cancellation)...");
+
+  // A. Temporarily enable strict operational settings
+  await prisma.operationalSettings.update({
+    where: { companyId: company.id },
+    data: {
+      allowDiscount: true,
+      sellerDiscountLimit: 5.00,
+      adminDiscountLimit: 5.00,
+      requireAuthorizationAboveLimit: true,
+      requireAuthorizationToCancelSale: true,
+      allowSaleCancellation: true
+    }
+  });
+
+  // B. Attempt sale with 50% discount (R$ 10 discount on R$ 20 subtotal)
+  console.log("  Step 1: Requesting sale with 50% discount...");
+  const discountAmount = 10;
+  const totalAmount = 10;
+  const items = [{
+    variantId: variant.id,
+    productNameSnapshot: product.name,
+    variantNameSnapshot: variant.name,
+    skuSnapshot: variant.sku,
+    quantity: 1,
+    unitPrice: 20,
+    discount: 10,
+    totalPrice: 10,
+    costPriceAtSale: 10,
+    salePriceAtSale: 20,
+    marginAtSale: 0
+  }];
+
+  const saleRes1 = await salesService.createSale({
+    companyId: company.id,
+    sellerId: seller.id,
+    customerId: customer.id,
+    cashRegisterId: openedRegister.id,
+    subtotal: 20,
+    totalAmount: 10,
+    discountAmount: 10,
+    items,
+    payments: [{ paymentMethodId: pmMap["CREDIT_CARD"], amount: 10, installments: 2 }]
+  }, user.id) as any;
+
+  if (!saleRes1.requireAuthorization || !saleRes1.authorizationId) {
+    throw new Error(`Expected discount authorization request, instead got: ${JSON.stringify(saleRes1)}`);
+  }
+  console.log("    [PASS] Sale correctly blocked. Authorization requested.");
+
+  // C. Approve authorization request
+  console.log("  Step 2: Approving discount authorization...");
+  await prisma.actionAuthorization.update({
+    where: { id: saleRes1.authorizationId },
+    data: {
+      status: "APPROVED",
+      authorizedByUserId: user.id,
+      authorizedAt: new Date()
+    }
+  });
+
+  // D. Complete sale with approved authorization
+  console.log("  Step 3: Completing sale with approved authorization...");
+  const sale6 = await salesService.createSale({
+    companyId: company.id,
+    sellerId: seller.id,
+    customerId: customer.id,
+    cashRegisterId: openedRegister.id,
+    subtotal: 20,
+    totalAmount: 10,
+    discountAmount: 10,
+    items,
+    payments: [{ paymentMethodId: pmMap["CREDIT_CARD"], amount: 10, installments: 2 }],
+    authorizationId: saleRes1.authorizationId
+  }, user.id) as any;
+
+  if (!sale6.id) throw new Error("Failed to finalize sale after approval.");
+  createdSaleIds.push(sale6.id);
+  console.log("    [PASS] Sale completed successfully.");
+
+  // E. Verify Stock decremented (7 - 1 = 6)
+  const v5 = await prisma.productVariant.findUnique({ where: { id: variant.id } });
+  if (v5?.availableStock.toNumber() !== 6) throw new Error(`Stock mismatch. Expected 6, got ${v5?.availableStock}`);
+  console.log("    [PASS] Stock correctly decremented to 6.");
+
+  // F. Verify 2 pending receivables of R$ 5 each
+  const recs6 = await prisma.accountsReceivable.findMany({
+    where: { originalAmount: 5, customerId: customer.id, status: "PENDING" }
+  });
+  if (recs6.length !== 2) throw new Error(`Expected 2 pending receivables, found ${recs6.length}`);
+  console.log("    [PASS] 2 pending receivables created (R$ 5.00 each).");
+
+  // G. Verify seller commission is calculated (5% commission on R$ 10 sale = R$ 0.50)
+  const comm6 = await prisma.sellerCommission.findFirst({ where: { saleId: sale6.id } });
+  if (!comm6 || comm6.amount.toNumber() !== 0.50) {
+    throw new Error(`Commission mismatch. Expected 0.50, got ${comm6?.amount}`);
+  }
+  console.log("    [PASS] Commission calculated correctly (R$ 0.50).");
+
+  // H. Attempt cancellation (requires authorization)
+  console.log("  Step 4: Requesting cancellation...");
+  const cancelRes1 = await salesService.cancelSale({
+    saleId: sale6.id,
+    cancelReason: "Cancelamento E2E teste",
+    cancelledByUserId: user.id
+  }) as any;
+
+  if (!cancelRes1.requireAuthorization || !cancelRes1.authorizationId) {
+    throw new Error(`Expected cancellation authorization request, instead got: ${JSON.stringify(cancelRes1)}`);
+  }
+  console.log("    [PASS] Cancellation correctly blocked. Authorization requested.");
+
+  // I. Approve cancellation authorization request
+  console.log("  Step 5: Approving cancellation authorization...");
+  await prisma.actionAuthorization.update({
+    where: { id: cancelRes1.authorizationId },
+    data: {
+      status: "APPROVED",
+      authorizedByUserId: user.id,
+      authorizedAt: new Date()
+    }
+  });
+
+  // J. Complete cancellation with approved authorization
+  console.log("  Step 6: Executing cancellation with approved authorization...");
+  await salesService.cancelSale({
+    saleId: sale6.id,
+    cancelReason: "Cancelamento E2E teste",
+    cancelledByUserId: user.id,
+    authorizationId: cancelRes1.authorizationId
+  });
+  console.log("    [PASS] Sale cancelled successfully.");
+
+  // K. Verify rollbacks
+  // - Stock restored to 7
+  const v6 = await prisma.productVariant.findUnique({ where: { id: variant.id } });
+  if (v6?.availableStock.toNumber() !== 7) throw new Error(`Stock not restored. Expected 7, got ${v6?.availableStock}`);
+  console.log("    [PASS] Stock correctly restored to 7.");
+
+  // - Receivables status updated to CANCELLED
+  const recs6Cancelled = await prisma.accountsReceivable.findMany({
+    where: { originalAmount: 5, customerId: customer.id, status: "CANCELLED" }
+  });
+  if (recs6Cancelled.length !== 2) throw new Error(`Expected 2 cancelled receivables, found ${recs6Cancelled.length}`);
+  console.log("    [PASS] Receivables correctly cancelled.");
+
+  // - Commission status updated to CANCELLED
+  const comm6Cancelled = await prisma.sellerCommission.findFirst({ where: { saleId: sale6.id } });
+  if (comm6Cancelled?.status !== "CANCELLED") throw new Error("Commission was not cancelled.");
+  console.log("    [PASS] Commission correctly marked as CANCELLED.\n");
+
+  // ===========================================================================
   // CLEANUP
   // ===========================================================================
   console.log("Cleaning up database audit test records...");
+  await prisma.actionAuthorization.deleteMany({
+    where: { companyId: company.id, reason: { in: ["Desconto excede o limite", "Cancelamento E2E teste", "Cliente devolveu os produtos"] } }
+  });
   await prisma.customerWalletMovement.deleteMany({ where: { walletId: customer.wallet!.id } });
   await prisma.walletTransaction.deleteMany({ where: { customerId: customer.id } });
   await prisma.customerWallet.deleteMany({ where: { customerId: customer.id } });
@@ -460,6 +630,14 @@ async function runFinancialAuditTests() {
   await prisma.customer.delete({ where: { id: customer.id } });
   if (createdSeller && seller) {
     await prisma.seller.delete({ where: { id: seller.id } });
+  } else if (seller && originalSellerStatus !== null && originalSellerCommRate !== null) {
+    await prisma.seller.update({
+      where: { id: seller.id },
+      data: {
+        status: originalSellerStatus,
+        commissionRate: originalSellerCommRate
+      }
+    });
   }
   if (createdBankAccount && bankAccount) {
     await prisma.bankAccount.delete({ where: { id: bankAccount.id } });
@@ -475,7 +653,11 @@ async function runFinancialAuditTests() {
         allowSaleCancellation: originalSettings.allowSaleCancellation,
         allowNegativeStock: originalSettings.allowNegativeStock,
         enableCommissions: originalSettings.enableCommissions,
-        defaultCommissionRate: originalSettings.defaultCommissionRate
+        defaultCommissionRate: originalSettings.defaultCommissionRate,
+        allowDiscount: originalSettings.allowDiscount,
+        sellerDiscountLimit: originalSettings.sellerDiscountLimit,
+        adminDiscountLimit: originalSettings.adminDiscountLimit,
+        requireAuthorizationAboveLimit: originalSettings.requireAuthorizationAboveLimit
       }
     });
   } else if (createdSettings) {

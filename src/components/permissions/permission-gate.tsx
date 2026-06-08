@@ -9,8 +9,8 @@ interface PermissionGateProps {
   action?: PermissionAction;
   permissions?: { module: PermissionModule; action: PermissionAction }[];
   requireAll?: boolean;
-  children: React.ReactNãode;
-  fallback?: React.ReactNãode;
+  children: React.ReactNode;
+  fallback?: React.ReactNode;
 }
 
 export function PermissionGate({

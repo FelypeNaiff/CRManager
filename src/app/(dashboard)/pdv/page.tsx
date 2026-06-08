@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { useProfile } from "@/lib/contexts/profile-context";
 import { searchVariantsAction, searchCustomersAction } from "@/lib/sales/actions/search-sales-entities-action";
@@ -25,6 +25,9 @@ export default function PDVPage() {
   const [customerQuery, setCustomerQuery] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [customerResults, setCustomerResults] = useState<any[]>([]);
+  const [searchError, setSearchError] = useState("");
+  const [searchSuccess, setSearchSuccess] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
 
   // Cart & Sale State
   const [cartItems, setCartItems] = useState<any[]>([]);
@@ -72,8 +75,42 @@ export default function PDVPage() {
   // Product Search
   const handleSearchProduct = async () => {
     if (!activeProfile?.empresaId || !productQuery) return;
+    setSearchError("");
+    setSearchSuccess("");
     const res = await searchVariantsAction(activeProfile.empresaId, productQuery);
-    if (res.success) setSearchResults(res.variants || []);
+    if (res.success) {
+      const variants = res.variants || [];
+      if (variants.length === 1) {
+        const variant = variants[0];
+        const stock = Number(variant.availableStock);
+        const allowNegativeStock = settings?.allowNegativeStock ?? false;
+        
+        if (stock <= 0 && !allowNegativeStock) {
+          setSearchError("Produto sem estoque.");
+          return;
+        }
+        
+        handleSelectVariant(variant);
+      } else if (variants.length > 1) {
+        setSearchResults(variants);
+        setSearchError("");
+      } else {
+        setSearchResults([]);
+        setSearchError("Produto não encontrado.");
+      }
+    } else {
+      setSearchError("Erro ao buscar: " + res.error);
+    }
+  };
+
+  const handleSelectVariant = (variant: any) => {
+    addToCart(variant);
+    setProductQuery("");
+    setSearchResults([]);
+    setSearchError("");
+    setSearchSuccess(`Adicionado: ${variant.product.name} - ${variant.name}`);
+    setTimeout(() => setSearchSuccess(""), 3000);
+    setTimeout(() => inputRef.current?.focus(), 50);
   };
 
   const handleSearchCustomer = async () => {
@@ -83,14 +120,17 @@ export default function PDVPage() {
   };
 
   const addToCart = (variant: any) => {
-    if (Number(variant.availableStock) <= 0) {
+    const stock = Number(variant.availableStock);
+    const allowNegativeStock = settings?.allowNegativeStock ?? false;
+
+    if (stock <= 0 && !allowNegativeStock) {
       alert("Estoque insuficiente!");
       return;
     }
     setCartItems(prev => {
       const existing = prev.find(i => i.variantId === variant.id);
       if (existing) {
-        if (existing.quantity + 1 > Number(variant.availableStock)) {
+        if (!allowNegativeStock && existing.quantity + 1 > stock) {
           alert("Estoque insuficiente para adicionar mais uma unidade.");
           return prev;
         }
@@ -110,7 +150,7 @@ export default function PDVPage() {
         costPriceAtSale: Number(variant.costPrice || 0),
         salePriceAtSale: Number(variant.salePrice),
         marginAtSale: variant.costPrice ? ((Number(variant.salePrice) - Number(variant.costPrice)) / Number(variant.salePrice)) * 100 : 100,
-        availableStock: Number(variant.availableStock)
+        availableStock: stock
       }];
     });
     setSearchResults([]);
@@ -303,15 +343,23 @@ export default function PDVPage() {
         <div className="flex-[2] flex flex-col gap-4 overflow-hidden">
           {/* Busca Produto */}
           <Card className="shrink-0">
-            <CardContent className="p-4 flex gap-2">
-              <Input 
-                placeholder="Código de barras, SKU ou Nãome do Produto..." 
-                value={productQuery}
-                onChange={e => setProductQuery(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleSearchProduct()}
-                autoFocus
-              />
-              <Button onClick={handleSearchProduct}><Search className="w-4 h-4" /></Button>
+            <CardContent className="p-4 flex flex-col gap-2">
+              <div className="flex gap-2">
+                <Input 
+                  ref={inputRef}
+                  placeholder="Código de barras, SKU ou Nome do Produto..." 
+                  value={productQuery}
+                  onChange={e => {
+                    setProductQuery(e.target.value);
+                    setSearchError("");
+                  }}
+                  onKeyDown={e => e.key === 'Enter' && handleSearchProduct()}
+                  autoFocus
+                />
+                <Button onClick={handleSearchProduct}><Search className="w-4 h-4" /></Button>
+              </div>
+              {searchError && <p className="text-sm text-red-500 font-medium">{searchError}</p>}
+              {searchSuccess && <p className="text-sm text-green-600 font-medium">{searchSuccess}</p>}
             </CardContent>
           </Card>
 
@@ -323,11 +371,13 @@ export default function PDVPage() {
                   <div key={v.id} className="flex justify-between items-center p-2 hover:bg-slate-50">
                     <div>
                       <p className="font-bold text-sm">{v.product.name} - {v.name}</p>
-                      <p className="text-xs text-muted-foreground">SKU: {v.sku} | Barcode: {v.barcode || '-'} | Estoque: {v.availableStock}</p>
+                      <p className="text-xs text-muted-foreground">
+                        SKU: {v.sku} | Código Interno: {v.product.internalCode || '-'} | Barcode: {v.barcode || '-'} | Estoque: {v.availableStock}
+                      </p>
                     </div>
                     <div className="flex items-center gap-4">
                       <p className="font-bold text-green-600">{formatCurrency(Number(v.salePrice))}</p>
-                      <Button size="sm" onClick={() => addToCart(v)}>Adicionar</Button>
+                      <Button size="sm" onClick={() => handleSelectVariant(v)}>Adicionar</Button>
                     </div>
                   </div>
                 ))}

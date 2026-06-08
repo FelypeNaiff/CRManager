@@ -5,18 +5,33 @@ import { prisma } from '@/lib/prisma';
 export async function searchVariantsAction(companyId: string, query: string) {
   try {
     const q = query.trim();
+    if (!q) return { success: true, variants: [] };
+
+    // Carregar configurações operacionais da empresa
+    const settings = await prisma.operationalSettings.findUnique({
+      where: { companyId }
+    });
+    const allowNegativeStock = settings?.allowNegativeStock ?? false;
+
+    const whereClause: any = {
+      companyId,
+      isActive: true,
+      product: { isActive: true },
+      OR: [
+        { sku: { equals: q, mode: "insensitive" } },
+        { barcode: { equals: q } },
+        { name: { contains: q, mode: "insensitive" } },
+        { product: { name: { contains: q, mode: "insensitive" } } },
+        { product: { internalCode: { equals: q, mode: "insensitive" } } }
+      ]
+    };
+
+    if (!allowNegativeStock) {
+      whereClause.availableStock = { gt: 0 };
+    }
+
     const variants = await prisma.productVariant.findMany({
-      where: {
-        companyId,
-        isActive: true,
-        OR: [
-          { sku: { equals: q } },
-          { barcode: { equals: q } },
-          { name: { contains: q, mode: "insensitive" } },
-          { product: { name: { contains: q, mode: "insensitive" } } },
-          { product: { internalCode: { equals: q } } }
-        ]
-      },
+      where: whereClause,
       select: {
         id: true,
         sku: true,
@@ -26,7 +41,7 @@ export async function searchVariantsAction(companyId: string, query: string) {
         salePrice: true,
         availableStock: true,
         productId: true,
-        product: { select: { name: true, imageUrl: true } }
+        product: { select: { name: true, imageUrl: true, internalCode: true } }
       },
       take: 20
     });

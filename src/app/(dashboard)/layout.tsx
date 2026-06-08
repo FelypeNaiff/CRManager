@@ -33,7 +33,7 @@ interface SessionData {
 export default function DashboardLayout({
   children,
 }: {
-  children: React.ReactNãode
+  children: React.ReactNode
 }) {
   const { activeProfile, isLoadingProfile, loginProfile, logoutProfile } = useProfile()
   const router = useRouter()

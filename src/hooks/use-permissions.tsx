@@ -1,6 +1,6 @@
 'use client';
 
-import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNãode } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useMemo, ReactNode } from 'react';
 import { useProfile } from '@/lib/contexts/profile-context';
 import { PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
 import { usePathname } from 'next/navigation';
@@ -25,7 +25,7 @@ const PermissionsContext = createContext<PermissionsContextType>({
   hasAllPermissions: () => false,
 });
 
-export function PermissionsProvider({ children }: { children: ReactNãode }) {
+export function PermissionsProvider({ children }: { children: ReactNode }) {
   const { activeProfile, isLoadingProfile } = useProfile();
   
   const [permissionsMap, setPermissionsMap] = useState<Record<string, boolean>>({});

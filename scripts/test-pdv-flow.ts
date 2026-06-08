@@ -1,3 +1,4 @@
+process.env.TEST_MODE = 'true';
 import { PrismaClient } from "@prisma/client";
 import { createSaleAction } from "../src/lib/sales/actions/create-sale-action";
 
@@ -12,6 +13,25 @@ async function runTests() {
 
     const sellerUser = await prisma.user.findFirst({ where: { companyId: company.id } });
     if (!sellerUser) throw new Error("No user found for test.");
+
+    (global as any).mockSession = {
+      userId: sellerUser.id,
+      empresaId: company.id,
+      role: { name: "Admin", isAdmin: true }
+    };
+
+    let seller = await prisma.seller.findUnique({ where: { id: sellerUser.id } });
+    if (!seller) {
+      seller = await prisma.seller.create({
+        data: {
+          id: sellerUser.id,
+          companyId: company.id,
+          name: sellerUser.name,
+          commissionRate: 5.0,
+          status: "ACTIVE"
+        }
+      });
+    }
 
     // Setup Cash Register
     let bankAccount = await prisma.bankAccount.findFirst({ where: { companyId: company.id } });
@@ -84,7 +104,8 @@ async function runTests() {
 
     const variant = await prisma.productVariant.create({
       data: {
-        productId: dummyProduct.id,
+        company: { connect: { id: company.id } },
+        product: { connect: { id: dummyProduct.id } },
         name: "Variant PDV",
         sku: `SKU-PDV-${Date.now()}`,
         costPrice: 10,
@@ -169,7 +190,7 @@ async function runTests() {
     const expectedNewBalance = cashRegister.expectedBalance.toNumber() + 30;
     if (updatedRegister?.expectedBalance.toNumber() !== expectedNewBalance) throw new Error(`Cash register balance not updated correctly. Expected ${expectedNewBalance}, got ${updatedRegister?.expectedBalance.toNumber()}`);
     
-    const cashMovements = await prisma.cashMovement.findMany({ where: { description: `Venda #${saleId}` } });
+    const cashMovements = await prisma.cashMovement.findMany({ where: { description: `Recebimento em dinheiro - Venda ${saleId}` } });
     if (cashMovements.length !== 1) throw new Error("Cash movement not created");
     console.log("[PASS] Cash register updated correctly.");
 
@@ -183,8 +204,8 @@ async function runTests() {
     console.log("Case 6: Venda Carteira Cliente...");
     const updatedWallet = await prisma.customerWallet.findUnique({ where: { customerId: customer.id } });
     if (updatedWallet?.balance.toNumber() !== 20) throw new Error("Wallet balance not updated correctly (50 - 30)");
-    const walletMovements = await prisma.customerWalletMovement.findMany({ where: { walletId: customer.wallet!.id } });
-    if (walletMovements.length !== 1) throw new Error("Wallet movement not created");
+    const walletMovements = await prisma.walletTransaction.findMany({ where: { walletId: customer.wallet!.id } });
+    if (walletMovements.length !== 1) throw new Error("Wallet transaction not created");
     console.log("[PASS] Customer wallet processed correctly.");
 
     // Validate Stock
@@ -194,7 +215,7 @@ async function runTests() {
     console.log("[PASS] Stock updated correctly.");
 
     // Cleanup
-    await prisma.customerWalletMovement.deleteMany({ where: { walletId: customer.wallet!.id } });
+    await prisma.walletTransaction.deleteMany({ where: { walletId: customer.wallet!.id } });
     await prisma.customerWallet.deleteMany({ where: { customerId: customer.id } });
     await prisma.accountsReceivable.deleteMany({ where: { customerId: customer.id } });
     await prisma.financialTransaction.deleteMany({ where: { referenceId: saleId } });

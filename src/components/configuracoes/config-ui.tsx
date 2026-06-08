@@ -49,7 +49,7 @@ export function ConfigPageHeader({ title, description, breadcrumb }: { title: st
 }
 
 // 3. ConfigCardSection
-export function ConfigCardSection({ title, description, icon: Icon, children, footer, className }: { title: string, description?: string, icon?: React.ElementType, children: React.ReactNãode, footer?: React.ReactNãode, className?: string }) {
+export function ConfigCardSection({ title, description, icon: Icon, children, footer, className }: { title: string, description?: string, icon?: React.ElementType, children: React.ReactNode, footer?: React.ReactNode, className?: string }) {
   return (
     <Card className={cn("rounded-xl border shadow-sm bg-white overflow-hidden", className)}>
       <CardHeader className="bg-slate-50/50 border-b pb-4">
@@ -161,7 +161,7 @@ export function ConfigStatusBadge({ status }: { status: "ativo" | "inativo" | "p
 }
 
 // 11. ConfigEmptyState
-export function ConfigEmptyState({ title, description, icon: Icon, action }: { title: string, description: string, icon?: React.ElementType, action?: React.ReactNãode }) {
+export function ConfigEmptyState({ title, description, icon: Icon, action }: { title: string, description: string, icon?: React.ElementType, action?: React.ReactNode }) {
   return (
     <div className="flex flex-col items-center justify-center p-12 text-center border rounded-xl border-dashed bg-slate-50/50">
       {Icon && (

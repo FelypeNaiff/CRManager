@@ -18,10 +18,10 @@ export async function createSaleAction(data: CreateSaleInput) {
 
   try {
     const session = await getActiveProfileSession();
-    if (!session?.id) throw new Error("Usuário não autenticado");
+    if (!session?.userId) throw new Error("Usuário não autenticado");
 
     const validatedData = createSaleSchema.parse(data);
-    const result = await salesService.createSale(validatedData, session.id);
+    const result = await salesService.createSale(validatedData, session.userId);
     
     if (result && 'requireAuthorization' in result) {
       console.log(JSON.stringify({
@@ -34,8 +34,12 @@ export async function createSaleAction(data: CreateSaleInput) {
     }
 
     // Purge cache tags on successful sale
-    revalidateTag("sales-reports");
-    revalidateTag("crm-segmentation");
+    try {
+      revalidateTag("sales-reports");
+      revalidateTag("crm-segmentation");
+    } catch (e) {
+      console.log("revalidateTag ignored in test/CLI mode");
+    }
 
     console.log(JSON.stringify({
       timestamp: new Date().toISOString(),
