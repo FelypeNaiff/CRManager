@@ -148,7 +148,7 @@ export class SalesService {
               productNameSnapshot: item.productNameSnapshot,
               variantNameSnapshot: item.variantNameSnapshot,
               skuSnapshot: item.skuSnapshot,
-              barcodeSnapshot: item.barcodeSnapshot,
+              barcodeSnapshot: item.barcodeSnapshot || null,
               quantity: item.quantity,
               unitPrice: item.unitPrice,
               discountType: item.discountType,
@@ -208,7 +208,7 @@ export class SalesService {
           variantId: item.variantId,
           quantity: item.quantity,
           type: "SALE",
-          userId: data.sellerId,
+          userId: operatorUserId,
           reason: `Venda #${sale.id}`
         }))
       });
@@ -227,7 +227,7 @@ export class SalesService {
       await tx.activityLog.create({
         data: {
           companyId: data.companyId,
-          userId: data.sellerId,
+          userId: operatorUserId,
           action: "CREATE_SALE",
           module: "SALES",
           recordId: sale.id,

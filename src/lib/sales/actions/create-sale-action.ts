@@ -20,7 +20,18 @@ export async function createSaleAction(data: CreateSaleInput) {
     const session = await getActiveProfileSession();
     if (!session?.userId) throw new Error("Usuário não autenticado");
 
-    const validatedData = createSaleSchema.parse(data);
+    const normalizedData = {
+      ...data,
+      items: data.items?.map(item => ({
+        ...item,
+        barcodeSnapshot: item.barcodeSnapshot ?? "",
+        skuSnapshot: item.skuSnapshot ?? "",
+        productNameSnapshot: item.productNameSnapshot ?? "Produto sem nome",
+        variantNameSnapshot: item.variantNameSnapshot ?? "",
+      })) || []
+    };
+
+    const validatedData = createSaleSchema.parse(normalizedData);
     const result = await salesService.createSale(validatedData, session.userId);
     
     if (result && 'requireAuthorization' in result) {

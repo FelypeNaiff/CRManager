@@ -26,7 +26,7 @@ export const createSaleSchema = z.object({
     productNameSnapshot: z.string(),
     variantNameSnapshot: z.string(),
     skuSnapshot: z.string(),
-    barcodeSnapshot: z.string().optional(),
+    barcodeSnapshot: z.string().nullable().optional(),
     costPriceAtSale: z.number().min(0),
     salePriceAtSale: z.number().min(0),
     marginAtSale: z.number()

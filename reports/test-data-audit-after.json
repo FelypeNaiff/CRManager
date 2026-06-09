@@ -1,0 +1,146 @@
+{
+  "summary": [
+    {
+      "Entidade": "Produtos",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Variantes",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Clientes",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Filhos CRM",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Vendedores",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Metas Vendedores",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Comissões",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Vendas",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Itens de Venda",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Pagamentos de Venda",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Autorizações de Venda",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Trocas de Venda",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Devoluções de Venda",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Contas a Receber (Recebíveis)",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Transações Financeiras",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Movimentações de Estoque",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Carteiras de Clientes",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Movimentações de Carteira",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Transações de Carteira",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Contas Bancárias",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Formas de Pagamento",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Caixas Registradoras",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Movimentações de Caixa",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Trocas/Devoluções Específicas",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Itens de Troca/Devolução",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Histórico de Preços",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Logs de Atividades",
+      "Encontrados": 0
+    },
+    {
+      "Entidade": "Usuários",
+      "Encontrados": 0
+    }
+  ],
+  "details": {
+    "users": [],
+    "sellers": [],
+    "sellerGoals": [],
+    "sellerCommissions": [],
+    "products": [],
+    "productVariants": [],
+    "productPriceHistories": [],
+    "customers": [],
+    "customerChildren": [],
+    "customerWallets": [],
+    "customerWalletMovements": [],
+    "walletTransactions": [],
+    "bankAccounts": [],
+    "paymentMethods": [],
+    "cashRegisters": [],
+    "cashMovements": [],
+    "sales": [],
+    "saleItems": [],
+    "salePayments": [],
+    "saleAuthorizations": [],
+    "saleExchanges": [],
+    "saleReturns": [],
+    "exchangeReturns": [],
+    "exchangeReturnItems": [],
+    "financialTransactions": [],
+    "accountsReceivable": [],
+    "activityLogs": [],
+    "inventoryMovements": []
+  }
+}

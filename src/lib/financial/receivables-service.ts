@@ -27,6 +27,20 @@ export class ReceivablesService {
 
     if (!sale) throw new Error("Venda não encontrada para gerar recebíveis.");
 
+    // Resolve creatorUserId: verify if sellerId is a valid User.id. If not, fallback to first active user in the company
+    let creatorUserId = sale.sellerId;
+    const userExists = await tx.user.findFirst({
+      where: { id: sale.sellerId }
+    });
+    if (!userExists) {
+      const fallbackUser = await tx.user.findFirst({
+        where: { companyId: sale.companyId, status: "ACTIVE" }
+      });
+      if (fallbackUser) {
+        creatorUserId = fallbackUser.id;
+      }
+    }
+
     const now = new Date();
 
     for (const payment of sale.payments) {
@@ -70,7 +84,7 @@ export class ReceivablesService {
             balanceBefore: wallet.balance,
             balanceAfter: wallet.balance.minus(amount),
             description: `Uso de saldo na venda ${sale.id}`,
-            createdById: sale.sellerId
+            createdById: creatorUserId
           }
         });
 
@@ -100,7 +114,7 @@ export class ReceivablesService {
             type: "IN",
             amount: amount,
             description: `Recebimento em dinheiro - Venda ${sale.id}`,
-            createdByUserId: sale.sellerId
+            createdByUserId: creatorUserId
           }
         });
 
@@ -120,7 +134,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - Dinheiro`,
             amount: amount,
             paidAt: now,
-            createdByUserId: sale.sellerId
+            createdByUserId: creatorUserId
           }
         });
 
@@ -146,7 +160,7 @@ export class ReceivablesService {
             amount: amount,
             dueDate: now,
             paidAt: now,
-            createdByUserId: sale.sellerId
+            createdByUserId: creatorUserId
           }
         });
 
@@ -184,7 +198,7 @@ export class ReceivablesService {
               description: `Taxa de Cartão/PIX - Venda ${sale.id}`,
               amount: feeAmount,
               paidAt: now,
-              createdByUserId: sale.sellerId
+              createdByUserId: creatorUserId
             }
           });
         }
@@ -217,7 +231,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - ${pm.name} - Parcela ${i}/${installments}`,
             amount: installmentAmount,
             dueDate: dueDate,
-            createdByUserId: sale.sellerId
+            createdByUserId: creatorUserId
           }
         });
 

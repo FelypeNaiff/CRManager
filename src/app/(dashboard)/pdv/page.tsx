@@ -138,10 +138,10 @@ export default function PDVPage() {
       }
       return [...prev, {
         variantId: variant.id,
-        productNameSnapshot: variant.product.name,
-        variantNameSnapshot: variant.name,
-        skuSnapshot: variant.sku,
-        barcodeSnapshot: variant.barcode,
+        productNameSnapshot: variant.product?.name ?? "Produto sem nome",
+        variantNameSnapshot: variant.name ?? "",
+        skuSnapshot: variant.sku ?? "",
+        barcodeSnapshot: variant.barcode ?? "",
         quantity: 1,
         unitPrice: Number(variant.salePrice),
         discountType: "AMOUNT",

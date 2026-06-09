@@ -16,8 +16,9 @@ if ($pgDumpCmd) {
     foreach ($pattern in $commonPaths) {
         $resolved = Resolve-Path $pattern -ErrorAction SilentlyContinue
         if ($resolved) {
-            # Se encontrar múltiplas versões, seleciona a primeira
-            $pgDumpPath = $resolved[0].Path
+            # Se encontrar múltiplas versões, seleciona a maior versão (ordena decrescente)
+            $sorted = $resolved | Sort-Object -Property Path -Descending
+            $pgDumpPath = $sorted[0].Path
             break
         }
     }
@@ -37,19 +38,30 @@ if (-not $pgDumpPath) {
     exit 1
 }
 
-# 2. Obter DATABASE_URL com segurança (prioriza env var, senão busca no .env)
-$dbUrl = $env:DATABASE_URL
+# 2. Obter URL de conexão (prioriza DIRECT_URL para pg_dump, senão DATABASE_URL)
+$dbUrl = $env:DIRECT_URL
 if (-not $dbUrl -and (Test-Path ".env")) {
     Get-Content ".env" | Foreach-Object {
         $line = $_.Trim()
-        if ($line -match "^DATABASE_URL\s*=\s*`"(.+)`"$" -or $line -match "^DATABASE_URL\s*=\s*'(.+)'$" -or $line -match "^DATABASE_URL\s*=\s*(.+)$") {
+        if ($line -match "^DIRECT_URL\s*=\s*`"(.+)`"$" -or $line -match "^DIRECT_URL\s*=\s*'(.+)'$" -or $line -match "^DIRECT_URL\s*=\s*(.+)$") {
             $dbUrl = $Matches[1].Trim().Trim('"').Trim("'")
+        }
+    }
+}
+if (-not $dbUrl) {
+    $dbUrl = $env:DATABASE_URL
+    if (-not $dbUrl -and (Test-Path ".env")) {
+        Get-Content ".env" | Foreach-Object {
+            $line = $_.Trim()
+            if ($line -match "^DATABASE_URL\s*=\s*`"(.+)`"$" -or $line -match "^DATABASE_URL\s*=\s*'(.+)'$" -or $line -match "^DATABASE_URL\s*=\s*(.+)$") {
+                $dbUrl = $Matches[1].Trim().Trim('"').Trim("'")
+            }
         }
     }
 }
 
 if (-not $dbUrl) {
-    Write-Host "ERRO: A variável de ambiente DATABASE_URL não está configurada e não foi encontrada no arquivo .env." -ForegroundColor Red
+    Write-Host "ERRO: As variáveis de ambiente DIRECT_URL ou DATABASE_URL não estão configuradas e não foram encontradas no arquivo .env." -ForegroundColor Red
     exit 1
 }
 
