@@ -1,10 +1,21 @@
 'use server';
-import { serializePrisma } from '@/lib/serialize';
 
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { verifyPin } from './pin';
 import { writeActivityLog } from './activity-log';
+import {
+  resolveBaseServerAuthContext,
+  resolveServerAuthContext,
+  ServerAuthContext,
+  ServerAuthError,
+} from './server-auth-context';
+import {
+  createProfileSelector,
+  getProfileSessionSecret,
+  PROFILE_SELECTOR_MAX_AGE_SECONDS,
+  PROFILE_SESSION_COOKIE,
+} from './profile-selector';
 
 export interface ActiveProfileSession {
   userId: string;
@@ -13,113 +24,153 @@ export interface ActiveProfileSession {
   email: string;
   role: string;
   isAdmin: boolean;
-  permissions: Record<string, boolean>;
+  permissions: Readonly<Record<string, true>>;
 }
 
-/** Nãome do cookie de sessão do perfil ativo */
-const SESSION_COOKIE = '@crmanager:activeProfileSession';
+interface SelectableProfileRecord {
+  id: string;
+  companyId: string;
+  name: string;
+  email: string;
+  cargo: string | null;
+  roleId: string | null;
+  status: string;
+  permitirAcesso: boolean;
+  pinAccessHash: string;
+}
 
-/**
- * Validates a profile PIN on the server and creates a secure session cookie if correct.
- * Records security events in activity_logs (success, failure).
- */
-export async function validateProfilePin(userId: string, pin: string) {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      include: {
-        role: {
-          include: {
-            permissions: true,
-          },
-        },
-      },
-    });
+interface ProfileSelectionDependencies {
+  resolveBaseContext(): Promise<ServerAuthContext>;
+  listProfiles(companyId: string): Promise<SelectableProfileRecord[]>;
+  findProfile(profileId: string, companyId: string): Promise<SelectableProfileRecord | null>;
+  verifyPinValue(pin: string, hash: string): Promise<boolean>;
+  issueSelector(profileId: string, authUserId: string): string;
+}
 
-    if (!user || user.status !== 'ACTIVE' || !user.permitirAcesso) {
-      return { success: false, error: 'Perfil não encontrado ou inativo.' };
-    }
+function safeSelectionError(error: unknown): string {
+  if (error instanceof ServerAuthError) return error.message;
+  return 'Não foi possível validar o perfil.';
+}
 
-    const isValid = await verifyPin(pin, user.pinAccessHash);
+function createProfileSelectionService(dependencies: ProfileSelectionDependencies) {
+  return {
+    async getAvailableProfiles() {
+      try {
+        const base = await dependencies.resolveBaseContext();
+        const users = await dependencies.listProfiles(base.companyId);
+        return {
+          success: true as const,
+          profiles: users.map((user) => ({
+            id: user.id,
+            nome: user.name,
+            email: user.email,
+            cargo: user.cargo,
+            grupo_id: user.roleId,
+            permitir_acesso: true,
+          })),
+        };
+      } catch (error) {
+        return { success: false as const, error: safeSelectionError(error), profiles: [] };
+      }
+    },
 
-    if (!isValid) {
-      // Log PIN failure
-      await writeActivityLog({
-        companyId: user.companyId,
-        userId: user.id,
-        action: 'PIN_FALHOU',
-        module: 'Auth',
-        details: `Tentativa de PIN inválida para ${user.email}`,
-      });
-      return { success: false, error: 'Senha incorreta para este perfil.' };
-    }
-
-    // Build permission map
-    const permissionsMap: Record<string, boolean> = {};
-    if (user.role?.permissions) {
-      user.role.permissions.forEach((p: any) => {
-        if (p.allowed) {
-          permissionsMap[`${p.module}:${p.action}`] = true;
+    async validateProfilePin(profileId: string, pin: string) {
+      try {
+        const base = await dependencies.resolveBaseContext();
+        const user = await dependencies.findProfile(profileId, base.companyId);
+        if (!user || user.status !== 'ACTIVE' || !user.permitirAcesso) {
+          return { success: false as const, error: 'Perfil não encontrado ou inativo.' };
         }
-      });
-    }
+        if (!(await dependencies.verifyPinValue(pin, user.pinAccessHash))) {
+          return { success: false as const, error: 'Senha incorreta para este perfil.' };
+        }
 
-    // Set secure HTTP-only session cookie (1 day)
-    const cookieStore = await cookies();
-    const sessionData: ActiveProfileSession = {
-      userId: user.id,
-      companyId: user.companyId,
-      name: user.name,
-      email: user.email,
-      role: user.cargo || '',
-      isAdmin: user.role?.isAdmin || false,
-      permissions: permissionsMap,
-    };
-
-    cookieStore.set(SESSION_COOKIE, JSON.stringify(sessionData), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      maxAge: 60 * 60 * 24,
-      path: '/',
-      sameSite: 'lax',
-    });
-
-    // Log successful login
-    await writeActivityLog({
-      companyId: user.companyId,
-      userId: user.id,
-      action: 'LOGIN',
-      module: 'Auth',
-      details: `Perfil ${user.name} autenticado com sucesso.`,
-    });
-
-    return {
-      success: true,
-      profile: {
-        id: user.id,
-        nome: user.name,
-        email: user.email,
-        empresaId: user.companyId,
-        role: user.cargo || 'operador',
-        status: user.status,
-        permitir_acesso: user.permitirAcesso,
-        grupo_id: user.roleId,
-        isAdmin: user.role?.isAdmin || false,
-        permissions: permissionsMap,
-      },
-    };
-  } catch (error) {
-    console.error('Error validating profile PIN on server:', error);
-    return { success: false, error: 'Erro interno do servidor ao validar o PIN.' };
-  }
+        return {
+          success: true as const,
+          selector: dependencies.issueSelector(user.id, base.authUserId),
+          profile: {
+            id: user.id,
+            nome: user.name,
+            email: user.email,
+            cargo: user.cargo,
+            status: user.status,
+            permitir_acesso: user.permitirAcesso,
+            grupo_id: user.roleId,
+          },
+        };
+      } catch (error) {
+        return { success: false as const, error: safeSelectionError(error) };
+      }
+    },
+  };
 }
 
-/**
- * Clears the server-side profile session cookie and logs the logout event.
- */
+const productionSelectionService = createProfileSelectionService({
+  resolveBaseContext: resolveBaseServerAuthContext,
+  listProfiles(companyId) {
+    return prisma.user.findMany({
+      where: { companyId, status: 'ACTIVE', permitirAcesso: true },
+      select: {
+        id: true, companyId: true, name: true, email: true, cargo: true,
+        roleId: true, status: true, permitirAcesso: true, pinAccessHash: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+  },
+  findProfile(profileId, companyId) {
+    return prisma.user.findFirst({
+      where: { id: profileId, companyId },
+      select: {
+        id: true, companyId: true, name: true, email: true, cargo: true,
+        roleId: true, status: true, permitirAcesso: true, pinAccessHash: true,
+      },
+    });
+  },
+  verifyPinValue: verifyPin,
+  issueSelector(profileId, authUserId) {
+    return createProfileSelector({ profileId, authUserId }, getProfileSessionSecret());
+  },
+});
+
+/** Test-only dependency injection. It is unavailable in production. */
+export async function createProfileSelectionServiceForTesting(
+  dependencies: ProfileSelectionDependencies
+) {
+  if (process.env.NODE_ENV === 'production') throw new ServerAuthError('INVALID_CONTEXT');
+  return createProfileSelectionService(dependencies);
+}
+
+export async function getAvailableProfiles() {
+  return productionSelectionService.getAvailableProfiles();
+}
+
+export async function validateProfilePin(profileId: string, pin: string) {
+  const result = await productionSelectionService.validateProfilePin(profileId, pin);
+  if (!result.success) return result;
+
+  const cookieStore = await cookies();
+  cookieStore.set(PROFILE_SESSION_COOKIE, result.selector, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === 'production',
+    maxAge: PROFILE_SELECTOR_MAX_AGE_SECONDS,
+    path: '/',
+    sameSite: 'lax',
+  });
+
+  await writeActivityLog({
+    companyId: (await resolveBaseServerAuthContext()).companyId,
+    userId: result.profile.id,
+    action: 'LOGIN',
+    module: 'Auth',
+    details: 'Perfil operacional selecionado.',
+  });
+
+  return { success: true as const, profile: result.profile };
+}
+
+/** Clears only the profile selector. Supabase logout is handled separately. */
 export async function logoutProfileSession(options?: { logEvent?: boolean }) {
   try {
-    // Log the logout if session data is available
     if (options?.logEvent !== false) {
       const session = await getActiveProfileSession();
       if (session) {
@@ -128,95 +179,41 @@ export async function logoutProfileSession(options?: { logEvent?: boolean }) {
           userId: session.userId,
           action: 'LOGOUT',
           module: 'Auth',
-          details: `Perfil ${session.name} encerrou a sessão.`,
+          details: 'Perfil operacional encerrado.',
         });
       }
     }
-
-    const cookieStore = await cookies();
-    cookieStore.delete(SESSION_COOKIE);
-    return { success: true };
-  } catch (error) {
-    console.error('Error clearing profile session cookie:', error);
-    return { success: false, error: 'Erro ao encerrar sessão.' };
+    (await cookies()).delete(PROFILE_SESSION_COOKIE);
+    return { success: true as const };
+  } catch {
+    return { success: false as const, error: 'Erro ao encerrar sessão.' };
   }
 }
 
 /**
- * LEGACY COMPATIBILITY ONLY.
- *
- * Retrieves the untrusted active-profile payload from the legacy cookie.
- * Never use this function for server-side authentication or authorization;
- * new authorization helpers use resolveServerAuthContext() instead.
+ * Compatibility projection for legacy consumers. The cookie is never parsed as
+ * authority: Supabase, its HMAC selector and Prisma are revalidated first.
  */
 export async function getActiveProfileSession(): Promise<ActiveProfileSession | null> {
-  if (process.env.TEST_MODE === 'true') {
-    return (global as any).mockSession || null;
-  }
+  const cookieStore = await cookies();
+  if (!cookieStore.get(PROFILE_SESSION_COOKIE)?.value) return null;
   try {
-    console.log('[getActiveProfileSession] starting...');
-    const cookieStore = await cookies();
-    const sessionCookie = cookieStore.get(SESSION_COOKIE);
-    if (!sessionCookie || !sessionCookie.value) {
-      console.log('[getActiveProfileSession] no session cookie');
-      return null;
-    }
-    const session = JSON.parse(sessionCookie.value) as ActiveProfileSession;
-    console.log('[getActiveProfileSession] parsed session:', session.userId);
-    return session;
-  } catch (error) {
-    console.error('[getActiveProfileSession] erro:', error);
+    const context = await resolveServerAuthContext();
+    return {
+      userId: context.userId,
+      companyId: context.companyId,
+      name: context.name,
+      email: context.email,
+      role: context.roleName,
+      isAdmin: context.isAdmin,
+      permissions: context.permissions,
+    };
+  } catch {
     return null;
   }
 }
 
-/**
- * Retrieves all active user profiles from PostgreSQL via Prisma.
- */
-export async function getAvailableProfiles() {
-  try {
-    const users = await prisma.user.findMany({
-      where: {
-        status: 'ACTIVE',
-        permitirAcesso: true,
-      },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        cargo: true,
-        companyId: true,
-        roleId: true,
-      },
-      orderBy: { name: 'asc' },
-    });
-
-    return {
-      success: true,
-      profiles: users.map((u: any) => ({
-        id: u.id,
-        nome: u.name,
-        email: u.email,
-        cargo: u.cargo,
-        empresa_id: u.companyId,
-        grupo_id: u.roleId,
-        permitir_acesso: true,
-      })),
-    };
-  } catch (error) {
-    console.error('Error fetching available profiles from Prisma:', error);
-    return {
-      success: false,
-      error: 'Erro ao buscar perfis do banco relacional.',
-      profiles: [],
-    };
-  }
-}
-
-/**
- * Checks if the logged-in Google email is authorized (exists in the users table).
- * Replaces the hardcoded ALLOWED_EMAILS list.
- */
+/** Transitional lookup retained for the current login UI. */
 export async function checkEmailIsAuthorized(email: string): Promise<boolean> {
   try {
     const user = await prisma.user.findUnique({
@@ -224,8 +221,7 @@ export async function checkEmailIsAuthorized(email: string): Promise<boolean> {
       select: { id: true, status: true, permitirAcesso: true },
     });
     return !!user && user.status === 'ACTIVE' && user.permitirAcesso;
-  } catch (error) {
-    console.error('Error checking email authorization:', error);
+  } catch {
     return false;
   }
 }

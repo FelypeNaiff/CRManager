@@ -1,5 +1,12 @@
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
+import { cookies } from 'next/headers';
+import {
+  getProfileSessionSecret,
+  PROFILE_SESSION_COOKIE,
+  ProfileSelectorError,
+  verifyProfileSelector,
+} from './profile-selector';
 
 export type ServerPermissionMap = Readonly<Record<string, true>>;
 
@@ -134,6 +141,10 @@ async function resolveContextFromDependencies(
   }
 
   const user = await findNeexUserForAuthIdentity(identity, dependencies);
+  return buildContext(identity.id, user);
+}
+
+function buildContext(authUserId: string, user: NeexUserRecord): ServerAuthContext {
 
   if (!isActiveStatus(user.status)) {
     throw new ServerAuthError('USER_INACTIVE');
@@ -160,7 +171,7 @@ async function resolveContextFromDependencies(
   }
 
   return Object.freeze({
-    authUserId: identity.id,
+    authUserId,
     userId: user.id,
     companyId: user.company.id,
     name: user.name,
@@ -171,6 +182,25 @@ async function resolveContextFromDependencies(
     permissions: buildPermissionMap(user.role.permissions),
   });
 }
+
+const userContextSelect = {
+  id: true,
+  companyId: true,
+  name: true,
+  email: true,
+  status: true,
+  permitirAcesso: true,
+  company: { select: { id: true, status: true } },
+  role: {
+    select: {
+      id: true,
+      name: true,
+      status: true,
+      isAdmin: true,
+      permissions: { select: { module: true, action: true, allowed: true } },
+    },
+  },
+} as const;
 
 /**
  * Test-only entry point for isolated unit tests. It is fail-closed in a
@@ -191,7 +221,7 @@ export async function resolveServerAuthContextForTesting(
  * Resolves the current trusted server context without cache. Supabase validates
  * identity on every call and Prisma reloads authorization immediately.
  */
-export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
+export async function resolveBaseServerAuthContext(): Promise<ServerAuthContext> {
   return resolveContextFromDependencies({
     async getAuthenticatedIdentity() {
       const supabase = await createClient();
@@ -211,36 +241,34 @@ export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
     async findNeexUserByVerifiedEmail(email) {
       return prisma.user.findUnique({
         where: { email },
-        select: {
-          id: true,
-          companyId: true,
-          name: true,
-          email: true,
-          status: true,
-          permitirAcesso: true,
-          company: {
-            select: {
-              id: true,
-              status: true,
-            },
-          },
-          role: {
-            select: {
-              id: true,
-              name: true,
-              status: true,
-              isAdmin: true,
-              permissions: {
-                select: {
-                  module: true,
-                  action: true,
-                  allowed: true,
-                },
-              },
-            },
-          },
-        },
+        select: userContextSelect,
       });
     },
   });
+}
+
+export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
+  const baseContext = await resolveBaseServerAuthContext();
+
+  const cookieStore = await cookies();
+  const selectorToken = cookieStore.get(PROFILE_SESSION_COOKIE)?.value;
+  if (!selectorToken) return baseContext;
+
+  try {
+    const selector = verifyProfileSelector(
+      selectorToken,
+      getProfileSessionSecret(),
+      baseContext.authUserId
+    );
+    const selectedUser = await prisma.user.findFirst({
+      where: { id: selector.profileId, companyId: baseContext.companyId },
+      select: userContextSelect,
+    });
+    if (!selectedUser) throw new ServerAuthError('INVALID_CONTEXT');
+    return buildContext(baseContext.authUserId, selectedUser);
+  } catch (error) {
+    if (error instanceof ServerAuthError) throw error;
+    if (error instanceof ProfileSelectorError) throw new ServerAuthError('INVALID_CONTEXT');
+    throw error;
+  }
 }

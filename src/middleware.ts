@@ -97,6 +97,15 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  // Signed profile selectors are opaque to middleware. Until the dedicated
+  // middleware hardening commit, allow only the free authenticated shell here;
+  // sensitive APIs/actions still enforce Supabase + Prisma server-side RBAC.
+  if (sessionCookie.value.split('.').length === 2) {
+    if (FREE_AUTH_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
+    if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/selecionar-perfil', request.url));
+  }
+
   let session: {
     userId: string;
     isAdmin: boolean;

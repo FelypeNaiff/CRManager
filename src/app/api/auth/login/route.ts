@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createClient } from '@/lib/supabase/server'
-import { cookies } from 'next/headers'
 
 export async function POST(req: NextRequest) {
   try {
@@ -55,38 +54,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: `Falha Supabase Auth: ${authError?.message || 'Sessão nula'}` }, { status: 401 })
     }
 
-    console.log(`[LOGIN] Sucesso no Supabase Auth. Criando cookie de sessão.`)
-
-    // Populating SESSION_COOKIE for RBAC compat
-    const permissionsMap: Record<string, boolean> = {}
-    if (user.role?.permissions) {
-      user.role.permissions.forEach((p: any) => {
-        if (p.allowed) {
-          permissionsMap[`${p.module}:${p.action}`] = true
-        }
-      })
-    }
-
-    const sessionData = {
-      userId: user.id,
-      companyId: user.companyId ?? '',
-      name: user.name,              // Prisma field is 'name', not 'nome'
-      email: user.email,
-      role: user.role?.name || 'USER',
-      isAdmin: user.role?.isAdmin === true || user.role?.name === 'ADMIN',
-      permissions: permissionsMap,
-    }
-
-    const cookieStore = await cookies()
-    cookieStore.set('@crmanager:activeProfileSession', JSON.stringify(sessionData), {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      maxAge: 60 * 60 * 24 * 7 // 1 week
-    })
-
-    return NextResponse.json({ success: true, redirectTo: '/dashboard' })
+    // Supabase establishes identity. A separate PIN step selects an eligible
+    // operational profile and emits the signed selector cookie.
+    return NextResponse.json({ success: true, redirectTo: '/selecionar-perfil' })
 
   } catch (error: any) {
     console.error('[LOGIN] Erro interno capturado com stack:', error.stack || error)

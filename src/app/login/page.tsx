@@ -41,9 +41,7 @@ export default function LoginPage() {
         })
 
         // Redirecionamento forçado para garantir refresh do cookie/sessão
-        const callbackUrl = new URLSearchParams(window.location.search).get("callbackUrl")
-        const targetUrl = (callbackUrl && callbackUrl !== '/') ? callbackUrl : "/dashboard"
-        window.location.replace(targetUrl)
+        window.location.replace(data.redirectTo || "/selecionar-perfil")
 
         // IMPORTANTE: Não colocamos setIsLoading(false) aqui porque o redirecionamento
         // de página cheia assumirá a tela, deixando o loading spinner visível até o recarregamento.
