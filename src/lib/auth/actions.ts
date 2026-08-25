@@ -143,7 +143,11 @@ export async function logoutProfileSession(options?: { logEvent?: boolean }) {
 }
 
 /**
- * Retrieves the active profile session from cookies.
+ * LEGACY COMPATIBILITY ONLY.
+ *
+ * Retrieves the untrusted active-profile payload from the legacy cookie.
+ * Never use this function for server-side authentication or authorization;
+ * new authorization helpers use resolveServerAuthContext() instead.
  */
 export async function getActiveProfileSession(): Promise<ActiveProfileSession | null> {
   if (process.env.TEST_MODE === 'true') {
