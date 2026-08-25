@@ -1,7 +1,16 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
+
 const prisma = new PrismaClient();
 
 async function main() {
+  if (process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production') {
+    throw new Error('Este seed de teste não pode ser executado em produção.');
+  }
+
+  const inaccessiblePinHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
+
   const company = await prisma.company.create({
     data: {
       name: 'Test Company',
@@ -26,7 +35,7 @@ async function main() {
       roleId: role.id,
       name: 'Admin Test',
       email: 'admin@test.neex.com',
-      pinAccessHash: '1234',
+      pinAccessHash: inaccessiblePinHash,
       status: 'ACTIVE',
       permitirAcesso: true
     }

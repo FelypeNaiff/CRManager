@@ -39,6 +39,7 @@ next-env.d.ts
 
 .genkit/*
 .env*
+!.env.example
 
 # firebase
 firebase-debug.log
@@ -47,5 +48,6 @@ firestore-debug.log
 # database backups
 /backups/
 *.sql
+!/prisma/migrations/**/migration.sql
 *.dump
 *.backup

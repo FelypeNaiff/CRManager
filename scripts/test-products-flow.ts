@@ -1,6 +1,8 @@
 // Set test environment variable before any imports
 process.env.TEST_MODE = 'true';
 
+import bcrypt from 'bcryptjs';
+import { randomBytes } from 'node:crypto';
 import { prisma } from '../src/lib/prisma';
 import {
   createProductCategory,
@@ -32,6 +34,10 @@ function recordResult(caseNum: number, name: string, success: boolean, errorMsg?
 }
 
 async function runTests() {
+  if (process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production') {
+    throw new Error('Este fluxo de teste não pode ser executado em produção.');
+  }
+
   console.log('Fetching seeded users from database...');
   let adminUser = await prisma.user.findFirst({
     where: { companyId: '2052613e-1e1a-4796-95cd-eb2b35ef7eb9' }
@@ -39,12 +45,13 @@ async function runTests() {
   
   if (!adminUser) {
     console.log('Criando usuário temporário para testes...');
+    const inaccessiblePinHash = await bcrypt.hash(randomBytes(32).toString('hex'), 12);
     adminUser = await prisma.user.create({
       data: {
         companyId: '2052613e-1e1a-4796-95cd-eb2b35ef7eb9',
         name: 'Test Admin',
         email: 'testadmin@neex.com',
-        pinAccessHash: '1234',
+        pinAccessHash: inaccessiblePinHash,
         status: 'ACTIVE'
       }
     });

@@ -45,11 +45,11 @@ Para gerar um backup local completo e criptografado de forma rápida e segura:
 2. Defina a string de conexão para este banco de testes.
 3. Se o arquivo estiver em formato `.sql` (plain text), execute via ferramenta `psql`:
    ```bash
-   psql -d "postgresql://[user]:[password]@[host]:[port]/[database]" -f backups/neex_backup_YYYYMMDD_HHMMSS.sql
+   psql -d "$DIRECT_URL" -f backups/neex_backup_YYYYMMDD_HHMMSS.sql
    ```
 4. Se o backup foi gerado no formato `.dump` (custom binário), execute via `pg_restore`:
    ```bash
-   pg_restore -d "postgresql://[user]:[password]@[host]:[port]/[database]" --no-owner --clean backups/neex_backup_YYYYMMDD_HHMMSS.dump
+   pg_restore -d "$DIRECT_URL" --no-owner --clean backups/neex_backup_YYYYMMDD_HHMMSS.dump
    ```
 
 ### 2.3 Como Validar o Backup Restaurado

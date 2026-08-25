@@ -58,8 +58,8 @@ As seguintes variáveis de ambiente foram incluídas no seu arquivo `.env` com v
 
 ```env
 # Configurações do Supabase & Prisma (Substitua pelos dados reais do painel do Supabase)
-DATABASE_URL="postgresql://postgres:sua-senha@db.sua-referencia-projeto.supabase.co:6543/postgres?pgbouncer=true&connection_limit=1"
-DIRECT_URL="postgresql://postgres:sua-senha@db.sua-referencia-projeto.supabase.co:5432/postgres"
+DATABASE_URL="<DATABASE_URL>"
+DIRECT_URL="<DIRECT_URL>"
 NEXT_PUBLIC_SUPABASE_URL="https://sua-referencia-projeto.supabase.co"
 NEXT_PUBLIC_SUPABASE_ANON_KEY="sua-chave-anonima"
 ```
