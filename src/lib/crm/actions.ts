@@ -487,7 +487,8 @@ export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustme
       amount: data.amount,
       type: data.type,
       reason: data.reason,
-      createdById: session.userId,
+      companyId: session.companyId,
+      userId: session.userId,
     });
 
     await writeActivityLog({

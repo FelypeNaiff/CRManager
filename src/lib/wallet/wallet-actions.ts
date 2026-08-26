@@ -8,11 +8,10 @@ import { WalletTransactionType } from "@prisma/client";
 export async function getWalletAction(customerId: string) {
   const session = await requirePermission("CARTEIRA", "VIEW");
   try {
-    const wallet = await customerWalletService.getWallet(customerId);
+    const wallet = await customerWalletService.getWallet(customerId, session.companyId);
     return { success: true, wallet };
-  } catch (error: any) {
-    console.error("Error in getWalletAction:", error);
-    return { success: false, error: error.message || "Erro ao obter carteira." };
+  } catch {
+    return { success: false, error: "Erro ao obter carteira." };
   }
 }
 
@@ -25,10 +24,10 @@ export async function getCustomerWalletAction(customerId: string, filters?: {
   const session = await requirePermission("CARTEIRA", "VIEW");
   try {
     // Check and trigger any expired credits first
-    await customerWalletService.expireCredits(customerId);
+    await customerWalletService.expireCredits(customerId, session.companyId);
 
-    const wallet = await customerWalletService.getWallet(customerId);
-    const transactions = await customerWalletService.getWalletTransactions(customerId, filters);
+    const wallet = await customerWalletService.getWallet(customerId, session.companyId);
+    const transactions = await customerWalletService.getWalletTransactions(customerId, session.companyId, filters);
     
     // Calculate total credits and debits for display
     let totalCredits = 0;
@@ -67,9 +66,8 @@ export async function getCustomerWalletAction(customerId: string, filters?: {
       totalCredits,
       totalDebits
     };
-  } catch (error: any) {
-    console.error("Error in getCustomerWalletAction:", error);
-    return { success: false, error: error.message || "Erro ao obter extrato da carteira." };
+  } catch {
+    return { success: false, error: "Erro ao obter extrato da carteira." };
   }
 }
 
@@ -80,16 +78,16 @@ export async function creditWalletAction(data: {
   type: WalletTransactionType;
   expiresAt?: Date;
 }) {
-  const session = await requirePermission("CARTEIRA", "CREATE");
+  const session = await requirePermission("CARTEIRA", "CREDIT");
   try {
     const result = await customerWalletService.creditWallet({
       ...data,
-      createdById: session.userId
+      companyId: session.companyId,
+      userId: session.userId,
     });
     return { success: true, wallet: result.wallet, transaction: result.transaction };
-  } catch (error: any) {
-    console.error("Error in creditWalletAction:", error);
-    return { success: false, error: error.message || "Erro ao creditar carteira." };
+  } catch {
+    return { success: false, error: "Erro ao creditar carteira." };
   }
 }
 
@@ -99,16 +97,19 @@ export async function debitWalletAction(data: {
   description: string;
   type: WalletTransactionType;
 }) {
-  const session = await requirePermission("CARTEIRA", "DELETE"); // matching DEBIT
+  const session = await requirePermission("CARTEIRA", "DEBIT");
   try {
     const result = await customerWalletService.debitWallet({
       ...data,
-      createdById: session.userId
+      companyId: session.companyId,
+      userId: session.userId,
     });
     return { success: true, wallet: result.wallet, transaction: result.transaction };
-  } catch (error: any) {
-    console.error("Error in debitWalletAction:", error);
-    return { success: false, error: error.message || "Erro ao debitar carteira." };
+  } catch (error: unknown) {
+    if (error instanceof Error && error.message.startsWith('Saldo insuficiente na carteira do cliente.')) {
+      return { success: false, error: error.message };
+    }
+    return { success: false, error: "Erro ao debitar carteira." };
   }
 }
 
@@ -119,52 +120,22 @@ export async function createManualAdjustmentAction(data: {
   reason: string;
   authorizationId?: string;
 }) {
-  const session = await requirePermission("CARTEIRA", "UPDATE"); // matching ADJUST
-  console.log(JSON.stringify({
-    timestamp: new Date().toISOString(),
-    level: "INFO",
-    action: "WALLET_ADJUSTMENT_REQUEST",
-    customerId: data.customerId,
-    amount: data.amount,
-    type: data.type,
-    userId: session.userId
-  }));
+  const session = await requirePermission("CARTEIRA", "ADJUST");
 
   try {
     const result = await customerWalletService.createManualAdjustment({
       ...data,
-      createdById: session.userId,
+      companyId: session.companyId,
+      userId: session.userId,
       authorizationId: data.authorizationId
     });
     
     if (result && 'requireAuthorization' in result) {
-      console.log(JSON.stringify({
-        timestamp: new Date().toISOString(),
-        level: "INFO",
-        action: "WALLET_ADJUSTMENT_REQUIRES_AUTH",
-        authorizationId: result.authorizationId
-      }));
       return { success: false, requireAuthorization: true, authorizationId: result.authorizationId, type: data.type };
     }
 
-    console.log(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: "INFO",
-      action: "WALLET_ADJUSTMENT_SUCCESS",
-      customerId: data.customerId,
-      amount: data.amount,
-      type: data.type
-    }));
-
     return { success: true, wallet: result.wallet };
-  } catch (error: any) {
-    console.error(JSON.stringify({
-      timestamp: new Date().toISOString(),
-      level: "ERROR",
-      action: "WALLET_ADJUSTMENT_FAILURE",
-      customerId: data.customerId,
-      error: error.message || "Erro ao aplicar ajuste manual."
-    }));
-    return { success: false, error: error.message || "Erro ao aplicar ajuste manual." };
+  } catch {
+    return { success: false, error: "Erro ao aplicar ajuste manual." };
   }
 }

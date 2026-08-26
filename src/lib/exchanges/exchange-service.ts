@@ -193,7 +193,8 @@ export class ExchangeService {
         type: "EXCHANGE",
         exchangeId: exchange.id,
         description: `Crédito gerado por Troca da Venda #${sale.id.slice(0, 8)}`,
-        createdById: data.userId
+        companyId: data.companyId,
+        userId: data.userId,
       }, tx);
 
       // Register activity log for audit
@@ -270,7 +271,8 @@ export class ExchangeService {
         type: "ADJUSTMENT",
         exchangeId: exchange.id,
         description: `Estorno de troca cancelada #${exchange.id.slice(0, 8)}`,
-        createdById: userId
+        companyId,
+        userId,
       }, tx);
 
       // Revert Inventory

@@ -192,7 +192,8 @@ export class ReturnService {
           type: "REFUND",
           returnId: returnRecord.id,
           description: `Crédito de reembolso por Devolução da Venda #${sale.id.slice(0, 8)}`,
-          createdById: data.userId
+          companyId: data.companyId,
+          userId: data.userId,
         }, tx);
       }
 
@@ -269,7 +270,8 @@ export class ReturnService {
           type: "ADJUSTMENT",
           returnId: returnRecord.id,
           description: `Estorno de devolução cancelada #${returnRecord.id.slice(0, 8)}`,
-          createdById: userId
+          companyId,
+          userId,
         }, tx);
       }
 

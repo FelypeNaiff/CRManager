@@ -4,6 +4,11 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { authorizationService } from "@/lib/auth/authorization-service";
 import { writeActivityLog } from "@/lib/auth/activity-log";
+import {
+  approvedWalletAuthorizationWhere,
+  walletCustomerWhere,
+  walletForCustomerWhere,
+} from './wallet-tenant-security';
 
 export interface CreditWalletInput {
   customerId: string;
@@ -13,8 +18,9 @@ export interface CreditWalletInput {
   saleId?: string;
   exchangeId?: string;
   returnId?: string;
-  createdById?: string;
   expiresAt?: Date;
+  companyId: string;
+  userId: string;
 }
 
 export interface DebitWalletInput {
@@ -25,25 +31,26 @@ export interface DebitWalletInput {
   saleId?: string;
   exchangeId?: string;
   returnId?: string;
-  createdById?: string;
+  companyId: string;
+  userId: string;
 }
 
 export class CustomerWalletService {
   /**
    * Gets or creates a wallet for a customer.
    */
-  async getWallet(customerId: string, tx: any = prisma) {
-    let wallet = await tx.customerWallet.findUnique({
-      where: { customerId },
+  async getWallet(customerId: string, companyId: string, tx: any = prisma) {
+    const customer = await tx.customer.findFirst({
+      where: walletCustomerWhere(customerId, companyId), select: { id: true },
+    });
+    if (!customer) throw new Error("Cliente não encontrado.");
+
+    let wallet = await tx.customerWallet.findFirst({
+      where: walletForCustomerWhere(customerId, companyId),
     });
 
     if (!wallet) {
       // Find customer to check companyId
-      const customer = await tx.customer.findUnique({
-        where: { id: customerId }
-      });
-      if (!customer) throw new Error("Cliente não encontrado.");
-
       wallet = await tx.customerWallet.create({
         data: {
           customerId,
@@ -55,12 +62,13 @@ export class CustomerWalletService {
     // Se estiver rodando dentro de uma transação ativa (tx !== prisma), aplica trava pessimista
     if (tx && tx !== prisma) {
       await tx.$queryRawUnsafe(
-        `SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`,
-        customerId
+        `SELECT cw.id FROM customer_wallets cw JOIN customers c ON c.id = cw.customer_id WHERE cw.customer_id = $1 AND c.company_id = $2 FOR UPDATE`,
+        customerId,
+        companyId,
       );
       // Re-busca para garantir que lemos o saldo atualizado pós-trava
-      const lockedWallet = await tx.customerWallet.findUnique({
-        where: { customerId },
+      const lockedWallet = await tx.customerWallet.findFirst({
+        where: walletForCustomerWhere(customerId, companyId),
       });
       if (lockedWallet) {
         wallet = lockedWallet;
@@ -73,8 +81,8 @@ export class CustomerWalletService {
   /**
    * Returns current wallet balance as a Decimal.
    */
-  async getWalletBalance(customerId: string, tx: any = prisma): Promise<Decimal> {
-    const wallet = await this.getWallet(customerId, tx);
+  async getWalletBalance(customerId: string, companyId: string, tx: any = prisma): Promise<Decimal> {
+    const wallet = await this.getWallet(customerId, companyId, tx);
     return wallet.balance;
   }
 
@@ -83,6 +91,7 @@ export class CustomerWalletService {
    */
   async getWalletTransactions(
     customerId: string,
+    companyId: string,
     filters?: {
       startDate?: Date;
       endDate?: Date;
@@ -91,7 +100,7 @@ export class CustomerWalletService {
     },
     tx: any = prisma
   ) {
-    const wallet = await this.getWallet(customerId, tx);
+    const wallet = await this.getWallet(customerId, companyId, tx);
 
     const whereClause: any = {
       walletId: wallet.id,
@@ -132,9 +141,9 @@ export class CustomerWalletService {
       const amountVal = new Decimal(data.amount);
       if (amountVal.lte(0)) throw new Error("O valor do crédito deve ser maior que zero.");
 
-      const wallet = await this.getWallet(data.customerId, innerTx);
-      const customer = await innerTx.customer.findUnique({
-        where: { id: data.customerId }
+      const wallet = await this.getWallet(data.customerId, data.companyId, innerTx);
+      const customer = await innerTx.customer.findFirst({
+        where: walletCustomerWhere(data.customerId, data.companyId),
       });
       if (!customer) throw new Error("Cliente não encontrado.");
 
@@ -155,7 +164,7 @@ export class CustomerWalletService {
 
       // Update balance
       const updatedWallet = await innerTx.customerWallet.update({
-        where: { id: wallet.id },
+        where: { id: wallet.id, customer: { companyId: data.companyId } },
         data: { balance: balanceAfter }
       });
 
@@ -178,16 +187,14 @@ export class CustomerWalletService {
         }
       });
 
-      if (data.createdById) {
-        await writeActivityLog({
-          companyId: customer.companyId,
-          userId: data.createdById,
+      await writeActivityLog({
+          companyId: data.companyId,
+          userId: data.userId,
           action: "CREDITO_CARTEIRA",
           module: "CARTEIRA",
           recordId: wallet.id,
           details: `Crédito de R$ ${amountVal.toFixed(2)} gerado para cliente ${customer.name}.`,
         });
-      }
 
       return { wallet: updatedWallet, transaction };
     };
@@ -207,9 +214,9 @@ export class CustomerWalletService {
       const amountVal = new Decimal(data.amount);
       if (amountVal.lte(0)) throw new Error("O valor do débito deve ser maior que zero.");
 
-      const wallet = await this.getWallet(data.customerId, innerTx);
-      const customer = await innerTx.customer.findUnique({
-        where: { id: data.customerId }
+      const wallet = await this.getWallet(data.customerId, data.companyId, innerTx);
+      const customer = await innerTx.customer.findFirst({
+        where: walletCustomerWhere(data.customerId, data.companyId),
       });
       if (!customer) throw new Error("Cliente não encontrado.");
 
@@ -222,7 +229,7 @@ export class CustomerWalletService {
 
       // Update balance
       const updatedWallet = await innerTx.customerWallet.update({
-        where: { id: wallet.id },
+        where: { id: wallet.id, customer: { companyId: data.companyId } },
         data: { balance: balanceAfter }
       });
 
@@ -245,16 +252,14 @@ export class CustomerWalletService {
         }
       });
 
-      if (data.createdById) {
-        await writeActivityLog({
-          companyId: customer.companyId,
-          userId: data.createdById,
+      await writeActivityLog({
+          companyId: data.companyId,
+          userId: data.userId,
           action: "DEBITO_CARTEIRA",
           module: "CARTEIRA",
           recordId: wallet.id,
           details: `Débito de R$ ${amountVal.toFixed(2)} realizado para cliente ${customer.name}.`,
         });
-      }
 
       return { wallet: updatedWallet, transaction };
     };
@@ -266,7 +271,8 @@ export class CustomerWalletService {
     }
   }
 
-  async expireCredits(customerId: string, tx: any = prisma) {
+  async expireCredits(customerId: string, companyId: string, tx: any = prisma) {
+    await this.getWallet(customerId, companyId, tx);
     // Expiration logic is disabled as CustomerWalletMovement does not support expiresAt
     return null;
   }
@@ -278,18 +284,20 @@ export class CustomerWalletService {
     fromCustomerId: string,
     toCustomerId: string,
     amount: number | Decimal,
-    createdById?: string,
+    companyId: string,
+    userId: string,
     tx: any = prisma
   ) {
     const amountVal = new Decimal(amount);
     if (amountVal.lte(0)) throw new Error("O valor da transferência deve ser maior que zero.");
 
     return await tx.$transaction(async (innerTx: any) => {
-      const fromWallet = await this.getWallet(fromCustomerId, innerTx);
-      const toWallet = await this.getWallet(toCustomerId, innerTx);
+      const fromWallet = await this.getWallet(fromCustomerId, companyId, innerTx);
+      const toWallet = await this.getWallet(toCustomerId, companyId, innerTx);
 
-      const fromCustomer = await innerTx.customer.findUnique({ where: { id: fromCustomerId } });
-      const toCustomer = await innerTx.customer.findUnique({ where: { id: toCustomerId } });
+      const fromCustomer = await innerTx.customer.findFirst({ where: walletCustomerWhere(fromCustomerId, companyId) });
+      const toCustomer = await innerTx.customer.findFirst({ where: walletCustomerWhere(toCustomerId, companyId) });
+      if (!fromCustomer || !toCustomer) throw new Error('Cliente não encontrado.');
 
       if (fromWallet.balance.lt(amountVal)) {
         throw new Error(`Saldo insuficiente para transferir. Saldo: R$ ${fromWallet.balance.toFixed(2)}`);
@@ -301,7 +309,8 @@ export class CustomerWalletService {
         amount: amountVal,
         type: "DEBIT",
         description: `Transferência de saldo para ${toCustomer?.name || toCustomerId}`,
-        createdById
+        companyId,
+        userId,
       }, innerTx);
 
       // Credit destination
@@ -310,7 +319,8 @@ export class CustomerWalletService {
         amount: amountVal,
         type: "CREDIT",
         description: `Transferência recebida de ${fromCustomer?.name || fromCustomerId}`,
-        createdById
+        companyId,
+        userId,
       }, innerTx);
 
       return { debit: debitRes, credit: creditRes };
@@ -326,13 +336,14 @@ export class CustomerWalletService {
       amount: number;
       type: "credit" | "debit";
       reason: string;
-      createdById: string;
+      companyId: string;
+      userId: string;
       authorizationId?: string;
     },
     tx: any = prisma
   ) {
-    const customer = await tx.customer.findUnique({
-      where: { id: data.customerId }
+    const customer = await tx.customer.findFirst({
+      where: walletCustomerWhere(data.customerId, data.companyId),
     });
     if (!customer) throw new Error("Cliente não encontrado.");
 
@@ -343,16 +354,18 @@ export class CustomerWalletService {
     if (data.type === "credit") {
       if (settings && !settings.walletAllowManualCredit) {
         if (data.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
-          if (!auth || auth.status !== 'APPROVED') {
+          const auth = await tx.actionAuthorization.findFirst({
+            where: approvedWalletAuthorizationWhere(data.authorizationId, data.companyId, data.customerId, 'WALLET_CREDIT'),
+          });
+          if (!auth) {
             throw new Error('Autorização de crédito manual inválida ou não aprovada.');
           }
         } else {
           const authReq = await authorizationService.createAuthorizationRequest({
-            companyId: customer.companyId,
+            companyId: data.companyId,
             type: AuthorizationType.WALLET_CREDIT,
             module: 'CARTEIRA',
-            requestedByUserId: data.createdById,
+            requestedByUserId: data.userId,
             referenceId: customer.id,
             referenceModule: 'CUSTOMER',
             amount: data.amount,
@@ -367,21 +380,24 @@ export class CustomerWalletService {
         amount: data.amount,
         type: "ADJUSTMENT",
         description: `Ajuste Manual: ${data.reason}`,
-        createdById: data.createdById
+        companyId: data.companyId,
+        userId: data.userId,
       }, tx);
     } else {
       if (settings && !settings.walletAllowManualDebit) {
         if (data.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
-          if (!auth || auth.status !== 'APPROVED') {
+          const auth = await tx.actionAuthorization.findFirst({
+            where: approvedWalletAuthorizationWhere(data.authorizationId, data.companyId, data.customerId, 'WALLET_DEBIT'),
+          });
+          if (!auth) {
             throw new Error('Autorização de débito manual inválida ou não aprovada.');
           }
         } else {
           const authReq = await authorizationService.createAuthorizationRequest({
-            companyId: customer.companyId,
+            companyId: data.companyId,
             type: AuthorizationType.WALLET_DEBIT,
             module: 'CARTEIRA',
-            requestedByUserId: data.createdById,
+            requestedByUserId: data.userId,
             referenceId: customer.id,
             referenceModule: 'CUSTOMER',
             amount: data.amount,
@@ -396,7 +412,8 @@ export class CustomerWalletService {
         amount: data.amount,
         type: "ADJUSTMENT",
         description: `Ajuste Manual: ${data.reason}`,
-        createdById: data.createdById
+        companyId: data.companyId,
+        userId: data.userId,
       }, tx);
     }
   }
