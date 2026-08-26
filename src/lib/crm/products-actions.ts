@@ -15,6 +15,19 @@ import {
 } from './products-schemas';
 import { InventoryMovementType, Prisma, AuthorizationType } from '@prisma/client';
 import { authorizationService } from '../auth/authorization-service';
+import { tenantWhere } from './tenant-security';
+
+async function validateProductRelations(
+  companyId: string,
+  categoryId?: string | null,
+  supplierId?: string | null,
+) {
+  const [category, supplier] = await Promise.all([
+    categoryId ? prisma.productCategory.findFirst({ where: tenantWhere(categoryId, companyId), select: { id: true } }) : null,
+    supplierId ? prisma.supplier.findFirst({ where: tenantWhere(supplierId, companyId), select: { id: true } }) : null,
+  ]);
+  return (!categoryId || Boolean(category)) && (!supplierId || Boolean(supplier));
+}
 
 
 // =========================================================================
@@ -222,6 +235,9 @@ export async function createProduct(input: any) {
   const minStock = parsed.data.minimumStock ?? 0;
 
   try {
+    if (!(await validateProductRelations(session.companyId, parsed.data.categoryId, parsed.data.supplierId))) {
+      return { success: false, error: 'Categoria ou fornecedor não encontrado.' };
+    }
     const result = await prisma.$transaction(async (tx) => {
       // 1. Criar o produto principal
       const newProduct = await tx.product.create({
@@ -289,7 +305,7 @@ export async function createProduct(input: any) {
     if (error.code === 'P2002') {
       return { success: false, error: 'Já existe um produto com este código interno ou SKU.' };
     }
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro ao criar produto.' };
   }
 }
 
@@ -301,6 +317,9 @@ export async function updateProduct(id: string, input: any) {
   }
 
   try {
+    if (!(await validateProductRelations(session.companyId, parsed.data.categoryId, parsed.data.supplierId))) {
+      return { success: false, error: 'Categoria ou fornecedor não encontrado.' };
+    }
     const existing = await prisma.product.findFirst({
       where: { id, companyId: session.companyId, isActive: true },
       include: {
@@ -323,7 +342,7 @@ export async function updateProduct(id: string, input: any) {
     const result = await prisma.$transaction(async (tx) => {
       // 1. Atualizar produto
       const updated = await tx.product.update({
-        where: { id },
+        where: tenantWhere(id, session.companyId),
         data: {
           categoryId: parsed.data.categoryId || null,
           supplierId: parsed.data.supplierId || null,
@@ -339,7 +358,7 @@ export async function updateProduct(id: string, input: any) {
       // 2. Atualizar variante padrão (Único) se existir
       if (defaultVariant) {
         await tx.productVariant.update({
-          where: { id: defaultVariant.id },
+          where: tenantWhere(defaultVariant.id, session.companyId),
           data: {
             sku: parsed.data.sku || defaultVariant.sku,
             barcode: parsed.data.barcode || defaultVariant.barcode,
@@ -383,7 +402,7 @@ export async function updateProduct(id: string, input: any) {
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error updating product:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro ao atualizar produto.' };
   }
 }
 
@@ -402,11 +421,11 @@ export async function deleteProduct(id: string) {
 
     await prisma.$transaction([
       prisma.product.update({
-        where: { id },
+        where: tenantWhere(id, session.companyId),
         data: { isActive: false, archivedAt: now },
       }),
       prisma.productVariant.updateMany({
-        where: { productId: id },
+        where: { productId: id, companyId: session.companyId },
         data: { isActive: false, archivedAt: now },
       }),
     ]);
@@ -425,7 +444,7 @@ export async function deleteProduct(id: string) {
     return { success: true };
   } catch (error: any) {
     console.error('Error deleting product:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro ao remover produto.' };
   }
 }
 
@@ -467,12 +486,12 @@ export async function getInventoryMovements(filters?: { variantId?: string } & P
     return { success: true, ...buildPaginatedResult(movements, totalCount, page, pageSize) };
   } catch (error: any) {
     console.error('Error fetching inventory movements:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro ao consultar movimentações de estoque.' };
   }
 }
 
 export async function createInventoryMovement(input: any) {
-  const session = await requirePermission('ESTOQUE', 'CREATE');
+  const session = await requirePermission('ESTOQUE', 'ADJUST');
   const parsed = InventoryMovementSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
@@ -486,6 +505,7 @@ export async function createInventoryMovement(input: any) {
       const variant = await tx.productVariant.findFirst({
         where: {
           id: variantId,
+          companyId: session.companyId,
           product: { companyId: session.companyId },
         },
         include: { product: true },
@@ -530,7 +550,9 @@ export async function createInventoryMovement(input: any) {
 
         if (isManual && !company.allowNegativeStockOnManualAdjustment) {
           if (input.authorizationId) {
-            const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+            const auth = await tx.actionAuthorization.findUnique({
+              where: { id: input.authorizationId, companyId: session.companyId },
+            });
             if (!auth || auth.status !== 'APPROVED') {
               throw new Error('Autorização de estoque negativo inválida ou não aprovada.');
             }
@@ -554,7 +576,9 @@ export async function createInventoryMovement(input: any) {
       if (isManual && newAvailableStock >= 0) {
         // Correção manual de quantidade normal
         if (input.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
+          const auth = await tx.actionAuthorization.findUnique({
+            where: { id: input.authorizationId, companyId: session.companyId },
+          });
           if (!auth || auth.status !== 'APPROVED') {
             throw new Error('Autorização de ajuste de estoque inválida ou não aprovada.');
           }
@@ -588,7 +612,7 @@ export async function createInventoryMovement(input: any) {
 
       // 6. Atualizar os saldos consolidados na variante
       await tx.productVariant.update({
-        where: { id: variantId },
+        where: tenantWhere(variantId, session.companyId),
         data: {
           currentStock: new Prisma.Decimal(newCurrentStock),
           reservedStock: new Prisma.Decimal(newReservedStock),
@@ -625,7 +649,7 @@ export async function createInventoryMovement(input: any) {
     return { success: true, data: serializePrisma(movement) };
   } catch (error: any) {
     console.error('Error creating inventory movement:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Não foi possível concluir a movimentação de estoque.' };
   }
 }
 

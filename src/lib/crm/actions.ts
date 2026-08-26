@@ -8,6 +8,7 @@ import { writeActivityLog } from '@/lib/auth/activity-log';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 import { unstable_cache, revalidateTag } from 'next/cache';
+import { tenantChildWhere, tenantTagRelationWhere, tenantWhere } from './tenant-security';
 
 
 
@@ -220,6 +221,11 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
   try {
     const data = CustomerSchema.parse(rawData);
 
+    const ownedCustomer = await prisma.customer.findFirst({
+      where: tenantWhere(id, session.companyId), select: { id: true },
+    });
+    if (!ownedCustomer) return { success: false, error: 'Cliente não encontrado.' };
+
     // Check uniqueness of phone
     const existing = await prisma.customer.findFirst({
       where: {
@@ -234,7 +240,7 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
     }
 
     const customer = await prisma.customer.update({
-      where: { id },
+      where: tenantWhere(id, session.companyId),
       data: {
         name: data.name,
         email: data.email || null,
@@ -269,7 +275,7 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
     return { success: true, data: serializePrisma(customer) };
   } catch (error: any) {
     console.error('Error updating customer:', error);
-    return { success: false, error: error.message || 'Erro ao atualizar cliente.' };
+    return { success: false, error: 'Erro ao atualizar cliente.' };
   }
 }
 
@@ -277,7 +283,7 @@ export async function deleteCustomer(id: string) {
   const session = await requirePermission('CLIENTES', 'DELETE');
   try {
     const customer = await prisma.customer.update({
-      where: { id },
+      where: tenantWhere(id, session.companyId),
       data: { status: 'arquivado' },
     });
 
@@ -312,6 +318,11 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
   try {
     const data = ChildSchema.parse(rawData);
 
+    const customer = await prisma.customer.findFirst({
+      where: tenantWhere(data.customerId, session.companyId), select: { id: true },
+    });
+    if (!customer) return { success: false, error: 'Cliente não encontrado.' };
+
     const child = await prisma.customerChild.create({
       data: {
         customerId: data.customerId,
@@ -335,7 +346,7 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
     return { success: true, data: serializePrisma(child) };
   } catch (error: any) {
     console.error('Error creating child:', error);
-    return { success: false, error: error.message || 'Erro ao criar cadastro de filho.' };
+    return { success: false, error: 'Erro ao criar cadastro de filho.' };
   }
 }
 
@@ -343,7 +354,7 @@ export async function deleteChild(id: string) {
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const child = await prisma.customerChild.delete({
-      where: { id },
+      where: tenantChildWhere(id, session.companyId),
     });
 
     await prisma.customerHistory.create({
@@ -404,6 +415,11 @@ export async function createTag(name: string, color?: string) {
 export async function addTagToCustomer(customerId: string, tagId: string) {
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
+    const [customer, tag] = await Promise.all([
+      prisma.customer.findFirst({ where: tenantWhere(customerId, session.companyId), select: { id: true } }),
+      prisma.customerTag.findFirst({ where: tenantWhere(tagId, session.companyId), select: { id: true } }),
+    ]);
+    if (!customer || !tag) return { success: false, error: 'Cliente ou tag não encontrado.' };
     const relation = await prisma.customerTagRelation.upsert({
       where: {
         customerId_tagId: { customerId, tagId },
@@ -431,6 +447,10 @@ export async function addTagToCustomer(customerId: string, tagId: string) {
 export async function removeTagFromCustomer(customerId: string, tagId: string) {
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
+    const ownedRelation = await prisma.customerTagRelation.findFirst({
+      where: tenantTagRelationWhere(customerId, tagId, session.companyId), select: { id: true },
+    });
+    if (!ownedRelation) return { success: false, error: 'Vínculo não encontrado.' };
     const relation = await prisma.customerTagRelation.delete({
       where: {
         customerId_tagId: { customerId, tagId },
@@ -492,7 +512,7 @@ export async function getCustomerHistory(customerId: string) {
   const session = await requirePermission('CLIENTES', 'VIEW');
   try {
     const list = await prisma.customerHistory.findMany({
-      where: { customerId },
+      where: { customerId, customer: { companyId: session.companyId } },
       orderBy: { createdAt: 'desc' },
     });
     return { success: true, data: serializePrisma(list) };
@@ -578,7 +598,7 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
   try {
     // Custom partial parsing
     const child = await prisma.customerChild.update({
-      where: { id },
+      where: tenantChildWhere(id, session.companyId),
       data: {
         name: rawData.name,
         birthDate: rawData.birthDate ? safeDate(rawData.birthDate) ?? undefined : undefined,
@@ -738,6 +758,11 @@ export async function getActivityLogs() {
 export async function getCustomerExchangeReturns(customerId: string) {
   const session = await requirePermission('CLIENTES', 'VIEW');
   try {
+    const customer = await prisma.customer.findFirst({
+      where: tenantWhere(customerId, session.companyId), select: { id: true },
+    });
+    if (!customer) return { success: false, error: 'Cliente não encontrado.' };
+
     // Fetch from new FASE 1 tables
     const [exchanges, returns] = await Promise.all([
       prisma.saleExchange.findMany({
@@ -888,7 +913,9 @@ export async function listExchangeReturns() {
     });
 
     const customerIds = [...new Set(list.map((e: any) => e.customerId).filter(Boolean))] as string[];
-    const customers = await prisma.customer.findMany({ where: { id: { in: customerIds } } });
+    const customers = await prisma.customer.findMany({
+      where: { id: { in: customerIds }, companyId: session.companyId },
+    });
     const customerMap = new Map(customers.map(c => [c.id, c]));
 
     const mapped = list.map((e: any) => ({
@@ -972,8 +999,15 @@ export async function createCampaignAction(data: any) {
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     const { clients, name, message, integration } = data;
-    
-    for (const clientId of clients) {
+
+    const ownedClients = await prisma.customer.findMany({
+      where: { id: { in: clients }, companyId: session.companyId }, select: { id: true },
+    });
+    if (ownedClients.length !== new Set(clients).size) {
+      return { success: false, error: 'Um ou mais clientes não foram encontrados.' };
+    }
+
+    for (const { id: clientId } of ownedClients) {
       await prisma.customerHistory.create({
         data: {
           customerId: clientId,

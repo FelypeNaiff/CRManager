@@ -1,7 +1,7 @@
 'use server';
 
 import { prisma } from '@/lib/prisma';
-import { getActiveProfileSession } from '@/lib/auth/actions';
+import { requirePermission } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { Decimal } from '@prisma/client/runtime/library';
 
@@ -20,13 +20,9 @@ interface ProductImportItem {
 }
 
 export async function importProductsAction(items: ProductImportItem[]) {
+  const auth = await requirePermission('PRODUTOS', 'IMPORT');
   try {
-    const session = await getActiveProfileSession();
-    if (!session?.userId || !session.companyId) {
-      return { success: false, error: 'Usuário não autenticado.' };
-    }
-
-    const companyId = session.companyId;
+    const companyId = auth.companyId;
     let createdCount = 0;
     let updatedCount = 0;
 
@@ -119,7 +115,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 newCostPrice: costPrice,
                 oldSalePrice: existingVariant.salePrice,
                 newSalePrice: salePrice,
-                changedByUserId: session.userId,
+                changedByUserId: auth.userId,
                 changeReason: "Atualização de Preço/Custo - GO-LIVE-04"
               }
             });
@@ -138,13 +134,13 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 quantity: delta,
                 type: 'INITIAL',
                 reason: 'GO-LIVE-04',
-                userId: session.userId
+                userId: auth.userId
               }
             });
 
             // Apply stock adjustment
             await tx.productVariant.update({
-              where: { id: existingVariant.id },
+              where: { id: existingVariant.id, companyId },
               data: {
                 currentStock: currentStock.plus(delta),
                 availableStock: currentAvailable.plus(delta)
@@ -154,7 +150,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
 
           // Update other variant/product properties
           await tx.productVariant.update({
-            where: { id: existingVariant.id },
+            where: { id: existingVariant.id, companyId },
             data: {
               costPrice,
               salePrice,
@@ -165,7 +161,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
           });
 
           await tx.product.update({
-            where: { id: existingVariant.productId },
+            where: { id: existingVariant.productId, companyId },
             data: {
               name: nome,
               categoryId,
@@ -205,7 +201,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
               newCostPrice: costPrice,
               oldSalePrice: 0,
               newSalePrice: salePrice,
-              changedByUserId: session.userId,
+              changedByUserId: auth.userId,
               changeReason: "Carga Inicial - GO-LIVE-04"
             }
           });
@@ -233,12 +229,12 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 quantity: targetStock,
                 type: 'INITIAL',
                 reason: 'GO-LIVE-04',
-                userId: session.userId
+                userId: auth.userId
               }
             });
 
             await tx.productVariant.update({
-              where: { id: newVariant.id },
+              where: { id: newVariant.id, companyId },
               data: {
                 currentStock: targetStock,
                 availableStock: targetStock
@@ -253,8 +249,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
 
     revalidatePath('/produtos');
     return { success: true, created: createdCount, updated: updatedCount };
-  } catch (error: any) {
-    console.error("Error during product import action:", error);
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao importar produtos.' };
   }
 }
