@@ -7,6 +7,7 @@ import { writeActivityLog } from '@/lib/auth/activity-log';
 import { Prisma } from '@prisma/client';
 import { AccountsReceivableSchema, PayInstallmentSchema } from './financial-schemas';
 import { addDays } from 'date-fns';
+import { receivableTenantWhere, relatedTenantWhere } from './receivables-tenant-security';
 
 // =============================================================================
 // ACCOUNTS RECEIVABLE SERVICE — Contas a Receber
@@ -48,8 +49,8 @@ export async function getAccountsReceivable(filters?: {
     });
 
     return { success: true, data: serializePrisma(receivables) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar contas a receber.' };
   }
 }
 
@@ -63,6 +64,19 @@ export async function createAccountsReceivable(input: any) {
 
   try {
     const installments = await prisma.$transaction(async (tx) => {
+      if (customerId) {
+        const customer = await tx.customer.findFirst({
+          where: relatedTenantWhere(customerId, session.companyId), select: { id: true },
+        });
+        if (!customer) throw new Error('Cliente não encontrado.');
+      }
+      if (financialAccountId) {
+        const financialAccount = await tx.financialAccount.findFirst({
+          where: relatedTenantWhere(financialAccountId, session.companyId), select: { id: true },
+        });
+        if (!financialAccount) throw new Error('Conta financeira não encontrada.');
+      }
+
       const baseDueDate = new Date(dueDate);
       const createdInstallments = [];
 
@@ -103,7 +117,7 @@ export async function createAccountsReceivable(input: any) {
     return { success: true, data: serializePrisma(installments) };
   } catch (error: any) {
     console.error('Error creating accounts receivable:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Erro ao criar contas a receber.' };
   }
 }
 
@@ -122,7 +136,7 @@ export async function payInstallment(
   try {
     const result = await prisma.$transaction(async (tx) => {
       const receivable = await tx.accountsReceivable.findFirst({
-        where: { id, companyId: session.companyId },
+        where: receivableTenantWhere(id, session.companyId),
       });
 
       if (!receivable) throw new Error('Conta a receber não encontrada.');
@@ -132,12 +146,27 @@ export async function payInstallment(
         throw new Error(`Valor de pagamento (R$ ${amount}) excede o saldo restante (R$ ${receivable.remainingAmount}).`);
       }
 
+      if (bankAccountId) {
+        const bankAccount = await tx.bankAccount.findFirst({
+          where: { ...relatedTenantWhere(bankAccountId, session.companyId), isActive: true },
+          select: { id: true },
+        });
+        if (!bankAccount) throw new Error('Conta bancária não encontrada.');
+      }
+      if (paymentMethodId) {
+        const paymentMethod = await tx.paymentMethod.findFirst({
+          where: { ...relatedTenantWhere(paymentMethodId, session.companyId), isActive: true },
+          select: { id: true },
+        });
+        if (!paymentMethod) throw new Error('Forma de pagamento não encontrada.');
+      }
+
       const newPaidAmount = Number(receivable.paidAmount) + amount;
       const newRemainingAmount = Number(receivable.originalAmount) - newPaidAmount;
       const isFullyPaid = newRemainingAmount <= 0;
 
       const updated = await tx.accountsReceivable.update({
-        where: { id },
+        where: receivableTenantWhere(id, session.companyId),
         data: {
           paidAmount: new Prisma.Decimal(newPaidAmount),
           remainingAmount: new Prisma.Decimal(Math.max(0, newRemainingAmount)),
@@ -169,13 +198,13 @@ export async function payInstallment(
         });
 
         await tx.bankAccount.update({
-          where: { id: bankAccountId },
+          where: relatedTenantWhere(bankAccountId, session.companyId),
           data: { currentBalance: { increment: new Prisma.Decimal(amount) } },
         });
 
         // Vincular transação à conta a receber
         await tx.accountsReceivable.update({
-          where: { id },
+          where: receivableTenantWhere(id, session.companyId),
           data: { financialTransactionId: financialTx.id },
         });
       }
@@ -195,7 +224,7 @@ export async function payInstallment(
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
     console.error('Error paying installment:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: 'Não foi possível registrar o recebimento.' };
   }
 }
 
@@ -203,7 +232,7 @@ export async function cancelReceivable(id: string, reason?: string) {
   const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     const receivable = await prisma.accountsReceivable.findFirst({
-      where: { id, companyId: session.companyId },
+      where: receivableTenantWhere(id, session.companyId),
     });
 
     if (!receivable) return { success: false, error: 'Conta a receber não encontrada.' };
@@ -211,7 +240,7 @@ export async function cancelReceivable(id: string, reason?: string) {
     if (receivable.status === 'CANCELLED') return { success: false, error: 'Esta parcela já está cancelada.' };
 
     await prisma.accountsReceivable.update({
-      where: { id },
+      where: receivableTenantWhere(id, session.companyId),
       data: { status: 'CANCELLED' },
     });
 
@@ -225,8 +254,8 @@ export async function cancelReceivable(id: string, reason?: string) {
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao cancelar conta a receber.' };
   }
 }
 
@@ -234,7 +263,7 @@ export async function renegotiateReceivable(id: string, newDueDate: string, note
   const session = await requirePermission('FINANCEIRO', 'UPDATE');
   try {
     const receivable = await prisma.accountsReceivable.findFirst({
-      where: { id, companyId: session.companyId },
+      where: receivableTenantWhere(id, session.companyId),
     });
 
     if (!receivable) return { success: false, error: 'Conta a receber não encontrada.' };
@@ -242,7 +271,7 @@ export async function renegotiateReceivable(id: string, newDueDate: string, note
     if (receivable.status === 'CANCELLED') return { success: false, error: 'Não é possível renegociar uma parcela cancelada.' };
 
     await prisma.accountsReceivable.update({
-      where: { id },
+      where: receivableTenantWhere(id, session.companyId),
       data: {
         dueDate: new Date(newDueDate),
         status: 'RENEGOTIATED',
@@ -260,25 +289,26 @@ export async function renegotiateReceivable(id: string, newDueDate: string, note
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao renegociar conta a receber.' };
   }
 }
 
 export async function recalculateOverdueReceivables(companyId: string) {
-  // Utilitário para marcar parcelas vencidas como OVERDUE automaticamente
+  // Mantém o parâmetro apenas por compatibilidade; o tenant externo não possui autoridade.
+  const auth = await requirePermission('FINANCEIRO', 'UPDATE');
   try {
     const now = new Date();
     const result = await prisma.accountsReceivable.updateMany({
       where: {
-        companyId,
+        companyId: auth.companyId,
         status: 'PENDING',
         dueDate: { lt: now },
       },
       data: { status: 'OVERDUE' },
     });
     return { success: true, updatedCount: result.count };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao recalcular contas vencidas.' };
   }
 }

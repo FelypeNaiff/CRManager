@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import { requirePermission } from "@/lib/auth/permissions";
 import { receivablesService } from "./receivables-service";
 import { revalidatePath } from "next/cache";
+import { scopeReceivablesList, secureReceivableSettlement } from './receivables-tenant-security';
 
 export async function getAccountsReceivableAction(companyId: string, filters?: {
   status?: string;
@@ -13,9 +14,9 @@ export async function getAccountsReceivableAction(companyId: string, filters?: {
   customerId?: string;
 }) {
   try {
-    await requirePermission("FINANCEIRO", "VIEW");
+    const auth = await requirePermission("FINANCEIRO", "VIEW");
 
-    const whereClause: any = { companyId };
+    const whereClause: any = scopeReceivablesList(auth, undefined, companyId);
 
     if (filters?.status && filters.status !== "ALL") {
       whereClause.status = filters.status;
@@ -43,25 +44,34 @@ export async function getAccountsReceivableAction(companyId: string, filters?: {
     });
 
     return { success: true, receivables };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar contas a receber.' };
   }
 }
 
 export async function settleReceivableAction(receivableId: string) {
   try {
     const session = await requirePermission("FINANCEIRO", "UPDATE");
+    const settlement = secureReceivableSettlement(session, receivableId);
 
     await prisma.$transaction(async (tx: any) => {
-      await receivablesService.settleReceivable(receivableId, new Date(), session.userId, tx);
+      await receivablesService.settleReceivable(
+        settlement.receivableId,
+        new Date(),
+        settlement.userId,
+        settlement.companyId,
+        tx,
+      );
       
       // Activity Log
-      const rec = await tx.accountsReceivable.findUnique({ where: { id: receivableId } });
+      const rec = await tx.accountsReceivable.findFirst({
+        where: { id: settlement.receivableId, companyId: settlement.companyId },
+      });
       if (rec) {
         await tx.activityLog.create({
           data: {
-            companyId: rec.companyId,
-            userId: session.userId,
+            companyId: settlement.companyId,
+            userId: settlement.userId,
             action: "SETTLE_RECEIVABLE",
             module: "FINANCEIRO",
             recordId: receivableId,
@@ -73,7 +83,7 @@ export async function settleReceivableAction(receivableId: string) {
 
     revalidatePath("/financeiro/recebimentos");
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível realizar a baixa do recebível.' };
   }
 }

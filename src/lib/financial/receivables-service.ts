@@ -257,9 +257,15 @@ export class ReceivablesService {
   /**
    * Realiza a baixa manual de um Contas a Receber, processando taxas.
    */
-  async settleReceivable(receivableId: string, settleDate: Date, userId: string, tx: Prisma.TransactionClient) {
-    const receivable = await tx.accountsReceivable.findUnique({
-      where: { id: receivableId },
+  async settleReceivable(
+    receivableId: string,
+    settleDate: Date,
+    userId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const receivable = await tx.accountsReceivable.findFirst({
+      where: { id: receivableId, companyId },
       include: {
         financialTransaction: {
           include: { paymentMethod: true }
@@ -272,12 +278,16 @@ export class ReceivablesService {
 
     const finTx = receivable.financialTransaction;
     if (!finTx) throw new Error("Recebível não possui transação financeira atrelada.");
+    if (finTx.companyId !== companyId) throw new Error("Recebível não encontrado.");
+    if (finTx.paymentMethod && finTx.paymentMethod.companyId !== companyId) {
+      throw new Error("Recebível não encontrado.");
+    }
 
     const amount = receivable.originalAmount;
 
     // Atualiza Recebível
     await tx.accountsReceivable.update({
-      where: { id: receivableId },
+      where: { id: receivableId, companyId },
       data: {
         paidAmount: amount,
         remainingAmount: 0,
@@ -288,7 +298,7 @@ export class ReceivablesService {
 
     // Atualiza a Transação Principal (Entrada do Valor Bruto)
     await tx.financialTransaction.update({
-      where: { id: finTx.id },
+      where: { id: finTx.id, companyId },
       data: {
         status: FinancialTransactionStatus.PAID,
         paidAt: settleDate
