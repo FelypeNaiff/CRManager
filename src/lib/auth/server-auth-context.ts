@@ -252,7 +252,7 @@ export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
 
   const cookieStore = await cookies();
   const selectorToken = cookieStore.get(PROFILE_SESSION_COOKIE)?.value;
-  if (!selectorToken) return baseContext;
+  if (!selectorToken) throw new ServerAuthError('INVALID_CONTEXT');
 
   try {
     const selector = verifyProfileSelector(

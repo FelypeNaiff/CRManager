@@ -1,178 +1,65 @@
-import { NextResponse } from 'next/server';
-import type { NextRequest } from 'next/server';
+import { createServerClient } from '@supabase/ssr';
+import { NextResponse, type NextRequest } from 'next/server';
+import { decideRequest } from '@/lib/auth/middleware-policy';
+import { verifyProfileSelectorAtEdge } from '@/lib/auth/profile-selector-edge';
 
 export const SESSION_COOKIE = '@crmanager:activeProfileSession';
 
-// Routes completely open (no auth required)
-const PUBLIC_PATHS = [
-  '/login',
-  '/selecionar-perfil',
-  '/setup',
-  '/favicon.ico',
-  '/_next',
-  '/api',
-];
+function preserveSupabaseCookies(source: NextResponse, target: NextResponse): NextResponse {
+  source.cookies.getAll().forEach((cookie) => target.cookies.set(cookie));
+  return target;
+}
 
-// Routes that any authenticated profile can access
-const FREE_AUTH_PATHS = ['/dashboard', '/inbox', '/agenda'];
+export async function middleware(request: NextRequest) {
+  let response = NextResponse.next({ request });
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  let authUserId: string | null = null;
 
-// Route → [module, action] map for RBAC enforcement
-const ROUTE_PERMISSION_MAP: Array<{
-  prefix: string;
-  module: string;
-  action: string;
-}> = [
-  // Segurança / Configurações
-  { prefix: '/configuracoes/usuarios',        module: 'USUARIOS',               action: 'VIEW' },
-  { prefix: '/configuracoes/grupos-usuarios', module: 'GRUPOS_USUARIOS',         action: 'VIEW' },
-  { prefix: '/configuracoes/permissoes',      module: 'PERMISSOES',              action: 'VIEW' },
-  { prefix: '/configuracoes/empresa',         module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
-  { prefix: '/configuracoes/dados-empresa',   module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
-  { prefix: '/configuracoes/minha-empresa',   module: 'CONFIGURACOES_EMPRESA',    action: 'VIEW' },
-  { prefix: '/configuracoes/configuracoes-operacionais', module: 'CONFIGURACOES_OPERACIONAIS', action: 'VIEW' },
-  { prefix: '/configuracoes/logs',            module: 'LOGS',                    action: 'VIEW' },
-
-  // Financeiro
-  { prefix: '/financeiro',                    module: 'FINANCEIRO',              action: 'VIEW' },
-  { prefix: '/carteira-saldos',               module: 'FINANCEIRO',              action: 'VIEW' },
-  { prefix: '/contas-a-pagar',                module: 'FINANCEIRO',          action: 'VIEW' },
-  { prefix: '/contas-a-receber',              module: 'FINANCEIRO',        action: 'VIEW' },
-
-  // Estoque & Produtos
-  { prefix: '/produtos',                      module: 'PRODUTOS',                action: 'VIEW' },
-  { prefix: '/estoque',                       module: 'ESTOQUE',                 action: 'VIEW' },
-  { prefix: '/movimentacoes',                 module: 'ESTOQUE',                 action: 'VIEW' },
-
-  // CRM
-  { prefix: '/clientes',                      module: 'CLIENTES',                action: 'VIEW' },
-  { prefix: '/aniversariantes',               module: 'CLIENTES',                action: 'VIEW' },
-  { prefix: '/clientes-com-saldo',            module: 'CLIENTES',                action: 'VIEW' },
-  { prefix: '/filhos',                        module: 'FILHOS',                  action: 'VIEW' },
-  { prefix: '/crm/carteira',                  module: 'CARTEIRA',                action: 'VIEW' },
-  { prefix: '/wallet',                        module: 'CARTEIRA',                action: 'VIEW' },
-  { prefix: '/crm',                           module: 'CRM',                     action: 'VIEW' },
-
-  // Vendas / PDV
-  { prefix: '/pdv',                           module: 'PDV',                     action: 'VIEW' },
-  { prefix: '/caixa',                         module: 'CAIXA',                   action: 'VIEW' },
-  { prefix: '/financeiro/caixas',             module: 'CAIXA',                   action: 'VIEW' },
-  { prefix: '/vendas',                        module: 'VENDAS',                  action: 'VIEW' },
-  { prefix: '/comercial/vendas',              module: 'VENDAS',                  action: 'VIEW' },
-  
-  // Trocas & Devoluções
-  { prefix: '/trocas',                        module: 'TROCAS',                  action: 'VIEW' },
-  { prefix: '/comercial/trocas',              module: 'TROCAS',                  action: 'VIEW' },
-  { prefix: '/devolucoes',                    module: 'DEVOLUCOES',              action: 'VIEW' },
-  { prefix: '/returns',                       module: 'DEVOLUCOES',              action: 'VIEW' },
-  { prefix: '/vendas/devolucoes',             module: 'DEVOLUCOES',              action: 'VIEW' },
-
-  // Relatórios
-  { prefix: '/relatorios',                    module: 'RELATORIOS',              action: 'VIEW' },
-  { prefix: '/comercial/relatorios',          module: 'RELATORIOS',              action: 'VIEW' },
-
-  // Generic /comercial matches
-  { prefix: '/comercial',                     module: 'VENDAS',                  action: 'VIEW' },
-];
-
-export function middleware(request: NextRequest) {
-  const { pathname } = request.nextUrl;
-
-  // 1. Read session cookie early
-  const sessionCookie = request.cookies.get(SESSION_COOKIE);
-
-  // 2. Handle public paths
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p) || pathname === p)) {
-    // se usuário autenticado acessar /login, redirecionar para /dashboard
-    if (sessionCookie?.value && pathname === '/login') {
-      return NextResponse.redirect(new URL('/dashboard', request.url));
-    }
-    return NextResponse.next();
+  if (supabaseUrl && supabaseKey) {
+    const supabase = createServerClient(supabaseUrl, supabaseKey, {
+      cookies: {
+        getAll: () => request.cookies.getAll(),
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value));
+          response = NextResponse.next({ request });
+          cookiesToSet.forEach(({ name, value, options }) => response.cookies.set(name, value, options));
+        },
+      },
+    });
+    const { data, error } = await supabase.auth.getUser();
+    if (!error && data.user) authUserId = data.user.id;
   }
 
-  // 3. Read session cookie (if no session -> redirect to login)
-  if (!sessionCookie?.value) {
-    // Não session → redirect to login
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('callbackUrl', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  // Signed profile selectors are opaque to middleware. Until the dedicated
-  // middleware hardening commit, allow only the free authenticated shell here;
-  // sensitive APIs/actions still enforce Supabase + Prisma server-side RBAC.
-  if (sessionCookie.value.split('.').length === 2) {
-    if (FREE_AUTH_PATHS.some((p) => pathname.startsWith(p))) return NextResponse.next();
-    if (pathname === '/') return NextResponse.redirect(new URL('/dashboard', request.url));
-    return NextResponse.redirect(new URL('/selecionar-perfil', request.url));
-  }
-
-  let session: {
-    userId: string;
-    isAdmin: boolean;
-    permissions: Record<string, boolean>;
-    name: string;
-  };
-
-  try {
-    session = JSON.parse(sessionCookie.value);
-  } catch {
-    // Corrupt cookie → force re-login
-    const res = NextResponse.redirect(new URL('/login', request.url));
-    res.cookies.delete(SESSION_COOKIE);
-    return res;
-  }
-
-  // 3. Admins bypass all RBAC checks
-  if (session.isAdmin) {
-    return NextResponse.next();
-  }
-
-  // 4. Free routes for any authenticated profile
-  if (FREE_AUTH_PATHS.some((p) => pathname.startsWith(p))) {
-    return NextResponse.next();
-  }
-
-  // 5. Root redirect
-  if (pathname === '/') {
-    return NextResponse.redirect(new URL('/dashboard', request.url));
-  }
-
-  // 6. Evaluate RBAC from cookie permissions map (no DB call in middleware)
-  const matchedRule = ROUTE_PERMISSION_MAP.find((rule) =>
-    pathname.startsWith(rule.prefix)
+  const selector = request.cookies.get(SESSION_COOKIE)?.value;
+  const selectorSecret = process.env.NEEX_PROFILE_SESSION_SECRET;
+  const hasValidSelector = !!(
+    authUserId && selector && selectorSecret
+    && await verifyProfileSelectorAtEdge(selector, selectorSecret, authUserId)
   );
+  const decision = decideRequest({
+    pathname: request.nextUrl.pathname,
+    hasSupabaseIdentity: !!authUserId,
+    hasValidSelector,
+  });
 
-  if (matchedRule) {
-    const key = `${matchedRule.module}:${matchedRule.action}`;
-    const hasPermission = !!session.permissions[key];
-
-    if (!hasPermission) {
-      const deniedUrl = new URL('/selecionar-perfil', request.url);
-      deniedUrl.searchParams.set('error', 'unauthorized');
-      return NextResponse.redirect(deniedUrl);
-    }
-
-    return NextResponse.next();
+  if (decision === 'allow') return response;
+  if (decision === 'api-401' || decision === 'api-403') {
+    return preserveSupabaseCookies(response, NextResponse.json(
+      { success: false, error: decision === 'api-401' ? 'Autenticação necessária.' : 'Acesso não permitido.' },
+      { status: decision === 'api-401' ? 401 : 403 }
+    ));
   }
 
-  // 7. /configuracoes catch-all
-  if (pathname.startsWith('/configuracoes')) {
-    const hasConfig = !!session.permissions['CONFIGURACOES:VIEW'];
-    
-    // As long as the user has some sort of configuration view, they can see the layout
-    if (hasConfig) {
-      return NextResponse.next();
-    }
-
-    const deniedUrl = new URL('/selecionar-perfil', request.url);
-    deniedUrl.searchParams.set('error', 'unauthorized');
-    return NextResponse.redirect(deniedUrl);
-  }
-
-  // 8. Unmapped protected routes — deny by default
-  const deniedUrl = new URL('/selecionar-perfil', request.url);
-  deniedUrl.searchParams.set('error', 'unauthorized');
-  return NextResponse.redirect(deniedUrl);
+  const destination = decision === 'login'
+    ? '/login'
+    : decision === 'dashboard'
+      ? '/dashboard'
+      : '/selecionar-perfil';
+  const redirect = NextResponse.redirect(new URL(destination, request.url));
+  preserveSupabaseCookies(response, redirect);
+  if (selector && !hasValidSelector) redirect.cookies.delete(SESSION_COOKIE);
+  return redirect;
 }
 
 export const config = {

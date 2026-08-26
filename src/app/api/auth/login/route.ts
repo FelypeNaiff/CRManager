@@ -11,8 +11,6 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Usuário e senha são obrigatórios.' }, { status: 400 })
     }
 
-    console.log(`[LOGIN] Tentativa para: ${username}`)
-
     // Find user by username OR email
     const user = await prisma.user.findFirst({
       where: {
@@ -31,16 +29,12 @@ export async function POST(req: NextRequest) {
     })
 
     if (!user) {
-      console.log(`[LOGIN] Usuário não encontrado: ${username}`)
       return NextResponse.json({ success: false, error: 'Usuário não encontrado' }, { status: 401 })
     }
 
     if (user.status !== 'ACTIVE' || user.permitirAcesso === false) {
-      console.log(`[LOGIN] Usuário inativo: ${user.email}`)
       return NextResponse.json({ success: false, error: 'Usuário inativo' }, { status: 403 })
     }
-
-    console.log(`[LOGIN] Usuário encontrado. Autenticando com email: ${user.email}`)
 
     // Auth with Supabase using email
     const supabase = await createClient()
@@ -50,16 +44,14 @@ export async function POST(req: NextRequest) {
     })
 
     if (authError || !authData.session) {
-      console.error(`[LOGIN] Falha no Supabase Auth:`, authError?.message)
-      return NextResponse.json({ success: false, error: `Falha Supabase Auth: ${authError?.message || 'Sessão nula'}` }, { status: 401 })
+      return NextResponse.json({ success: false, error: 'Credenciais inválidas.' }, { status: 401 })
     }
 
     // Supabase establishes identity. A separate PIN step selects an eligible
     // operational profile and emits the signed selector cookie.
     return NextResponse.json({ success: true, redirectTo: '/selecionar-perfil' })
 
-  } catch (error: any) {
-    console.error('[LOGIN] Erro interno capturado com stack:', error.stack || error)
-    return NextResponse.json({ success: false, error: `Erro interno: ${error.message || String(error)}` }, { status: 500 })
+  } catch {
+    return NextResponse.json({ success: false, error: 'Erro interno do servidor.' }, { status: 500 })
   }
 }

@@ -11,7 +11,7 @@ import {
 import { Bell, User, LogOut, Store } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { logoutProfileSession } from "@/lib/auth/actions"
+import { logoutSession } from "@/lib/auth/actions"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,20 +44,16 @@ export default function DashboardLayout({
   // On mount: fetch real session from the HTTP-only cookie via API
   useEffect(() => {
     async function loadSession() {
-      console.log('[layout] carregando sessão...')
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 10000);
         const res = await fetch('/api/auth/session', { cache: 'no-store', signal: controller.signal })
         clearTimeout(timeoutId);
-        console.log('[layout] session result status:', res.status)
         if (res.ok) {
           const body = await res.json()
-          console.log('[layout] session result', body)
           if (body.authenticated && body.session) {
             const sess: SessionData = body.session
             setSessionData(sess)
-            console.log('[permissions] result', (sess as any).permissions)
 
             // Sync profile context from real session
             loginProfile({
@@ -76,9 +72,7 @@ export default function DashboardLayout({
         } else {
           window.location.replace('/login')
         }
-      } catch (err) {
-        console.error('[layout] erro', err)
-        console.error('[DashboardLayout] Session fetch failed:', err)
+      } catch {
         window.location.replace('/login')
       } finally {
         setIsSessionLoading(false)
@@ -91,7 +85,7 @@ export default function DashboardLayout({
 
   const handleLogoutMaster = async () => {
     logoutProfile()
-    await logoutProfileSession()
+    await logoutSession()
     window.location.replace('/login')
   }
 

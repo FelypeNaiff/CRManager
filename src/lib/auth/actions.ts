@@ -16,6 +16,7 @@ import {
   PROFILE_SELECTOR_MAX_AGE_SECONDS,
   PROFILE_SESSION_COOKIE,
 } from './profile-selector';
+import { performServerLogout } from './session-logout';
 
 export interface ActiveProfileSession {
   userId: string;
@@ -188,6 +189,11 @@ export async function logoutProfileSession(options?: { logEvent?: boolean }) {
   } catch {
     return { success: false as const, error: 'Erro ao encerrar sessão.' };
   }
+}
+
+/** Unified logout: ends Supabase Auth and clears the profile selector. */
+export async function logoutSession() {
+  return performServerLogout();
 }
 
 /**
