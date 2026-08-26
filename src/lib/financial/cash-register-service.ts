@@ -9,6 +9,12 @@ import { CashRegisterOpenSchema, CashRegisterCloseSchema, CashMovementSchema } f
 import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
 import { AuthorizationType } from '@prisma/client';
 import { authorizationService } from '../auth/authorization-service';
+import {
+  approvedCashAuthorizationWhere,
+  cashMovementPermission,
+  financialTenantWhere,
+  safeFinancialError,
+} from './financial-tenant-security';
 
 // =============================================================================
 // CASH REGISTER SERVICE — Serviço de Caixa
@@ -31,8 +37,8 @@ export async function getCurrentOpenRegister() {
       },
     });
     return { success: true, data: serializePrisma(register) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar o caixa atual.' };
   }
 }
 
@@ -51,13 +57,13 @@ export async function getCashRegisters(limit = 30) {
       take: limit,
     });
     return { success: true, data: serializePrisma(registers) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar caixas.' };
   }
 }
 
 export async function openCashRegister(input: any) {
-  const session = await requirePermission('CAIXA', 'CREATE');
+  const session = await requirePermission('CAIXA', 'OPEN');
   const parsed = CashRegisterOpenSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -122,14 +128,19 @@ export async function openCashRegister(input: any) {
     });
 
     return { success: true, data: serializePrisma(result) };
-  } catch (error: any) {
-    console.error('Error opening cash register:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: safeFinancialError(error, 'Não foi possível abrir o caixa.', [
+        'Já existe um caixa aberto. Feche o caixa atual antes de abrir um novo.',
+        'Conta bancária não encontrada ou inativa.',
+      ]),
+    };
   }
 }
 
 export async function closeCashRegister(registerId: string, input: any) {
-  const session = await requirePermission('CAIXA', 'UPDATE');
+  const session = await requirePermission('CAIXA', 'CLOSE');
   const parsed = CashRegisterCloseSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
@@ -137,8 +148,9 @@ export async function closeCashRegister(registerId: string, input: any) {
     const result = await prisma.$transaction(async (tx) => {
       // Travar o caixa para evitar fechamento duplo ou movimentações concorrentes
       await tx.$queryRawUnsafe(
-        `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
-        registerId
+        `SELECT id FROM cash_registers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+        registerId,
+        session.companyId,
       );
 
       const register = await tx.cashRegister.findFirst({
@@ -160,11 +172,11 @@ export async function closeCashRegister(registerId: string, input: any) {
       // Soma das transações IN/OUT do caixa
       const [inSum, outSum] = await Promise.all([
         tx.financialTransaction.aggregate({
-          where: { cashRegisterId: registerId, direction: 'IN', status: 'PAID' },
+          where: { cashRegisterId: registerId, companyId: session.companyId, direction: 'IN', status: 'PAID' },
           _sum: { amount: true },
         }),
         tx.financialTransaction.aggregate({
-          where: { cashRegisterId: registerId, direction: 'OUT', status: 'PAID' },
+          where: { cashRegisterId: registerId, companyId: session.companyId, direction: 'OUT', status: 'PAID' },
           _sum: { amount: true },
         }),
       ]);
@@ -173,7 +185,7 @@ export async function closeCashRegister(registerId: string, input: any) {
       const difference = parsed.data.closingBalance - expectedBalance;
 
       const updated = await tx.cashRegister.update({
-        where: { id: registerId },
+        where: financialTenantWhere(registerId, session.companyId),
         data: {
           status: 'CLOSED',
           closedByUserId: session.userId,
@@ -210,16 +222,22 @@ export async function closeCashRegister(registerId: string, input: any) {
     });
 
     return { success: true, data: serializePrisma(result) };
-  } catch (error: any) {
-    console.error('Error closing cash register:', error);
-    return { success: false, error: error.message };
+  } catch (error: unknown) {
+    return {
+      success: false,
+      error: safeFinancialError(error, 'Não foi possível fechar o caixa.', [
+        'Caixa não encontrado.',
+        'Este caixa já está fechado.',
+        'Este caixa está suspenso e não pode ser fechado diretamente.',
+      ]),
+    };
   }
 }
 
 export async function addCashMovement(input: any) {
-  const session = await requirePermission('CAIXA', 'UPDATE');
   const parsed = CashMovementSchema.safeParse(input);
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+  const session = await requirePermission('CAIXA', cashMovementPermission(parsed.data.type));
 
   const typeLabel = parsed.data.type === 'REFORCO' ? 'Reforço' : parsed.data.type === 'SANGRIA' ? 'Sangria' : 'Ajuste';
 
@@ -227,8 +245,9 @@ export async function addCashMovement(input: any) {
     const movement = await prisma.$transaction(async (tx) => {
       // Travar o caixa para evitar movimentações em caixas concorrentemente fechados
       await tx.$queryRawUnsafe(
-        `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
-        parsed.data.cashRegisterId
+        `SELECT id FROM cash_registers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+        parsed.data.cashRegisterId,
+        session.companyId,
       );
 
       const register = await tx.cashRegister.findFirst({
@@ -242,8 +261,15 @@ export async function addCashMovement(input: any) {
       const settings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId, tx);
       if (parsed.data.type === 'SANGRIA' && !settings.allowCashWithdrawal) {
         if (input.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
-          if (!auth || auth.status !== 'APPROVED') {
+          const auth = await tx.actionAuthorization.findFirst({
+            where: approvedCashAuthorizationWhere(
+              input.authorizationId,
+              session.companyId,
+              register.id,
+              'CASH_WITHDRAWAL',
+            ),
+          });
+          if (!auth) {
             throw new Error('Autorização de sangria inválida ou não aprovada.');
           }
         } else {
@@ -263,8 +289,15 @@ export async function addCashMovement(input: any) {
       }
       if (parsed.data.type === 'REFORCO' && !settings.allowCashSupply) {
         if (input.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: input.authorizationId } });
-          if (!auth || auth.status !== 'APPROVED') {
+          const auth = await tx.actionAuthorization.findFirst({
+            where: approvedCashAuthorizationWhere(
+              input.authorizationId,
+              session.companyId,
+              register.id,
+              'CASH_SUPPLY',
+            ),
+          });
+          if (!auth) {
             throw new Error('Autorização de reforço inválida ou não aprovada.');
           }
         } else {
@@ -297,7 +330,7 @@ export async function addCashMovement(input: any) {
       // Atualizar saldo da conta bancária associada ao caixa
       const balanceDelta = parsed.data.type === 'REFORCO' ? parsed.data.amount : -parsed.data.amount;
       await tx.bankAccount.update({
-        where: { id: register.bankAccountId },
+        where: financialTenantWhere(register.bankAccountId, session.companyId),
         data: { currentBalance: { increment: new Prisma.Decimal(balanceDelta) } },
       });
 
@@ -319,9 +352,8 @@ export async function addCashMovement(input: any) {
     });
 
     return { success: true, data: serializePrisma(movement) };
-  } catch (error: any) {
-    console.error('Error adding cash movement:', error);
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível realizar a movimentação de caixa.' };
   }
 }
 
@@ -334,7 +366,7 @@ export async function getCashRegisterMovements(cashRegisterId: string) {
       orderBy: { createdAt: 'asc' },
     });
     return { success: true, data: serializePrisma(movements) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar movimentações do caixa.' };
   }
 }

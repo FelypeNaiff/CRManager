@@ -12,6 +12,42 @@ import {
   PaymentMethodSchema,
   FinancialTransactionSchema,
 } from './financial-schemas';
+import { financialTenantWhere } from './financial-tenant-security';
+
+async function validateFinancialTransactionRelations(
+  tx: Prisma.TransactionClient,
+  companyId: string,
+  data: {
+    bankAccountId?: string | null;
+    cashRegisterId?: string | null;
+    paymentMethodId?: string | null;
+    costCenterId?: string | null;
+    financialAccountId?: string | null;
+    customerId?: string | null;
+  },
+) {
+  const [bankAccount, cashRegister, paymentMethod, costCenter, financialAccount, customer] = await Promise.all([
+    data.bankAccountId ? tx.bankAccount.findFirst({ where: { ...financialTenantWhere(data.bankAccountId, companyId), isActive: true }, select: { id: true } }) : null,
+    data.cashRegisterId ? tx.cashRegister.findFirst({
+      where: { ...financialTenantWhere(data.cashRegisterId, companyId), status: 'OPEN' },
+      select: { id: true, bankAccountId: true },
+    }) : null,
+    data.paymentMethodId ? tx.paymentMethod.findFirst({ where: { ...financialTenantWhere(data.paymentMethodId, companyId), isActive: true }, select: { id: true } }) : null,
+    data.costCenterId ? tx.costCenter.findFirst({ where: { ...financialTenantWhere(data.costCenterId, companyId), isActive: true }, select: { id: true } }) : null,
+    data.financialAccountId ? tx.financialAccount.findFirst({ where: { ...financialTenantWhere(data.financialAccountId, companyId), isActive: true }, select: { id: true } }) : null,
+    data.customerId ? tx.customer.findFirst({ where: financialTenantWhere(data.customerId, companyId), select: { id: true } }) : null,
+  ]);
+
+  if (data.bankAccountId && !bankAccount) throw new Error('Vínculo financeiro inválido.');
+  if (data.cashRegisterId && !cashRegister) throw new Error('Vínculo financeiro inválido.');
+  if (data.paymentMethodId && !paymentMethod) throw new Error('Vínculo financeiro inválido.');
+  if (data.costCenterId && !costCenter) throw new Error('Vínculo financeiro inválido.');
+  if (data.financialAccountId && !financialAccount) throw new Error('Vínculo financeiro inválido.');
+  if (data.customerId && !customer) throw new Error('Vínculo financeiro inválido.');
+  if (cashRegister && data.bankAccountId && cashRegister.bankAccountId !== data.bankAccountId) {
+    throw new Error('Vínculo financeiro inválido.');
+  }
+}
 
 // =============================================================================
 // BANK ACCOUNTS — Contas Bancárias
@@ -25,8 +61,8 @@ export async function getBankAccounts() {
       orderBy: { name: 'asc' },
     });
     return { success: true, data: serializePrisma(accounts) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar contas bancárias.' };
   }
 }
 
@@ -38,8 +74,8 @@ export async function getBankAccountById(id: string) {
     });
     if (!account) return { success: false, error: 'Conta não encontrada.' };
     return { success: true, data: serializePrisma(account) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar conta bancária.' };
   }
 }
 
@@ -76,8 +112,8 @@ export async function createBankAccount(input: any) {
     });
 
     return { success: true, data: serializePrisma(account) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao criar conta bancária.' };
   }
 }
 
@@ -102,8 +138,8 @@ export async function updateBankAccount(id: string, input: any) {
     });
 
     return { success: true, data: serializePrisma(account) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao atualizar conta bancária.' };
   }
 }
 
@@ -125,8 +161,8 @@ export async function deleteBankAccount(id: string) {
     });
 
     return { success: true };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao arquivar conta bancária.' };
   }
 }
 
@@ -407,6 +443,8 @@ export async function createFinancialTransaction(input: any) {
 
   try {
     const transaction = await prisma.$transaction(async (tx) => {
+      await validateFinancialTransactionRelations(tx, session.companyId, parsed.data);
+
       const newTx = await tx.financialTransaction.create({
         data: {
           companyId: session.companyId,
@@ -435,7 +473,7 @@ export async function createFinancialTransaction(input: any) {
       if (parsed.data.bankAccountId) {
         const delta = parsed.data.direction === 'IN' ? parsed.data.amount : -parsed.data.amount;
         await tx.bankAccount.update({
-          where: { id: parsed.data.bankAccountId },
+          where: financialTenantWhere(parsed.data.bankAccountId, session.companyId),
           data: { currentBalance: { increment: new Prisma.Decimal(delta) } },
         });
       }
@@ -453,9 +491,8 @@ export async function createFinancialTransaction(input: any) {
     });
 
     return { success: true, data: serializePrisma(transaction) };
-  } catch (error: any) {
-    console.error('Error creating financial transaction:', error);
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível criar a transação financeira.' };
   }
 }
 
@@ -494,13 +531,13 @@ export async function getFinancialTransactions(filters?: {
     });
 
     return { success: true, data: serializePrisma(transactions) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Erro ao consultar transações financeiras.' };
   }
 }
 
 export async function cancelFinancialTransaction(id: string, reason: string) {
-  const session = await requirePermission('FINANCEIRO', 'UPDATE');
+  const session = await requirePermission('FINANCEIRO', 'CANCEL');
   try {
     const result = await prisma.$transaction(async (tx) => {
       const transaction = await tx.financialTransaction.findFirst({
@@ -511,15 +548,20 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
       if (transaction.status === 'CANCELLED') throw new Error('Transação já cancelada.');
 
       const updated = await tx.financialTransaction.update({
-        where: { id },
+        where: financialTenantWhere(id, session.companyId),
         data: { status: 'CANCELLED' },
       });
 
       // Reverter saldo bancário se a transação já foi paga
       if (transaction.status === 'PAID' && transaction.bankAccountId) {
+        const bankAccount = await tx.bankAccount.findFirst({
+          where: financialTenantWhere(transaction.bankAccountId, session.companyId),
+          select: { id: true },
+        });
+        if (!bankAccount) throw new Error('Transação não encontrada.');
         const reversalDelta = transaction.direction === 'IN' ? -Number(transaction.amount) : Number(transaction.amount);
         await tx.bankAccount.update({
-          where: { id: transaction.bankAccountId },
+          where: financialTenantWhere(transaction.bankAccountId, session.companyId),
           data: { currentBalance: { increment: new Prisma.Decimal(reversalDelta) } },
         });
       }
@@ -537,8 +579,8 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
     });
 
     return { success: true, data: serializePrisma(result) };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível cancelar a transação financeira.' };
   }
 }
 

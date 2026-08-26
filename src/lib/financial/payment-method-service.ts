@@ -100,13 +100,13 @@ export async function ensureDefaultPaymentMethods(companyId: string): Promise<vo
 /**
  * Calcula o valor líquido após descontar a taxa da forma de pagamento.
  */
-export async function calculateNetAmount(paymentMethodId: string, grossAmount: number): Promise<{
+export async function calculateNetAmount(paymentMethodId: string, grossAmount: number, companyId: string): Promise<{
   grossAmount: number;
   feeAmount: number;
   netAmount: number;
   settlementDays: number;
 }> {
-  const method = await prisma.paymentMethod.findUnique({ where: { id: paymentMethodId } });
+  const method = await prisma.paymentMethod.findFirst({ where: { id: paymentMethodId, companyId } });
   if (!method) return { grossAmount, feeAmount: 0, netAmount: grossAmount, settlementDays: 0 };
 
   const feeRate = Number(method.feePercentage) / 100;
