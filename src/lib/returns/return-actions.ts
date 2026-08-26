@@ -3,42 +3,39 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { returnService, CreateReturnInput } from "./return-service";
+import { scopeTenantOperationInput } from "../exchanges/exchange-return-tenant-security";
 
 export async function createReturnAction(data: Omit<CreateReturnInput, "userId">) {
-  const session = await requirePermission("DEVOLUCOES", "CREATE");
+  const auth = await requirePermission("DEVOLUCOES", "CREATE");
   try {
-    const saleReturn = await returnService.createReturn({
-      ...data,
-      userId: session.userId
-    });
+    const saleReturn = await returnService.createReturn(scopeTenantOperationInput(
+      { ...data, userId: auth.userId }, auth
+    ));
     if (saleReturn && 'requireAuthorization' in saleReturn) {
       return { success: false, requireAuthorization: true, authorizationId: (saleReturn as any).authorizationId };
     }
     return { success: true, returnRecord: saleReturn };
-  } catch (error: any) {
-    console.error("Error in createReturnAction:", error);
-    return { success: false, error: error.message || "Erro ao processar devolução." };
+  } catch {
+    return { success: false, error: "Não foi possível processar a devolução." };
   }
 }
 
 export async function getReturnAction(id: string) {
-  await requirePermission("DEVOLUCOES", "VIEW");
+  const auth = await requirePermission("DEVOLUCOES", "VIEW");
   try {
-    const returnRecord = await returnService.getReturn(id);
+    const returnRecord = await returnService.getReturn(id, auth.companyId);
     return { success: true, returnRecord };
-  } catch (error: any) {
-    console.error("Error in getReturnAction:", error);
-    return { success: false, error: error.message || "Erro ao obter devolução." };
+  } catch {
+    return { success: false, error: "Devolução não encontrada." };
   }
 }
 
 export async function cancelReturnAction(id: string) {
-  const session = await requirePermission("DEVOLUCOES", "DELETE");
+  const auth = await requirePermission("DEVOLUCOES", "CANCEL");
   try {
-    const returnRecord = await returnService.cancelReturn(id, session.userId);
+    const returnRecord = await returnService.cancelReturn(id, auth.companyId, auth.userId);
     return { success: true, returnRecord };
-  } catch (error: any) {
-    console.error("Error in cancelReturnAction:", error);
-    return { success: false, error: error.message || "Erro ao cancelar devolução." };
+  } catch {
+    return { success: false, error: "Não foi possível cancelar a devolução." };
   }
 }

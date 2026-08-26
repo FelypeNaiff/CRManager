@@ -19,7 +19,7 @@ export interface ProcessExchangeReturnInput {
 export class ExchangeService {
   async processExchangeReturn(data: ProcessExchangeReturnInput) {
     return await prisma.$transaction(async (tx) => {
-      const sale = await tx.sale.findUnique({
+      const sale = await tx.sale.findFirst({
         where: { id: data.saleId, companyId: data.companyId },
         include: { items: true, commissions: true, customer: true }
       }) as any;
@@ -27,6 +27,17 @@ export class ExchangeService {
       if (!sale) throw new Error("Venda não encontrada.");
       if (sale.status === "CANCELLED") throw new Error("Venda já está cancelada.");
       if (!sale.customerId) throw new Error("Não é possível gerar crédito sem um cliente vinculado à venda.");
+
+      const customer = await tx.customer.findFirst({
+        where: { id: sale.customerId, companyId: data.companyId }
+      });
+      if (!customer) throw new Error("Cliente inválido.");
+
+      const variantIds = [...new Set(data.items.map(item => item.variantId))];
+      const validVariants = await tx.productVariant.count({
+        where: { id: { in: variantIds }, companyId: data.companyId }
+      });
+      if (validVariants !== variantIds.length) throw new Error("Item inválido.");
 
       let totalCredit = 0;
       let totalReturnedItems = 0;
@@ -46,8 +57,6 @@ export class ExchangeService {
         }
       }
       
-      console.debug(`[ExchangeService] saleId: ${sale.id}, existingReturns: ${existingReturns.length}`);
-
       for (const itemInput of data.items) {
         const saleItem = sale.items.find((i: { variantId: string }) => i.variantId === itemInput.variantId);
         if (!saleItem) throw new Error(`Produto não encontrado na venda (variante ${itemInput.variantId})`);

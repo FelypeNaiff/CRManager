@@ -2,13 +2,16 @@
 import { serializePrisma } from '@/lib/serialize';
 
 import { ExchangeService, ProcessExchangeReturnInput } from "../exchange-service";
+import { requirePermission } from "@/lib/auth/permissions";
+import { scopeTenantOperationInput } from "@/lib/exchanges/exchange-return-tenant-security";
 
 export async function processExchangeReturnAction(data: ProcessExchangeReturnInput): Promise<{ success: true; exchangeReturn: any; totalCredit: number } | { success: false; error: string }> {
   try {
+    const auth = await requirePermission("TROCAS", "CREATE");
     const exchangeService = new ExchangeService();
-    const result = await exchangeService.processExchangeReturn(data);
+    const result = await exchangeService.processExchangeReturn(scopeTenantOperationInput(data, auth));
     return result as any;
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Não foi possível processar a troca." };
   }
 }

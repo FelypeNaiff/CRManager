@@ -3,42 +3,39 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { requirePermission } from "@/lib/auth/permissions";
 import { exchangeService, CreateExchangeInput } from "./exchange-service";
+import { scopeTenantOperationInput } from "./exchange-return-tenant-security";
 
 export async function createExchangeAction(data: Omit<CreateExchangeInput, "userId">) {
-  const session = await requirePermission("TROCAS", "CREATE");
+  const auth = await requirePermission("TROCAS", "CREATE");
   try {
-    const exchange = await exchangeService.createExchange({
-      ...data,
-      userId: session.userId
-    });
+    const exchange = await exchangeService.createExchange(scopeTenantOperationInput(
+      { ...data, userId: auth.userId }, auth
+    ));
     if (exchange && 'requireAuthorization' in exchange) {
       return { success: false, requireAuthorization: true, authorizationId: exchange.authorizationId };
     }
     return { success: true, exchange };
-  } catch (error: any) {
-    console.error("Error in createExchangeAction:", error);
-    return { success: false, error: error.message || "Erro ao processar troca." };
+  } catch {
+    return { success: false, error: "Não foi possível processar a troca." };
   }
 }
 
 export async function getExchangeAction(id: string) {
-  await requirePermission("TROCAS", "VIEW");
+  const auth = await requirePermission("TROCAS", "VIEW");
   try {
-    const exchange = await exchangeService.getExchange(id);
+    const exchange = await exchangeService.getExchange(id, auth.companyId);
     return { success: true, exchange };
-  } catch (error: any) {
-    console.error("Error in getExchangeAction:", error);
-    return { success: false, error: error.message || "Erro ao obter troca." };
+  } catch {
+    return { success: false, error: "Troca não encontrada." };
   }
 }
 
 export async function cancelExchangeAction(id: string) {
-  const session = await requirePermission("TROCAS", "DELETE");
+  const auth = await requirePermission("TROCAS", "CANCEL");
   try {
-    const exchange = await exchangeService.cancelExchange(id, session.userId);
+    const exchange = await exchangeService.cancelExchange(id, auth.companyId, auth.userId);
     return { success: true, exchange };
-  } catch (error: any) {
-    console.error("Error in cancelExchangeAction:", error);
-    return { success: false, error: error.message || "Erro ao cancelar troca." };
+  } catch {
+    return { success: false, error: "Não foi possível cancelar a troca." };
   }
 }

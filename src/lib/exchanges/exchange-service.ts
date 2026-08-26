@@ -4,6 +4,7 @@ import { AuthorizationType } from "@prisma/client";
 import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
 import { writeActivityLog } from "../auth/activity-log";
+import { itemBelongsToSale, tenantResourceWhere } from "./exchange-return-tenant-security";
 
 export interface CreateExchangeInput {
   companyId: string;
@@ -24,13 +25,24 @@ export class ExchangeService {
    */
   async createExchange(data: CreateExchangeInput) {
     // 1. Check if authorization is required
-    const sale = await prisma.sale.findUnique({
-      where: { id: data.saleId, companyId: data.companyId },
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(data.saleId, data.companyId),
       include: { items: true }
     });
     if (!sale) throw new Error("Venda não encontrada.");
     if (sale.status === "CANCELLED") throw new Error("Não é possível realizar troca de uma venda cancelada.");
     if (!sale.customerId) throw new Error("Cliente não vinculado à venda original.");
+
+    const customer = await prisma.customer.findFirst({
+      where: tenantResourceWhere(sale.customerId, data.companyId)
+    });
+    if (!customer) throw new Error("Cliente inválido.");
+
+    const variantIds = [...new Set(data.items.map(item => item.variantId))];
+    const tenantVariants = await prisma.productVariant.count({
+      where: { id: { in: variantIds }, companyId: data.companyId }
+    });
+    if (tenantVariants !== variantIds.length) throw new Error("Item inválido.");
 
     const settings = await prisma.operationalSettings.findFirst({
       where: { companyId: data.companyId }
@@ -38,7 +50,9 @@ export class ExchangeService {
 
     if (settings?.exchangeRequireAuthorization) {
       if (data.authorizationId) {
-        const auth = await prisma.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+        const auth = await prisma.actionAuthorization.findFirst({
+          where: { id: data.authorizationId, companyId: data.companyId }
+        });
         if (!auth || auth.status !== 'APPROVED') {
           throw new Error('Autorização inválida ou não aprovada.');
         }
@@ -199,16 +213,20 @@ export class ExchangeService {
   /**
    * Retrieves a SaleExchange record.
    */
-  async getExchange(id: string) {
-    return await prisma.saleExchange.findUnique({
-      where: { id }
+  async getExchange(id: string, companyId: string) {
+    const exchange = await prisma.saleExchange.findUnique({ where: { id } });
+    if (!exchange) return null;
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(exchange.originalSaleId, companyId),
+      select: { id: true }
     });
+    return sale ? exchange : null;
   }
 
   /**
    * Cancels an exchange, reverting inventory and debiting the wallet.
    */
-  async cancelExchange(id: string, userId: string) {
+  async cancelExchange(id: string, companyId: string, userId: string) {
     const exchange = await prisma.saleExchange.findUnique({
       where: { id }
     });
@@ -216,10 +234,33 @@ export class ExchangeService {
     if (exchange.notes?.startsWith("[CANCELADO]")) throw new Error("Esta troca já está cancelada.");
 
     // Fetch original sale to get companyId
-    const sale = await prisma.sale.findUnique({
-      where: { id: exchange.originalSaleId }
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(exchange.originalSaleId, companyId),
+      include: { items: true }
     });
     if (!sale) throw new Error("Venda de origem não encontrada.");
+    if (exchange.customerId !== sale.customerId) throw new Error("Troca não encontrada.");
+    const customer = await prisma.customer.findFirst({
+      where: tenantResourceWhere(exchange.customerId, companyId),
+      select: { id: true }
+    });
+    if (!customer) throw new Error("Troca não encontrada.");
+
+    let items: Array<{ variantId: string; quantity: number; condition: string }>;
+    try {
+      const parsed = JSON.parse(exchange.notes || "{}");
+      items = Array.isArray(parsed.items) ? parsed.items : [];
+    } catch {
+      throw new Error("Troca inválida.");
+    }
+    if (items.some(item => !itemBelongsToSale(sale.items, item.variantId))) {
+      throw new Error("Troca inválida.");
+    }
+    const variantIds = [...new Set(items.map(item => item.variantId))];
+    const validVariants = await prisma.productVariant.count({
+      where: { id: { in: variantIds }, companyId }
+    });
+    if (validVariants !== variantIds.length) throw new Error("Troca inválida.");
 
     return await prisma.$transaction(async (tx) => {
       // Revert credit by debiting wallet
@@ -233,10 +274,7 @@ export class ExchangeService {
       }, tx);
 
       // Revert Inventory
-      try {
-        const parsed = JSON.parse(exchange.notes || "{}");
-        const items = parsed.items || [];
-        for (const item of items) {
+      for (const item of items) {
           if (item.condition === "RESALE") {
             await tx.productVariant.update({
               where: { id: item.variantId },
@@ -256,9 +294,6 @@ export class ExchangeService {
               reason: `Estorno de Troca Cancelada ${exchange.id}`
             }
           });
-        }
-      } catch (err) {
-        console.error("Failed to parse items from exchange notes during cancellation:", err);
       }
 
       // Mark exchange as cancelled

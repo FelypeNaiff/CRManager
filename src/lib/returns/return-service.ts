@@ -4,6 +4,7 @@ import { AuthorizationType } from "@prisma/client";
 import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
 import { writeActivityLog } from "../auth/activity-log";
+import { itemBelongsToSale, tenantResourceWhere } from "../exchanges/exchange-return-tenant-security";
 
 export interface CreateReturnInput {
   companyId: string;
@@ -24,13 +25,24 @@ export class ReturnService {
    * Creates a new SaleReturn, updates inventory, and credits the wallet if WALLET is chosen.
    */
   async createReturn(data: CreateReturnInput) {
-    const sale = await prisma.sale.findUnique({
-      where: { id: data.saleId, companyId: data.companyId },
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(data.saleId, data.companyId),
       include: { items: true }
     });
     if (!sale) throw new Error("Venda não encontrada.");
     if (sale.status === "CANCELLED") throw new Error("Não é possível realizar devolução de uma venda cancelada.");
     if (!sale.customerId) throw new Error("Cliente não vinculado à venda original.");
+
+    const customer = await prisma.customer.findFirst({
+      where: tenantResourceWhere(sale.customerId, data.companyId)
+    });
+    if (!customer) throw new Error("Cliente inválido.");
+
+    const variantIds = [...new Set(data.items.map(item => item.variantId))];
+    const tenantVariants = await prisma.productVariant.count({
+      where: { id: { in: variantIds }, companyId: data.companyId }
+    });
+    if (tenantVariants !== variantIds.length) throw new Error("Item inválido.");
 
     const settings = await prisma.operationalSettings.findFirst({
       where: { companyId: data.companyId }
@@ -38,7 +50,9 @@ export class ReturnService {
 
     if (settings?.returnRequireAuthorization) {
       if (data.authorizationId) {
-        const auth = await prisma.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+        const auth = await prisma.actionAuthorization.findFirst({
+          where: { id: data.authorizationId, companyId: data.companyId }
+        });
         if (!auth || auth.status !== 'APPROVED') {
           throw new Error('Autorização inválida ou não aprovada.');
         }
@@ -198,26 +212,53 @@ export class ReturnService {
   /**
    * Retrieves a SaleReturn record.
    */
-  async getReturn(id: string) {
-    return await prisma.saleReturn.findUnique({
-      where: { id }
+  async getReturn(id: string, companyId: string) {
+    const returnRecord = await prisma.saleReturn.findUnique({ where: { id } });
+    if (!returnRecord) return null;
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(returnRecord.originalSaleId, companyId),
+      select: { id: true }
     });
+    return sale ? returnRecord : null;
   }
 
   /**
    * Cancels a return, reverting inventory and debiting wallet (if WALLET was selected).
    */
-  async cancelReturn(id: string, userId: string) {
+  async cancelReturn(id: string, companyId: string, userId: string) {
     const returnRecord = await prisma.saleReturn.findUnique({
       where: { id }
     });
     if (!returnRecord) throw new Error("Devolução não encontrada.");
     if (returnRecord.notes?.startsWith("[CANCELADO]")) throw new Error("Esta devolução já está cancelada.");
 
-    const sale = await prisma.sale.findUnique({
-      where: { id: returnRecord.originalSaleId }
+    const sale = await prisma.sale.findFirst({
+      where: tenantResourceWhere(returnRecord.originalSaleId, companyId),
+      include: { items: true }
     });
     if (!sale) throw new Error("Venda de origem não encontrada.");
+    if (returnRecord.customerId !== sale.customerId) throw new Error("Devolução não encontrada.");
+    const customer = await prisma.customer.findFirst({
+      where: tenantResourceWhere(returnRecord.customerId, companyId),
+      select: { id: true }
+    });
+    if (!customer) throw new Error("Devolução não encontrada.");
+
+    let items: Array<{ variantId: string; quantity: number; condition: string }>;
+    try {
+      const parsed = JSON.parse(returnRecord.notes || "{}");
+      items = Array.isArray(parsed.items) ? parsed.items : [];
+    } catch {
+      throw new Error("Devolução inválida.");
+    }
+    if (items.some(item => !itemBelongsToSale(sale.items, item.variantId))) {
+      throw new Error("Devolução inválida.");
+    }
+    const variantIds = [...new Set(items.map(item => item.variantId))];
+    const validVariants = await prisma.productVariant.count({
+      where: { id: { in: variantIds }, companyId }
+    });
+    if (validVariants !== variantIds.length) throw new Error("Devolução inválida.");
 
     return await prisma.$transaction(async (tx) => {
       // Revert wallet credit if WALLET
@@ -233,10 +274,7 @@ export class ReturnService {
       }
 
       // Revert Inventory
-      try {
-        const parsed = JSON.parse(returnRecord.notes || "{}");
-        const items = parsed.items || [];
-        for (const item of items) {
+      for (const item of items) {
           if (item.condition === "RESALE") {
             await tx.productVariant.update({
               where: { id: item.variantId },
@@ -256,9 +294,6 @@ export class ReturnService {
               reason: `Estorno de Devolução Cancelada ${returnRecord.id}`
             }
           });
-        }
-      } catch (err) {
-        console.error("Failed to parse items from return notes during cancellation:", err);
       }
 
       // Mark as cancelled
