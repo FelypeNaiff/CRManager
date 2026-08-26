@@ -11,6 +11,7 @@ export interface ReportFilters {
 }
 
 export class CommercialReportService {
+  // Public callers must provide companyId derived from ServerAuthContext.
   
   private getDateFilter(filters: ReportFilters) {
     if (filters.startDate || filters.endDate) {
@@ -182,6 +183,7 @@ export class CommercialReportService {
       JOIN sales s ON si.sale_id = s.id
       JOIN product_variants pv ON si.variant_id = pv.id
       WHERE s.company_id = ${filters.companyId}
+        AND pv.company_id = ${filters.companyId}
         AND s.status <> 'CANCELLED'
         ${sellerCondition}
         ${startCondition}

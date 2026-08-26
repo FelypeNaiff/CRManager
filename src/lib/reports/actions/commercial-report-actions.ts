@@ -1,253 +1,97 @@
 'use server';
-import { serializePrisma } from '@/lib/serialize';
-import { CommercialReportService, ReportFilters } from "../commercial-report-service";
-import { revalidatePath, unstable_cache } from "next/cache";
+
+import { unstable_cache } from 'next/cache';
+import { requirePermission } from '@/lib/auth/permissions';
+import { CommercialReportService, type ReportFilters } from '../commercial-report-service';
+import {
+  fromReportCacheArguments,
+  scopeReportFilters,
+  toReportCacheArguments,
+  type ReportCacheArguments,
+} from '../report-tenant-security';
 
 const reportService = new CommercialReportService();
+type ReportLoader<T> = (filters: ReportFilters) => Promise<T>;
 
-// Wrapper caches with primitive params to avoid object key serialization collision
-const getCachedDashboardMetrics = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getDashboardMetrics({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["dashboard-metrics"],
-  { tags: ["sales-reports", "dashboard"] }
+function createTenantSafeCache<T>(loader: ReportLoader<T>, key: string, tags: string[]) {
+  return unstable_cache(
+    async (...args: ReportCacheArguments): Promise<T> => loader(fromReportCacheArguments(args)),
+    [key],
+    { tags }
+  );
+}
+
+const cachedDashboard = createTenantSafeCache(
+  filters => reportService.getDashboardMetrics(filters),
+  'dashboard-metrics', ['sales-reports', 'dashboard']
+);
+const cachedTopProducts = createTenantSafeCache(
+  filters => reportService.getTopProductsReport(filters),
+  'top-products-report', ['sales-reports', 'top-products']
+);
+const cachedMargin = createTenantSafeCache(
+  filters => reportService.getMarginReport(filters),
+  'margin-report', ['sales-reports', 'margin']
+);
+const cachedGoals = createTenantSafeCache(
+  filters => reportService.getGoalsAndCommissionsReport(filters),
+  'goals-commissions-report', ['sales-reports', 'goals-commissions']
+);
+const cachedReturns = createTenantSafeCache(
+  filters => reportService.getReturnsReport(filters),
+  'returns-report', ['sales-reports', 'returns']
+);
+const cachedCredits = createTenantSafeCache(
+  filters => reportService.getCustomerCreditsReport(filters),
+  'customer-credits-report', ['sales-reports', 'customer-credits']
 );
 
-const getCachedTopProductsReport = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getTopProductsReport({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["top-products-report"],
-  { tags: ["sales-reports", "top-products"] }
-);
+async function trustedFilters(filters: ReportFilters): Promise<ReportFilters> {
+  const auth = await requirePermission('RELATORIOS', 'VIEW');
+  return scopeReportFilters(filters, auth);
+}
 
-const getCachedMarginReport = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getMarginReport({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["margin-report"],
-  { tags: ["sales-reports", "margin"] }
-);
-
-const getCachedGoalsAndCommissionsReport = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getGoalsAndCommissionsReport({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["goals-commissions-report"],
-  { tags: ["sales-reports", "goals-commissions"] }
-);
-
-const getCachedReturnsReport = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getReturnsReport({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["returns-report"],
-  { tags: ["sales-reports", "returns"] }
-);
-
-const getCachedCustomerCreditsReport = unstable_cache(
-  async (
-    companyId: string,
-    startDateStr: string,
-    endDateStr: string,
-    sellerId: string,
-    customerId: string,
-    status: string
-  ) => {
-    return reportService.getCustomerCreditsReport({
-      companyId,
-      startDate: startDateStr ? new Date(startDateStr) : undefined,
-      endDate: endDateStr ? new Date(endDateStr) : undefined,
-      sellerId: sellerId || undefined,
-      customerId: customerId || undefined,
-      status: status || undefined
-    });
-  },
-  ["customer-credits-report"],
-  { tags: ["sales-reports", "customer-credits"] }
-);
-
-
-export async function getDashboardMetricsAction(filters: ReportFilters) {
+async function runCachedReport<T>(
+  filters: ReportFilters,
+  loader: (...args: ReportCacheArguments) => Promise<T>
+) {
   try {
-    const data = await getCachedDashboardMetrics(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getDashboardMetricsAction error:", error);
-    return { success: false, error: error.message || "Failed to load dashboard metrics" };
+    const scoped = await trustedFilters(filters);
+    return { success: true, data: await loader(...toReportCacheArguments(scoped)) };
+  } catch {
+    return { success: false, error: 'Não foi possível carregar o relatório.' };
   }
 }
 
+export async function getDashboardMetricsAction(filters: ReportFilters) {
+  return runCachedReport(filters, cachedDashboard);
+}
+
 export async function getSalesReportAction(filters: ReportFilters) {
-  // Sales report list should NOT be cached as it's highly transactional / live feed
   try {
-    const data = await reportService.getSalesReport(filters);
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getSalesReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load sales report" };
+    const scoped = await trustedFilters(filters);
+    return { success: true, data: await reportService.getSalesReport(scoped) };
+  } catch {
+    return { success: false, error: 'Não foi possível carregar o relatório.' };
   }
 }
 
 export async function getTopProductsReportAction(filters: ReportFilters) {
-  try {
-    const data = await getCachedTopProductsReport(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getTopProductsReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load top products report" };
-  }
+  return runCachedReport(filters, cachedTopProducts);
 }
 
 export async function getMarginReportAction(filters: ReportFilters) {
-  try {
-    const data = await getCachedMarginReport(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getMarginReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load margin report" };
-  }
+  return runCachedReport(filters, cachedMargin);
 }
 
 export async function getGoalsAndCommissionsReportAction(filters: ReportFilters) {
-  try {
-    const data = await getCachedGoalsAndCommissionsReport(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getGoalsAndCommissionsReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load goals and commissions report" };
-  }
+  return runCachedReport(filters, cachedGoals);
 }
 
 export async function getReturnsReportAction(filters: ReportFilters) {
-  try {
-    const data = await getCachedReturnsReport(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getReturnsReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load returns report" };
-  }
+  return runCachedReport(filters, cachedReturns);
 }
 
 export async function getCustomerCreditsReportAction(filters: ReportFilters) {
-  try {
-    const data = await getCachedCustomerCreditsReport(
-      filters.companyId,
-      filters.startDate instanceof Date ? filters.startDate.toISOString() : (filters.startDate || ''),
-      filters.endDate instanceof Date ? filters.endDate.toISOString() : (filters.endDate || ''),
-      filters.sellerId || '',
-      filters.customerId || '',
-      filters.status || ''
-    );
-    return { success: true, data };
-  } catch (error: any) {
-    console.error("getCustomerCreditsReportAction error:", error);
-    return { success: false, error: error.message || "Failed to load customer credits report" };
-  }
+  return runCachedReport(filters, cachedCredits);
 }
