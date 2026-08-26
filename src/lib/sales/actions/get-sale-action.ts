@@ -2,13 +2,15 @@
 import { serializePrisma } from '@/lib/serialize';
 
 import { salesService } from "../sales-service";
+import { requirePermission } from "@/lib/auth/permissions";
 
 export async function getSaleAction(saleId: string) {
   try {
-    const sale = await salesService.getSaleById(saleId);
+    const auth = await requirePermission("VENDAS", "VIEW");
+    const sale = await salesService.getSaleById(saleId, auth.companyId);
     if (!sale) return { success: false, error: "Venda não encontrada." };
     return { success: true, sale };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: "Venda não encontrada." };
   }
 }

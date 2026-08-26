@@ -1,9 +1,20 @@
 'use server';
 import { serializePrisma } from '@/lib/serialize';
 import { prisma } from '@/lib/prisma';
+import { requireAnyPermission } from '@/lib/auth/permissions';
+import { tenantListWhere } from '../sales-tenant-security';
 
-export async function searchVariantsAction(companyId: string, query: string) {
+async function requireSalesSearchContext() {
+  return requireAnyPermission([
+    { module: 'PDV', action: 'VIEW' },
+    { module: 'VENDAS', action: 'VIEW' },
+  ]);
+}
+
+export async function searchVariantsAction(_companyId: string, query: string) {
   try {
+    const auth = await requireSalesSearchContext();
+    const companyId = auth.companyId;
     const q = query.trim();
     if (!q) return { success: true, variants: [] };
 
@@ -14,7 +25,7 @@ export async function searchVariantsAction(companyId: string, query: string) {
     const allowNegativeStock = settings?.allowNegativeStock ?? false;
 
     const whereClause: any = {
-      companyId,
+      ...tenantListWhere(companyId),
       isActive: true,
       product: { isActive: true },
       OR: [
@@ -46,16 +57,17 @@ export async function searchVariantsAction(companyId: string, query: string) {
       take: 20
     });
     return { success: true, variants };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível buscar produtos.' };
   }
 }
 
-export async function searchCustomersAction(companyId: string, query: string) {
+export async function searchCustomersAction(_companyId: string, query: string) {
   try {
+    const auth = await requireSalesSearchContext();
     const customers = await prisma.customer.findMany({
       where: {
-        companyId,
+        ...tenantListWhere(auth.companyId),
         OR: [
           { name: { contains: query, mode: "insensitive" } },
           { email: { contains: query, mode: "insensitive" } },
@@ -69,7 +81,7 @@ export async function searchCustomersAction(companyId: string, query: string) {
       take: 20
     });
     return { success: true, customers };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch {
+    return { success: false, error: 'Não foi possível buscar clientes.' };
   }
 }

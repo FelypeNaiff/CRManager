@@ -1,13 +1,15 @@
 import { prisma } from "@/lib/prisma";
 
 export class SalesRepository {
-  async createSale(data: any) {
-    return prisma.sale.create({ data });
+  /** companyId must come from the trusted server auth context. */
+  async createSale(data: any, companyId: string) {
+    return prisma.sale.create({ data: { ...data, companyId } });
   }
 
-  async getSaleById(id: string) {
-    return prisma.sale.findUnique({
-      where: { id },
+  /** companyId must come from the trusted server auth context. */
+  async getSaleById(id: string, companyId: string) {
+    return prisma.sale.findFirst({
+      where: { id, companyId },
       include: {
         items: true,
         payments: true,
@@ -16,16 +18,16 @@ export class SalesRepository {
     });
   }
 
-  async updateSaleStatus(id: string, status: any) {
+  async updateSaleStatus(id: string, companyId: string, status: any) {
     return prisma.sale.update({
-      where: { id },
+      where: { id, companyId },
       data: { status }
     });
   }
 
-  async cancelSale(id: string, data: any) {
+  async cancelSale(id: string, companyId: string, data: any) {
     return prisma.sale.update({
-      where: { id },
+      where: { id, companyId },
       data
     });
   }

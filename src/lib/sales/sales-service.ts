@@ -8,6 +8,7 @@ import { getPaginationArgs, buildPaginatedResult, PaginationParams } from "../pe
 import { prisma } from "@/lib/prisma";
 
 import bcrypt from "bcryptjs";
+import { tenantResourceWhere } from "./sales-tenant-security";
 
 export class SalesService {
   async createSale(data: CreateSaleInput, operatorUserId: string) {
@@ -16,12 +17,24 @@ export class SalesService {
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
 
-      const seller = await tx.seller.findUnique({ where: { id: data.sellerId } });
+      const seller = await tx.seller.findFirst({
+        where: { ...tenantResourceWhere(data.sellerId, data.companyId), status: "ACTIVE" }
+      });
       if (!seller) throw new Error("Vendedor inválido.");
 
       if (data.customerId) {
-        const customer = await tx.customer.findUnique({ where: { id: data.customerId } });
+        const customer = await tx.customer.findFirst({
+          where: tenantResourceWhere(data.customerId, data.companyId)
+        });
         if (!customer) throw new Error("Cliente inválido.");
+      }
+
+      const paymentMethodIds = [...new Set(data.payments.map(payment => payment.paymentMethodId))];
+      const validPaymentMethods = await tx.paymentMethod.count({
+        where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true }
+      });
+      if (validPaymentMethods !== paymentMethodIds.length) {
+        throw new Error("Forma de pagamento inválida.");
       }
 
       // Carregar configurações operacionais da empresa
@@ -36,7 +49,9 @@ export class SalesService {
           if (!activeRegister) throw new Error("Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.");
           data.cashRegisterId = activeRegister.id;
         } else {
-          const register = await tx.cashRegister.findUnique({ where: { id: data.cashRegisterId } });
+          const register = await tx.cashRegister.findFirst({
+            where: tenantResourceWhere(data.cashRegisterId, data.companyId)
+          });
           if (!register || register.status !== "OPEN") throw new Error("Caixa informado não está aberto.");
         }
       }
@@ -44,8 +59,9 @@ export class SalesService {
       // Travar Caixa se informado (ordem de trava: CashRegister -> ProductVariant)
       if (data.cashRegisterId) {
         await tx.$queryRawUnsafe(
-          `SELECT id FROM cash_registers WHERE id = $1 FOR UPDATE`,
-          data.cashRegisterId
+          `SELECT id FROM cash_registers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+          data.cashRegisterId,
+          data.companyId
         );
       }
 
@@ -73,7 +89,9 @@ export class SalesService {
         if (!policy.allowed) {
           if (policy.requiresAuthorization) {
             if (data.authorizationId) {
-              const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+              const auth = await tx.actionAuthorization.findFirst({
+                where: { id: data.authorizationId, companyId: data.companyId }
+              });
               if (!auth || auth.status !== 'APPROVED') {
                 throw new Error('Autorização de desconto inválida ou não aprovada.');
               }
@@ -102,15 +120,16 @@ export class SalesService {
       // Etapa 2: Validar estoque disponível em lote com trava pessimista
       const variantIds = [...new Set(data.items.map(item => item.variantId))].sort();
       if (variantIds.length > 0) {
-        const placeholders = variantIds.map((_, idx) => `$${idx + 1}`).join(", ");
+        const placeholders = variantIds.map((_, idx) => `$${idx + 2}`).join(", ");
         await tx.$queryRawUnsafe(
-          `SELECT id FROM product_variants WHERE id IN (${placeholders}) FOR UPDATE`,
+          `SELECT id FROM product_variants WHERE company_id = $1 AND id IN (${placeholders}) FOR UPDATE`,
+          data.companyId,
           ...variantIds
         );
       }
 
       const variants = await tx.productVariant.findMany({
-        where: { id: { in: variantIds } }
+        where: { id: { in: variantIds }, companyId: data.companyId, isActive: true }
       });
       const variantMap = new Map(variants.map(v => [v.id, v]));
 
@@ -252,16 +271,17 @@ export class SalesService {
     });
   }
 
-  async cancelSale(data: CancelSaleInput) {
+  async cancelSale(data: CancelSaleInput, companyId: string) {
     return prisma.$transaction(async (tx) => {
       // Travar a venda alvo para evitar concorrência no cancelamento
       await tx.$queryRawUnsafe(
-        `SELECT id FROM sales WHERE id = $1 FOR UPDATE`,
-        data.saleId
+        `SELECT id FROM sales WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+        data.saleId,
+        companyId
       );
 
-      const sale = await tx.sale.findUnique({ 
-        where: { id: data.saleId },
+      const sale = await tx.sale.findFirst({
+        where: tenantResourceWhere(data.saleId, companyId),
         include: { items: true } 
       });
       if (!sale) throw new Error("Venda não encontrada.");
@@ -302,7 +322,9 @@ export class SalesService {
 
       if (needsAuthorization) {
         if (data.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({ where: { id: data.authorizationId } });
+          const auth = await tx.actionAuthorization.findFirst({
+            where: { id: data.authorizationId, companyId }
+          });
           if (!auth || auth.status !== 'APPROVED') {
             throw new Error('Autorização de cancelamento inválida ou não aprovada.');
           }
@@ -378,9 +400,9 @@ export class SalesService {
     });
   }
 
-  async getSaleById(saleId: string) {
-    return prisma.sale.findUnique({
-      where: { id: saleId },
+  async getSaleById(saleId: string, companyId: string) {
+    return prisma.sale.findFirst({
+      where: tenantResourceWhere(saleId, companyId),
       include: {
         items: true,
         payments: true,
