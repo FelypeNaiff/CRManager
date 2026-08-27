@@ -1,8 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { validatePin } from './pin-service';
 import { AuthorizationType, AuthorizationStatus, AUTHORIZATION_PERMISSION_MAP } from './authorization-types';
+import { authorizationBelongsToTenant, canonicalAuthorizationModule } from './authorization-security';
 
 export class AuthorizationService {
+  constructor(
+    private readonly db: any = prisma,
+    private readonly pinValidator: typeof validatePin = validatePin,
+  ) {}
   /**
    * Checks if an authorizer has the RBAC permissions to authorize an action.
    */
@@ -18,7 +23,7 @@ export class AuthorizationService {
       throw new Error('Usuário não pode autorizar a própria operação.');
     }
 
-    const authorizer = await prisma.user.findUnique({
+    const authorizer = await this.db.user.findUnique({
       where: { id: authorizerId },
       include: {
         role: {
@@ -48,7 +53,7 @@ export class AuthorizationService {
     
     if (requiredPermission) {
       const hasPermission = authorizer.role?.permissions.some(
-        (p) =>
+        (p: { module: string; action: string; allowed: boolean }) =>
           p.module === requiredPermission.module &&
           p.action === requiredPermission.action &&
           p.allowed
@@ -81,7 +86,7 @@ export class AuthorizationService {
       throw new Error('PIN de autorização é obrigatório.');
     }
 
-    const activeUsersWithPin = await prisma.user.findMany({
+    const activeUsersWithPin = await this.db.user.findMany({
       where: {
         companyId,
         status: 'ACTIVE',
@@ -94,7 +99,7 @@ export class AuthorizationService {
 
     for (const user of activeUsersWithPin) {
       if (!user.authorizationPinHash) continue;
-      const isValid = await validatePin(pin, user.authorizationPinHash);
+      const isValid = await this.pinValidator(pin, user.authorizationPinHash);
       if (isValid) {
         authorizer = user;
         break;
@@ -132,7 +137,7 @@ export class AuthorizationService {
     metadata?: any;
     financialImpact?: boolean;
   }) {
-    return prisma.actionAuthorization.create({
+    return this.db.actionAuthorization.create({
       data: {
         companyId: data.companyId,
         type: data.type,
@@ -155,16 +160,16 @@ export class AuthorizationService {
   /**
    * Approves an authorization request.
    */
-  async approveAuthorization(data: {
+  private async approveAuthorization(data: {
     authorizationId: string;
     authorizerId: string;
     companyId: string;
     approvedAmount?: number;
     approvedPercentage?: number;
   }, tx?: any) {
-    const db = tx || prisma;
-    const auth = await db.actionAuthorization.findUnique({
-      where: { id: data.authorizationId, companyId: data.companyId },
+    const db = tx || this.db;
+    const auth = await db.actionAuthorization.findFirst({
+      where: authorizationBelongsToTenant(data.authorizationId, data.companyId),
     });
 
     if (!auth) throw new Error('Autorização não encontrada.');
@@ -186,8 +191,8 @@ export class AuthorizationService {
       data.approvedPercentage || Number(auth.percentage)
     );
 
-    return db.actionAuthorization.update({
-      where: { id: data.authorizationId },
+    const result = await db.actionAuthorization.updateMany({
+      where: { id: auth.id, companyId: data.companyId, status: AuthorizationStatus.PENDING },
       data: {
         status: AuthorizationStatus.APPROVED,
         authorizedByUserId: data.authorizerId,
@@ -198,20 +203,35 @@ export class AuthorizationService {
         approvedPercentage: data.approvedPercentage ?? auth.percentage,
       },
     });
+    if (result.count !== 1) throw new Error('A autorização não está mais pendente.');
+    return db.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(auth.id, data.companyId) });
+  }
+
+  async approveAuthorizationWithPin(data: {
+    authorizationId: string; companyId: string; pin: string;
+    approvedAmount?: number; approvedPercentage?: number;
+  }) {
+    return this.db.$transaction(async (tx: any) => {
+      const auth = await tx.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(data.authorizationId, data.companyId) });
+      if (!auth) throw new Error('Autorização não encontrada.');
+      if (auth.module !== canonicalAuthorizationModule(auth.type as AuthorizationType)) throw new Error('Contexto de autorização inválido.');
+      const authorizer = await this.validateAuthorizationPin(data.companyId, data.pin, auth.type as AuthorizationType, auth.requestedByUserId, data.approvedAmount, data.approvedPercentage);
+      return this.approveAuthorization({ ...data, authorizerId: authorizer.id }, tx);
+    });
   }
 
   /**
    * Rejects an authorization request.
    */
-  async rejectAuthorization(data: {
+  private async rejectAuthorization(data: {
     authorizationId: string;
     rejecterId: string;
     companyId: string;
     rejectionReason: string;
   }, tx?: any) {
-    const db = tx || prisma;
-    const auth = await db.actionAuthorization.findUnique({
-      where: { id: data.authorizationId, companyId: data.companyId },
+    const db = tx || this.db;
+    const auth = await db.actionAuthorization.findFirst({
+      where: authorizationBelongsToTenant(data.authorizationId, data.companyId),
     });
 
     if (!auth) throw new Error('Autorização não encontrada.');
@@ -219,8 +239,8 @@ export class AuthorizationService {
       throw new Error(`A autorização não está pendente (Status: ${auth.status}).`);
     }
 
-    return db.actionAuthorization.update({
-      where: { id: data.authorizationId },
+    const result = await db.actionAuthorization.updateMany({
+      where: { id: auth.id, companyId: data.companyId, status: AuthorizationStatus.PENDING },
       data: {
         status: AuthorizationStatus.REJECTED,
         rejectedByUserId: data.rejecterId,
@@ -228,17 +248,31 @@ export class AuthorizationService {
         rejectionReason: data.rejectionReason,
       },
     });
+    if (result.count !== 1) throw new Error('A autorização não está mais pendente.');
+    return db.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(auth.id, data.companyId) });
+  }
+
+  async rejectAuthorizationWithPin(data: {
+    authorizationId: string; companyId: string; pin: string; rejectionReason: string;
+  }) {
+    return this.db.$transaction(async (tx: any) => {
+      const auth = await tx.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(data.authorizationId, data.companyId) });
+      if (!auth) throw new Error('Autorização não encontrada.');
+      if (auth.module !== canonicalAuthorizationModule(auth.type as AuthorizationType)) throw new Error('Contexto de autorização inválido.');
+      const rejecter = await this.validateAuthorizationPin(data.companyId, data.pin, auth.type as AuthorizationType, auth.requestedByUserId);
+      return this.rejectAuthorization({ ...data, rejecterId: rejecter.id }, tx);
+    });
   }
 
   async getPendingAuthorizations(companyId: string) {
-    return prisma.actionAuthorization.findMany({
+    return this.db.actionAuthorization.findMany({
       where: { companyId, status: AuthorizationStatus.PENDING },
       orderBy: { requestedAt: 'desc' },
     });
   }
 
   async getAuthorizationHistory(companyId: string) {
-    return prisma.actionAuthorization.findMany({
+    return this.db.actionAuthorization.findMany({
       where: { companyId, status: { not: AuthorizationStatus.PENDING } },
       orderBy: { updatedAt: 'desc' },
       take: 100, // Recent history
@@ -246,8 +280,8 @@ export class AuthorizationService {
   }
 
   async getAuthorizationById(id: string, companyId: string) {
-    return prisma.actionAuthorization.findUnique({
-      where: { id, companyId },
+    return this.db.actionAuthorization.findFirst({
+      where: authorizationBelongsToTenant(id, companyId),
     });
   }
 }

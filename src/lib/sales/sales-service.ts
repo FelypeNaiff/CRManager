@@ -9,6 +9,7 @@ import { prisma } from "@/lib/prisma";
 
 import bcrypt from "bcryptjs";
 import { tenantResourceWhere } from "./sales-tenant-security";
+import { approvedAuthorizationWhere } from "../auth/authorization-security";
 
 export class SalesService {
   async createSale(data: CreateSaleInput, operatorUserId: string) {
@@ -90,9 +91,14 @@ export class SalesService {
           if (policy.requiresAuthorization) {
             if (data.authorizationId) {
               const auth = await tx.actionAuthorization.findFirst({
-                where: { id: data.authorizationId, companyId: data.companyId }
+                where: approvedAuthorizationWhere({
+                  id: data.authorizationId,
+                  companyId: data.companyId,
+                  type: AuthorizationType.DISCOUNT,
+                  module: 'PDV',
+                })
               });
-              if (!auth || auth.status !== 'APPROVED') {
+              if (!auth) {
                 throw new Error('Autorização de desconto inválida ou não aprovada.');
               }
               authorizedByUserId = auth.authorizedByUserId;
@@ -323,9 +329,16 @@ export class SalesService {
       if (needsAuthorization) {
         if (data.authorizationId) {
           const auth = await tx.actionAuthorization.findFirst({
-            where: { id: data.authorizationId, companyId }
+            where: approvedAuthorizationWhere({
+              id: data.authorizationId,
+              companyId,
+              type: AuthorizationType.SALE_CANCEL,
+              module: 'VENDAS',
+              referenceId: sale.id,
+              referenceModule: 'SALE',
+            })
           });
-          if (!auth || auth.status !== 'APPROVED') {
+          if (!auth) {
             throw new Error('Autorização de cancelamento inválida ou não aprovada.');
           }
           // Here we could register the authorizer in the sale or keep it in ActionAuthorization

@@ -5,31 +5,9 @@ import { revalidatePath } from 'next/cache';
 import { requireAuth } from '@/lib/auth/permissions';
 import { authorizationService } from './authorization-service';
 import { AuthorizationType } from './authorization-types';
+import { canonicalAuthorizationModule } from './authorization-security';
 
-export async function validateAuthorizationPinAction(data: {
-  pin: string;
-  authorizationType: AuthorizationType;
-  amount?: number;
-  percentage?: number;
-}) {
-  try {
-    const session = await requireAuth();
-
-    // Validates the PIN and returns the authorizer user if successful and authorized
-    const authorizer = await authorizationService.validateAuthorizationPin(
-      session.companyId,
-      data.pin,
-      data.authorizationType,
-      session.userId, // requester is the currently logged in user
-      data.amount,
-      data.percentage
-    );
-
-    return { success: true, authorizerId: authorizer.id };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao validar PIN de autorização.' };
-  }
-}
+const publicError = (fallback: string) => ({ success: false as const, error: fallback });
 
 export async function createAuthorizationRequestAction(data: {
   type: AuthorizationType;
@@ -46,55 +24,56 @@ export async function createAuthorizationRequestAction(data: {
     const session = await requireAuth();
 
     const auth = await authorizationService.createAuthorizationRequest({
+      ...data,
       companyId: session.companyId,
       requestedByUserId: session.userId,
-      ...data,
+      module: canonicalAuthorizationModule(data.type),
     });
 
-    return { success: true, authorizationId: auth.id };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao solicitar autorização.' };
+    return { success: true as const, authorizationId: auth.id };
+  } catch {
+    return publicError('Falha ao solicitar autorização.');
   }
 }
 
-export async function approveAuthorizationAction(data: {
+export async function approveAuthorizationWithPinAction(data: {
   authorizationId: string;
-  authorizerId: string; // The ID of the user whose PIN was validated
+  pin: string;
   approvedAmount?: number;
   approvedPercentage?: number;
 }) {
   try {
     const session = await requireAuth();
 
-    const auth = await authorizationService.approveAuthorization({
-      companyId: session.companyId,
+    const auth = await authorizationService.approveAuthorizationWithPin({
       ...data,
+      companyId: session.companyId,
     });
 
     revalidatePath('/configuracoes/autorizacoes');
-    return { success: true, authorization: auth };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao aprovar autorização.' };
+    return { success: true as const, authorization: { id: auth.id, status: auth.status, type: auth.type } };
+  } catch {
+    return publicError('Falha ao aprovar autorização.');
   }
 }
 
-export async function rejectAuthorizationAction(data: {
+export async function rejectAuthorizationWithPinAction(data: {
   authorizationId: string;
-  rejecterId: string;
+  pin: string;
   rejectionReason: string;
 }) {
   try {
     const session = await requireAuth();
 
-    const auth = await authorizationService.rejectAuthorization({
-      companyId: session.companyId,
+    const auth = await authorizationService.rejectAuthorizationWithPin({
       ...data,
+      companyId: session.companyId,
     });
 
     revalidatePath('/configuracoes/autorizacoes');
-    return { success: true, authorization: auth };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao rejeitar autorização.' };
+    return { success: true as const, authorization: { id: auth.id, status: auth.status, type: auth.type } };
+  } catch {
+    return publicError('Falha ao rejeitar autorização.');
   }
 }
 
@@ -102,9 +81,9 @@ export async function getPendingAuthorizationsAction() {
   try {
     const session = await requireAuth();
     const authorizations = await authorizationService.getPendingAuthorizations(session.companyId);
-    return { success: true, data: serializePrisma(authorizations) };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao carregar autorizações.' };
+    return { success: true as const, data: serializePrisma(authorizations) };
+  } catch {
+    return publicError('Falha ao carregar autorizações.');
   }
 }
 
@@ -112,8 +91,8 @@ export async function getAuthorizationHistoryAction() {
   try {
     const session = await requireAuth();
     const authorizations = await authorizationService.getAuthorizationHistory(session.companyId);
-    return { success: true, data: serializePrisma(authorizations) };
-  } catch (err: any) {
-    return { success: false, error: err.message || 'Falha ao carregar histórico.' };
+    return { success: true as const, data: serializePrisma(authorizations) };
+  } catch {
+    return publicError('Falha ao carregar histórico.');
   }
 }

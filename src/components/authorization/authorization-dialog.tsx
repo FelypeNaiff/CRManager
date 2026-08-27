@@ -14,9 +14,8 @@ import { Input } from '@/components/ui/input';
 import { useToast } from '@/hooks/use-toast';
 import { ShieldCheck, ShieldAlert, Loader2 } from 'lucide-react';
 import {
-  validateAuthorizationPinAction,
-  approveAuthorizationAction,
-  rejectAuthorizationAction,
+  approveAuthorizationWithPinAction,
+  rejectAuthorizationWithPinAction,
 } from '@/lib/auth/authorization-actions';
 import { AuthorizationType } from '@/lib/auth/authorization-types';
 
@@ -60,24 +59,11 @@ export function AuthorizationDialog({
 
     setLoading(true);
     try {
-      // 1. Validate PIN & RBAC
-      const valRes = await validateAuthorizationPinAction({
-        pin,
-        authorizationType,
-        amount,
-        percentage,
-      });
-
-      if (!valRes.success || !valRes.authorizerId) {
-        toast({ title: 'Acesso Negado', description: valRes.error, variant: 'destructive' });
-        setLoading(false);
-        return;
-      }
-
-      // 2. Approve Request
-      const appRes = await approveAuthorizationAction({
+      const appRes = await approveAuthorizationWithPinAction({
         authorizationId,
-        authorizerId: valRes.authorizerId,
+        pin,
+        approvedAmount: amount,
+        approvedPercentage: percentage,
       });
 
       if (appRes.success) {
@@ -108,22 +94,9 @@ export function AuthorizationDialog({
 
     setLoading(true);
     try {
-      const valRes = await validateAuthorizationPinAction({
-        pin,
-        authorizationType,
-        amount,
-        percentage,
-      });
-
-      if (!valRes.success || !valRes.authorizerId) {
-        toast({ title: 'Acesso Negado', description: valRes.error, variant: 'destructive' });
-        setLoading(false);
-        return;
-      }
-
-      const rejRes = await rejectAuthorizationAction({
+      const rejRes = await rejectAuthorizationWithPinAction({
         authorizationId,
-        rejecterId: valRes.authorizerId,
+        pin,
         rejectionReason,
       });
 

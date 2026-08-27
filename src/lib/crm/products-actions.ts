@@ -16,6 +16,7 @@ import {
 import { InventoryMovementType, Prisma, AuthorizationType } from '@prisma/client';
 import { authorizationService } from '../auth/authorization-service';
 import { tenantWhere } from './tenant-security';
+import { approvedAuthorizationWhere } from '../auth/authorization-security';
 
 async function validateProductRelations(
   companyId: string,
@@ -550,10 +551,17 @@ export async function createInventoryMovement(input: any) {
 
         if (isManual && !company.allowNegativeStockOnManualAdjustment) {
           if (input.authorizationId) {
-            const auth = await tx.actionAuthorization.findUnique({
-              where: { id: input.authorizationId, companyId: session.companyId },
+            const auth = await tx.actionAuthorization.findFirst({
+              where: approvedAuthorizationWhere({
+                id: input.authorizationId,
+                companyId: session.companyId,
+                type: AuthorizationType.NEGATIVE_STOCK,
+                module: 'ESTOQUE',
+                referenceId: variantId,
+                referenceModule: 'PRODUCT_VARIANT',
+              }),
             });
-            if (!auth || auth.status !== 'APPROVED') {
+            if (!auth) {
               throw new Error('Autorização de estoque negativo inválida ou não aprovada.');
             }
           } else {
@@ -576,10 +584,17 @@ export async function createInventoryMovement(input: any) {
       if (isManual && newAvailableStock >= 0) {
         // Correção manual de quantidade normal
         if (input.authorizationId) {
-          const auth = await tx.actionAuthorization.findUnique({
-            where: { id: input.authorizationId, companyId: session.companyId },
+          const auth = await tx.actionAuthorization.findFirst({
+            where: approvedAuthorizationWhere({
+              id: input.authorizationId,
+              companyId: session.companyId,
+              type: AuthorizationType.STOCK_ADJUST,
+              module: 'ESTOQUE',
+              referenceId: variantId,
+              referenceModule: 'PRODUCT_VARIANT',
+            }),
           });
-          if (!auth || auth.status !== 'APPROVED') {
+          if (!auth) {
             throw new Error('Autorização de ajuste de estoque inválida ou não aprovada.');
           }
         } else {

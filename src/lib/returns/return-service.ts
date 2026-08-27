@@ -5,6 +5,7 @@ import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
 import { writeActivityLog } from "../auth/activity-log";
 import { itemBelongsToSale, tenantResourceWhere } from "../exchanges/exchange-return-tenant-security";
+import { approvedAuthorizationWhere } from "../auth/authorization-security";
 
 export interface CreateReturnInput {
   companyId: string;
@@ -51,9 +52,16 @@ export class ReturnService {
     if (settings?.returnRequireAuthorization) {
       if (data.authorizationId) {
         const auth = await prisma.actionAuthorization.findFirst({
-          where: { id: data.authorizationId, companyId: data.companyId }
+          where: approvedAuthorizationWhere({
+            id: data.authorizationId,
+            companyId: data.companyId,
+            type: AuthorizationType.RETURN,
+            module: 'DEVOLUCOES',
+            referenceId: sale.id,
+            referenceModule: 'SALE',
+          })
         });
-        if (!auth || auth.status !== 'APPROVED') {
+        if (!auth) {
           throw new Error('Autorização inválida ou não aprovada.');
         }
       } else {
