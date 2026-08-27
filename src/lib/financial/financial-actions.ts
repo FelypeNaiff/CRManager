@@ -13,6 +13,7 @@ import {
   FinancialTransactionSchema,
 } from './financial-schemas';
 import { financialTenantWhere } from './financial-tenant-security';
+import { publicActionError } from '@/lib/auth/public-action-error';
 
 async function validateFinancialTransactionRelations(
   tx: Prisma.TransactionClient,
@@ -179,7 +180,7 @@ export async function getCostCenters() {
     });
     return { success: true, data: serializePrisma(centers) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -205,7 +206,7 @@ export async function createCostCenter(input: any) {
     return { success: true, data: serializePrisma(center) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe um centro de custo com este nome.' };
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -231,7 +232,7 @@ export async function updateCostCenter(id: string, input: any) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -254,7 +255,7 @@ export async function deleteCostCenter(id: string) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -272,7 +273,7 @@ export async function getFinancialAccounts() {
     });
     return { success: true, data: serializePrisma(accounts) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -298,7 +299,7 @@ export async function createFinancialAccount(input: any) {
     return { success: true, data: serializePrisma(account) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe uma conta com este código.' };
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -324,7 +325,7 @@ export async function updateFinancialAccount(id: string, input: any) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -341,7 +342,7 @@ export async function getPaymentMethods() {
     });
     return { success: true, data: serializePrisma(methods) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -371,7 +372,7 @@ export async function createPaymentMethod(input: any) {
     return { success: true, data: serializePrisma(method) };
   } catch (error: any) {
     if (error.code === 'P2002') return { success: false, error: 'Já existe uma forma de pagamento com este nome.' };
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -402,7 +403,7 @@ export async function updatePaymentMethod(id: string, input: any) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -428,7 +429,7 @@ export async function deletePaymentMethod(id: string) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao processar operação financeira.') };
   }
 }
 
@@ -653,7 +654,6 @@ export async function getFinancialDashboardSummary() {
       },
     };
   } catch (error: any) {
-    console.error('Error getting financial dashboard summary:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao carregar resumo financeiro.') };
   }
 }

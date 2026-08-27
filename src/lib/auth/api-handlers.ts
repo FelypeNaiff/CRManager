@@ -25,17 +25,17 @@ export function createSessionHandler(resolveContext: () => Promise<ServerAuthCon
 }
 
 interface AdminRouteDependencies {
-  authorize(): Promise<unknown>;
-  migrate(): Promise<unknown>;
-  counts(): Promise<[number, number, number, number, number]>;
+  authorize(): Promise<ServerAuthContext>;
+  migrate(context: ServerAuthContext): Promise<unknown>;
+  counts(context: ServerAuthContext): Promise<[number, number, number, number, number]>;
 }
 
 export function createAdminMigrationHandlers(dependencies: AdminRouteDependencies) {
   return {
     async POST() {
       try {
-        await dependencies.authorize();
-        const result = await dependencies.migrate();
+        const context = await dependencies.authorize();
+        const result = await dependencies.migrate(context);
         return NextResponse.json({ success: true, message: 'Migração concluída com sucesso.', data: result });
       } catch (error) {
         return authErrorResponse(error);
@@ -43,9 +43,9 @@ export function createAdminMigrationHandlers(dependencies: AdminRouteDependencie
     },
     async GET() {
       try {
-        await dependencies.authorize();
+        const context = await dependencies.authorize();
         const [exchangeReturns, walletMovements, saleExchanges, saleReturns, walletTransactions] =
-          await dependencies.counts();
+          await dependencies.counts(context);
         return NextResponse.json({
           success: true,
           status: {

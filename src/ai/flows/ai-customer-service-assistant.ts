@@ -11,6 +11,8 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import { requireAuth } from '@/lib/auth/permissions';
+import { executeAuthenticatedAIAction } from '@/lib/auth/ai-action-security';
 
 const AICustomerServiceAssistantInputSchema = z.object({
   chatHistory: z.array(
@@ -32,7 +34,7 @@ const AICustomerServiceAssistantOutputSchema = z.object({
 export type AICustomerServiceAssistantOutput = z.infer<typeof AICustomerServiceAssistantOutputSchema>;
 
 export async function aiCustomerServiceAssistant(input: AICustomerServiceAssistantInput): Promise<AICustomerServiceAssistantOutput> {
-  return aiCustomerServiceAssistantFlow(input);
+  return executeAuthenticatedAIAction(requireAuth, input, aiCustomerServiceAssistantFlow);
 }
 
 const prompt = ai.definePrompt({

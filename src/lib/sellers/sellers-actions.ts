@@ -3,15 +3,17 @@
 import { revalidatePath } from "next/cache";
 import { CreateSellerInput, UpdateSellerInput, createSellerSchema, updateSellerSchema } from "./sellers-schemas";
 import { sellersService } from "./sellers-service";
-import { getActiveProfileSession } from "../auth/actions";
+import { requirePermission } from "../auth/permissions";
+import { publicActionError } from "../auth/public-action-error";
+import { SELLER_PERMISSIONS } from './seller-security';
 import { z } from "zod";
 
-export async function createSellerAction(data: CreateSellerInput) {
+type SellerActionInput = Omit<CreateSellerInput, "status"> & { status: string };
+type SellerUpdateActionInput = Omit<UpdateSellerInput, "status"> & { status?: string };
+
+export async function createSellerAction(data: SellerActionInput) {
   try {
-    const session = await getActiveProfileSession();
-    if (!session?.companyId) {
-      return { error: "Não autenticado ou sem empresa selecionada" };
-    }
+    const session = await requirePermission(SELLER_PERMISSIONS.create.module, SELLER_PERMISSIONS.create.action);
 
     const validatedData = createSellerSchema.parse(data);
 
@@ -24,16 +26,13 @@ export async function createSellerAction(data: CreateSellerInput) {
     if (error instanceof z.ZodError) {
       return { error: "Dados inválidos: " + error.errors.map(e => e.message).join(", ") };
     }
-    return { error: error instanceof Error ? error.message : "Erro ao criar vendedor" };
+    return { error: publicActionError(error, "Erro ao criar vendedor") };
   }
 }
 
-export async function updateSellerAction(data: UpdateSellerInput) {
+export async function updateSellerAction(data: SellerUpdateActionInput) {
   try {
-    const session = await getActiveProfileSession();
-    if (!session?.companyId) {
-      return { error: "Não autenticado" };
-    }
+    const session = await requirePermission(SELLER_PERMISSIONS.update.module, SELLER_PERMISSIONS.update.action);
 
     const validatedData = updateSellerSchema.parse(data);
 
@@ -46,22 +45,19 @@ export async function updateSellerAction(data: UpdateSellerInput) {
     if (error instanceof z.ZodError) {
       return { error: "Dados inválidos" };
     }
-    return { error: error instanceof Error ? error.message : "Erro ao atualizar" };
+    return { error: publicActionError(error, "Erro ao atualizar vendedor") };
   }
 }
 
 export async function deleteSellerAction(id: string) {
   try {
-    const session = await getActiveProfileSession();
-    if (!session?.companyId) {
-      return { error: "Não autenticado" };
-    }
+    const session = await requirePermission(SELLER_PERMISSIONS.disable.module, SELLER_PERMISSIONS.disable.action);
 
     await sellersService.deleteSeller(id, session.companyId);
     revalidatePath("/comercial/vendedores");
     revalidatePath("/pdv");
     return { success: true };
   } catch (error) {
-    return { error: error instanceof Error ? error.message : "Erro ao excluir" };
+    return { error: publicActionError(error, "Erro ao desativar vendedor") };
   }
 }

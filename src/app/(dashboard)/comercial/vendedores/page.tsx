@@ -1,5 +1,6 @@
 export const dynamic = 'force-dynamic';
-import { getActiveProfileSession } from "@/lib/auth/actions"
+import { requirePermission } from "@/lib/auth/permissions"
+import { SELLER_PERMISSIONS } from "@/lib/sellers/seller-security"
 import { sellersService } from "@/lib/sellers/sellers-service"
 import { VendedoresClient } from "./vendedores-client"
 
@@ -8,11 +9,7 @@ export const metadata = {
 }
 
 export default async function VendedoresPage() {
-  const session = await getActiveProfileSession()
-  
-  if (!session?.companyId) {
-    return <div>Não autenticado</div>
-  }
+  const session = await requirePermission(SELLER_PERMISSIONS.view.module, SELLER_PERMISSIONS.view.action)
 
   const sellers = await sellersService.getSellersByCompany(session.companyId)
 

@@ -38,7 +38,7 @@ test('forged cookie values do not influence session API response', async () => {
   assert.equal(body.session.isAdmin, false);
 });
 
-function adminHandlers(authorize: () => Promise<unknown>) {
+function adminHandlers(authorize: () => Promise<ServerAuthContext>) {
   return createAdminMigrationHandlers({ authorize, migrate: async () => ({ ok: true }), counts: async () => [0, 0, 0, 0, 0] });
 }
 
@@ -55,6 +55,19 @@ test('admin API returns 403 for non-admin and forged isAdmin', async () => {
 
 test('admin API allows Prisma-authorized admin', async () => {
   assert.equal((await adminHandlers(async () => trustedContext({ isAdmin: true })).GET()).status, 200);
+});
+
+test('admin migration receives only the trusted tenant context', async () => {
+  let received = '';
+  const handlers = createAdminMigrationHandlers({
+    authorize: async () => trustedContext({ companyId: 'tenant-a', isAdmin: true }),
+    migrate: async context => { received = context.companyId; return {}; },
+    counts: async context => { received = context.companyId; return [0, 0, 0, 0, 0]; },
+  });
+  await handlers.POST();
+  assert.equal(received, 'tenant-a');
+  await handlers.GET();
+  assert.equal(received, 'tenant-a');
 });
 
 test('logout signs out Supabase and deletes selector', async () => {

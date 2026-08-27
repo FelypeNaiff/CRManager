@@ -116,7 +116,6 @@ export async function createAccountsReceivable(input: any) {
 
     return { success: true, data: serializePrisma(installments) };
   } catch (error: any) {
-    console.error('Error creating accounts receivable:', error);
     return { success: false, error: 'Erro ao criar contas a receber.' };
   }
 }
@@ -223,7 +222,6 @@ export async function payInstallment(
 
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
-    console.error('Error paying installment:', error);
     return { success: false, error: 'Não foi possível registrar o recebimento.' };
   }
 }

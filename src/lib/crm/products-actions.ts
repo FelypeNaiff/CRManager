@@ -17,6 +17,7 @@ import { InventoryMovementType, Prisma, AuthorizationType } from '@prisma/client
 import { authorizationService } from '../auth/authorization-service';
 import { tenantWhere } from './tenant-security';
 import { approvedAuthorizationWhere } from '../auth/authorization-security';
+import { publicActionError } from '../auth/public-action-error';
 
 async function validateProductRelations(
   companyId: string,
@@ -44,8 +45,7 @@ export async function getProductCategories() {
     });
     return { success: true, data: serializePrisma(categories) };
   } catch (error: any) {
-    console.error('Error fetching product categories:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar categorias de produtos.') };
   }
 }
 
@@ -76,11 +76,10 @@ export async function createProductCategory(input: any) {
 
     return { success: true, data: serializePrisma(newCategory) };
   } catch (error: any) {
-    console.error('Error creating product category:', error);
     if (error.code === 'P2002') {
       return { success: false, error: 'Já existe uma categoria com este nome.' };
     }
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao criar categoria de produto.') };
   }
 }
 
@@ -97,8 +96,7 @@ export async function getSuppliers() {
     });
     return { success: true, data: serializePrisma(suppliers) };
   } catch (error: any) {
-    console.error('Error fetching suppliers:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar fornecedores.') };
   }
 }
 
@@ -131,8 +129,7 @@ export async function createSupplier(input: any) {
 
     return { success: true, data: serializePrisma(newSupplier) };
   } catch (error: any) {
-    console.error('Error creating supplier:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao criar fornecedor.') };
   }
 }
 
@@ -196,8 +193,7 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
 
     return { success: true, ...buildPaginatedResult(products, totalCount, page, pageSize) };
   } catch (error: any) {
-    console.error('Error fetching products:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar produtos.') };
   }
 }
 
@@ -219,7 +215,7 @@ export async function getProductById(id: string) {
     }
     return { success: true, data: serializePrisma(product) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar produto.') };
   }
 }
 
@@ -302,7 +298,6 @@ export async function createProduct(input: any) {
 
     return { success: true, data: serializePrisma(result.product) };
   } catch (error: any) {
-    console.error('Error creating product:', error);
     if (error.code === 'P2002') {
       return { success: false, error: 'Já existe um produto com este código interno ou SKU.' };
     }
@@ -402,7 +397,6 @@ export async function updateProduct(id: string, input: any) {
 
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
-    console.error('Error updating product:', error);
     return { success: false, error: 'Erro ao atualizar produto.' };
   }
 }
@@ -444,7 +438,6 @@ export async function deleteProduct(id: string) {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting product:', error);
     return { success: false, error: 'Erro ao remover produto.' };
   }
 }
@@ -486,7 +479,6 @@ export async function getInventoryMovements(filters?: { variantId?: string } & P
     ]);
     return { success: true, ...buildPaginatedResult(movements, totalCount, page, pageSize) };
   } catch (error: any) {
-    console.error('Error fetching inventory movements:', error);
     return { success: false, error: 'Erro ao consultar movimentações de estoque.' };
   }
 }
@@ -663,7 +655,6 @@ export async function createInventoryMovement(input: any) {
 
     return { success: true, data: serializePrisma(movement) };
   } catch (error: any) {
-    console.error('Error creating inventory movement:', error);
     return { success: false, error: 'Não foi possível concluir a movimentação de estoque.' };
   }
 }
@@ -680,8 +671,7 @@ export async function getProductPriceHistory(productId: string) {
     });
     return { success: true, data: serializePrisma(history) };
   } catch (error: any) {
-    console.error('Error fetching product price history:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar histórico de preços.') };
   }
 }
 
@@ -713,7 +703,6 @@ export async function getProductInventoryMovements(productId: string, filters?: 
     ]);
     return { success: true, ...buildPaginatedResult(movements, totalCount, page, pageSize) };
   } catch (error: any) {
-    console.error('Error fetching product inventory movements:', error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao consultar movimentações do produto.') };
   }
 }

@@ -1,9 +1,11 @@
 import { prisma } from "@/lib/prisma";
 import { CreateSellerInput, UpdateSellerInput } from "./sellers-schemas";
+import { sellerTenantWhere } from './seller-security';
 
 export class SellersService {
+  constructor(private readonly db: Pick<typeof prisma, "seller" | "sale"> = prisma) {}
   async getSellersByCompany(companyId: string, status?: "ACTIVE" | "INACTIVE") {
-    return prisma.seller.findMany({
+    return this.db.seller.findMany({
       where: {
         companyId,
         ...(status ? { status } : {})
@@ -13,13 +15,11 @@ export class SellersService {
   }
 
   async getSellerById(id: string, companyId: string) {
-    const seller = await prisma.seller.findUnique({ where: { id } });
-    if (!seller || seller.companyId !== companyId) return null;
-    return seller;
+    return this.db.seller.findFirst({ where: sellerTenantWhere(id, companyId) });
   }
 
   async createSeller(data: CreateSellerInput, companyId: string) {
-    return prisma.seller.create({
+    return this.db.seller.create({
       data: {
         ...data,
         companyId,
@@ -32,13 +32,13 @@ export class SellersService {
     const { id, ...rest } = data;
     
     // Validate ownership
-    const existing = await prisma.seller.findUnique({ where: { id } });
-    if (!existing || existing.companyId !== companyId) {
+    const existing = await this.db.seller.findFirst({ where: sellerTenantWhere(id, companyId) });
+    if (!existing) {
       throw new Error("Vendedor não encontrado ou sem permissão.");
     }
 
-    return prisma.seller.update({
-      where: { id },
+    return this.db.seller.update({
+      where: sellerTenantWhere(id, companyId),
       data: {
         ...rest,
         email: rest.email === "" ? null : rest.email
@@ -47,23 +47,23 @@ export class SellersService {
   }
 
   async deleteSeller(id: string, companyId: string) {
-    const existing = await prisma.seller.findUnique({ where: { id } });
-    if (!existing || existing.companyId !== companyId) {
+    const existing = await this.db.seller.findFirst({ where: sellerTenantWhere(id, companyId) });
+    if (!existing) {
       throw new Error("Vendedor não encontrado ou sem permissão.");
     }
     
     // Instead of deleting, just set to INACTIVE so sales history isn't lost
     // Or if we need hard delete, we check if sales exist
-    const salesCount = await prisma.sale.count({ where: { sellerId: id } });
+    const salesCount = await this.db.sale.count({ where: { sellerId: id, companyId } });
     if (salesCount > 0) {
       // Soft delete
-      return prisma.seller.update({
-        where: { id },
+      return this.db.seller.update({
+        where: sellerTenantWhere(id, companyId),
         data: { status: "INACTIVE" }
       });
     }
 
-    return prisma.seller.delete({ where: { id } });
+    return this.db.seller.delete({ where: sellerTenantWhere(id, companyId) });
   }
 }
 

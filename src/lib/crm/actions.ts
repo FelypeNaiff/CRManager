@@ -9,6 +9,7 @@ import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { tenantChildWhere, tenantTagRelationWhere, tenantWhere } from './tenant-security';
+import { publicActionError } from '../auth/public-action-error';
 
 
 
@@ -153,7 +154,6 @@ export async function getCustomers(params?: GetCustomersParams) {
       }
     };
   } catch (error: any) {
-    console.error('Error fetching customers:', error);
     return { success: false, error: 'Erro ao buscar clientes.' };
   }
 }
@@ -211,8 +211,7 @@ export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
 
     return { success: true, data: serializePrisma(customer) };
   } catch (error: any) {
-    console.error('Error creating customer:', error);
-    return { success: false, error: error.message || 'Erro ao criar cliente.' };
+    return { success: false, error: publicActionError(error, 'Erro ao criar cliente.') };
   }
 }
 
@@ -274,7 +273,6 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
 
     return { success: true, data: serializePrisma(customer) };
   } catch (error: any) {
-    console.error('Error updating customer:', error);
     return { success: false, error: 'Erro ao atualizar cliente.' };
   }
 }
@@ -306,7 +304,6 @@ export async function deleteCustomer(id: string) {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting customer:', error);
     return { success: false, error: 'Erro ao remover cliente.' };
   }
 }
@@ -345,7 +342,6 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
 
     return { success: true, data: serializePrisma(child) };
   } catch (error: any) {
-    console.error('Error creating child:', error);
     return { success: false, error: 'Erro ao criar cadastro de filho.' };
   }
 }
@@ -367,7 +363,6 @@ export async function deleteChild(id: string) {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting child:', error);
     return { success: false, error: 'Erro ao remover cadastro de filho.' };
   }
 }
@@ -383,7 +378,6 @@ export async function getTags() {
     });
     return { success: true, data: serializePrisma(tags) };
   } catch (error: any) {
-    console.error('Error getting tags:', error);
     return { success: false, error: 'Erro ao obter tags.' };
   }
 }
@@ -407,7 +401,6 @@ export async function createTag(name: string, color?: string) {
     });
     return { success: true, data: serializePrisma(tag) };
   } catch (error: any) {
-    console.error('Error creating tag:', error);
     return { success: false, error: 'Erro ao criar tag.' };
   }
 }
@@ -439,7 +432,6 @@ export async function addTagToCustomer(customerId: string, tagId: string) {
 
     return { success: true, data: serializePrisma(relation) };
   } catch (error: any) {
-    console.error('Error linking tag:', error);
     return { success: false, error: 'Erro ao vincular tag.' };
   }
 }
@@ -468,7 +460,6 @@ export async function removeTagFromCustomer(customerId: string, tagId: string) {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error unlinking tag:', error);
     return { success: false, error: 'Erro ao desvincular tag.' };
   }
 }
@@ -502,8 +493,7 @@ export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustme
 
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
-    console.error('Error adjusting wallet balance:', error);
-    return { success: false, error: error.message || 'Erro ao realizar transação de saldo.' };
+    return { success: false, error: publicActionError(error, 'Erro ao realizar transação de saldo.') };
   }
 }
 
@@ -518,7 +508,6 @@ export async function getCustomerHistory(customerId: string) {
     });
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
-    console.error('Error fetching history:', error);
     return { success: false, error: 'Erro ao buscar histórico do cliente.' };
   }
 }
@@ -567,7 +556,6 @@ export async function getBirthdayList(month: number) {
       })),
     };
   } catch (error: any) {
-    console.error('Error fetching birthday list:', error);
     return { success: false, error: 'Erro ao buscar aniversariantes.' };
   }
 }
@@ -589,7 +577,6 @@ export async function getChildren(customerId?: string) {
     });
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
-    console.error('Error fetching children:', error);
     return { success: false, error: 'Erro ao buscar filhos.' };
   }
 }
@@ -621,7 +608,6 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
 
     return { success: true, data: serializePrisma(child) };
   } catch (error: any) {
-    console.error('Error updating child:', error);
     return { success: false, error: 'Erro ao atualizar cadastro do filho.' };
   }
 }
@@ -635,7 +621,6 @@ export async function deleteTag(id: string) {
     });
     return { success: true };
   } catch (error: any) {
-    console.error('Error deleting tag:', error);
     return { success: false, error: 'Erro ao deletar tag.' };
   }
 }
@@ -709,7 +694,6 @@ export async function getWallets(params?: GetWalletsParams) {
       }
     };
   } catch (error: any) {
-    console.error('Error fetching wallets:', error);
     return { success: false, error: 'Erro ao buscar carteiras.' };
   }
 }
@@ -731,7 +715,6 @@ export async function getWalletHistory(walletId: string) {
     });
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
-    console.error('Error fetching wallet history:', error);
     return { success: false, error: 'Erro ao buscar extrato da carteira.' };
   }
 }
@@ -747,7 +730,6 @@ export async function getActivityLogs() {
     });
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
-    console.error('Error fetching activity logs:', error);
     return { success: false, error: 'Erro ao buscar logs de auditoria.' };
   }
 }
@@ -806,7 +788,6 @@ export async function getCustomerExchangeReturns(customerId: string) {
 
     return { success: true, data: serializePrisma(unified) };
   } catch (error: any) {
-    console.error('Error fetching customer exchange returns:', error);
     return { success: false, error: 'Erro ao buscar trocas e devoluções.' };
   }
 }
@@ -895,7 +876,6 @@ export async function getSegmentationData() {
     const data = await getCachedSegmentationData(session.companyId);
     return { success: true, data };
   } catch (error: any) {
-    console.error('Error fetching segmentation data:', error);
     return { success: false, error: 'Erro ao buscar dados para segmentacao.' };
   }
 }
@@ -938,8 +918,7 @@ export async function listExchangeReturns() {
 
     return { success: true, data: serializePrisma(mapped) };
   } catch (error: any) {
-    console.error("Error in listExchangeReturns:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao listar trocas e devoluções.') };
   }
 }
 
@@ -967,8 +946,7 @@ export async function createExchangeReturnAction(data: any) {
     
     return { success: true, data: serializePrisma(result) };
   } catch (error: any) {
-    console.error("Error creating exchange return:", error);
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao criar troca ou devolução.') };
   }
 }
 
@@ -992,7 +970,7 @@ export async function listCampaigns() {
 
     return { success: true, data: serializePrisma(list.map(h => ({ id: h.id, nome: h.actionType, cliente: h.customer.name, createdAt: h.createdAt, description: h.description }))) };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao buscar histórico de trocas e devoluções.') };
   }
 }
 
@@ -1020,7 +998,7 @@ export async function createCampaignAction(data: any) {
 
     return { success: true };
   } catch (error: any) {
-    return { success: false, error: error.message };
+    return { success: false, error: publicActionError(error, 'Erro ao remover troca ou devolução.') };
   }
 }
 
@@ -1035,7 +1013,6 @@ export async function getCustomerHistoryLogs() {
     });
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
-    console.error('Error fetching customer history logs:', error);
     return { success: false, error: 'Erro ao buscar histórico.' };
   }
 }

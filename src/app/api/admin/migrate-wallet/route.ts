@@ -4,14 +4,8 @@ import { createAdminMigrationHandlers } from '@/lib/auth/api-handlers';
 
 const handlers = createAdminMigrationHandlers({
   authorize: requireAdmin,
-  migrate: () => MigrationService.migrateHistoricalData(),
-  async counts() {
-    const { prisma } = await import('@/lib/prisma');
-    return Promise.all([
-      prisma.exchangeReturn.count(), prisma.customerWalletMovement.count(),
-      prisma.saleExchange.count(), prisma.saleReturn.count(), prisma.walletTransaction.count(),
-    ]);
-  },
+  migrate: (auth) => MigrationService.migrateHistoricalData(auth.companyId, auth.userId),
+  counts: (auth) => MigrationService.getTenantCounts(auth.companyId),
 });
 
 export const GET = handlers.GET;

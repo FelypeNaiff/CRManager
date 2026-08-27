@@ -9,6 +9,8 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { requireAuth } from '@/lib/auth/permissions';
+import { executeAuthenticatedAIAction } from '@/lib/auth/ai-action-security';
 
 const MarketingCampaignContentGeneratorInputSchema = z.object({
   targetAudience: z.string().describe('The target audience for the marketing campaign (e.g., "mães de primeira viagem", "clientes inativos", "aniversariantes do mês").'),
@@ -22,7 +24,7 @@ const MarketingCampaignContentGeneratorOutputSchema = z.object({
 export type MarketingCampaignContentGeneratorOutput = z.infer<typeof MarketingCampaignContentGeneratorOutputSchema>;
 
 export async function generateMarketingCampaignContent(input: MarketingCampaignContentGeneratorInput): Promise<MarketingCampaignContentGeneratorOutput> {
-  return marketingCampaignContentGeneratorFlow(input);
+  return executeAuthenticatedAIAction(requireAuth, input, marketingCampaignContentGeneratorFlow);
 }
 
 const marketingCampaignContentGeneratorPrompt = ai.definePrompt({
