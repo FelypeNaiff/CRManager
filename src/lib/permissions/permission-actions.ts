@@ -5,6 +5,12 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { PERMISSION_CATALOG, TEMPLATES, ADMIN_TEMPLATE, PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
+import { tenantRolePermissionWhere } from '@/lib/auth/admin-tenant-security';
+
+function containsOnlyCatalogPermissions(permissions: { module: string; action: string }[]) {
+  const catalog = new Set(PERMISSION_CATALOG.map(permission => `${permission.module}:${permission.action}`));
+  return permissions.every(permission => catalog.has(`${permission.module}:${permission.action}`));
+}
 
 export async function getPermissionCatalogAction() {
   const session = await requirePermission('PERMISSOES', 'VIEW');
@@ -23,10 +29,8 @@ export async function getRolePermissionsAction(roleId: string) {
     if (!role) {
       return { success: false, error: 'Grupo não encontrado.' };
     }
-
     return { success: true, data: { role, permissions: role.permissions } };
   } catch (error: any) {
-    console.error('Error fetching role permissions:', error);
     return { success: false, error: 'Erro ao buscar permissões.' };
   }
 }
@@ -66,6 +70,9 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
   const session = await requirePermission('PERMISSOES', 'UPDATE');
 
   try {
+    if (!containsOnlyCatalogPermissions(permissions)) {
+      return { success: false, error: 'Matriz de permissões inválida.' };
+    }
     const role = await prisma.role.findFirst({
       where: { id: roleId, companyId: session.companyId }
     });
@@ -73,13 +80,16 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
     if (!role) {
       return { success: false, error: 'Grupo não encontrado.' };
     }
+    if (role.isAdmin && !session.isAdmin) {
+      return { success: false, error: 'Apenas administradores podem alterar permissões de grupos administrativos.' };
+    }
 
     await ensureAdminPermissionsProtection(session.companyId, roleId, permissions);
 
     await prisma.$transaction(async (tx) => {
       // 1. Delete all existing permissions for this role
       await tx.permission.deleteMany({
-        where: { roleId }
+        where: tenantRolePermissionWhere(roleId, session.companyId)
       });
 
       // 2. Insert the new ones that are allowed
@@ -108,8 +118,7 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error updating permissions:', error);
-    return { success: false, error: error.message || 'Erro ao atualizar permissões.' };
+    return { success: false, error: 'Erro ao atualizar permissões.' };
   }
 }
 
@@ -123,6 +132,9 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
 
     if (!role) {
       return { success: false, error: 'Grupo não encontrado.' };
+    }
+    if (role.isAdmin && !session.isAdmin) {
+      return { success: false, error: 'Apenas administradores podem alterar permissões de grupos administrativos.' };
     }
 
     let templatePermissions: { module: string, action: string, allowed: boolean }[] = [];
@@ -139,7 +151,7 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
 
     await prisma.$transaction(async (tx) => {
       await tx.permission.deleteMany({
-        where: { roleId }
+        where: tenantRolePermissionWhere(roleId, session.companyId)
       });
 
       const dataToInsert = templatePermissions.map(p => ({
@@ -167,7 +179,6 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error applying template:', error);
-    return { success: false, error: error.message || 'Erro ao aplicar template.' };
+    return { success: false, error: 'Erro ao aplicar template.' };
   }
 }

@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { z } from 'zod';
+import { canSetAdministrativeRole, tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 
 const RoleFormSchema = z.object({
   name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
@@ -58,7 +59,6 @@ export async function getRolesAction() {
     });
     return { success: true, data: serializePrisma(roles) };
   } catch (error: any) {
-    console.error('Error fetching roles:', error);
     return { success: false, error: 'Erro ao buscar grupos de usuários.' };
   }
 }
@@ -77,7 +77,6 @@ export async function getRoleByIdAction(id: string) {
     }
     return { success: true, data: serializePrisma(role) };
   } catch (error: any) {
-    console.error('Error fetching role:', error);
     return { success: false, error: 'Erro ao buscar grupo de usuários.' };
   }
 }
@@ -89,6 +88,9 @@ export async function createRoleAction(rawData: any) {
   const session = await requirePermission('GRUPOS_USUARIOS', 'CREATE');
   try {
     const validatedData = RoleFormSchema.parse(rawData);
+    if (!canSetAdministrativeRole(session, false, validatedData.isAdmin)) {
+      return { success: false, error: 'Apenas administradores podem criar grupos administrativos.' };
+    }
 
     // Check name duplication within the company
     const existingRole = await prisma.role.findFirst({
@@ -122,11 +124,10 @@ export async function createRoleAction(rawData: any) {
 
     return { success: true, data: { id: newRole.id } };
   } catch (error: any) {
-    console.error('Error creating role:', error);
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
     }
-    return { success: false, error: error.message || 'Erro ao criar grupo de usuários.' };
+    return { success: false, error: 'Erro ao criar grupo de usuários.' };
   }
 }
 
@@ -144,6 +145,9 @@ export async function updateRoleAction(id: string, rawData: any) {
 
     if (!existingRole) {
       return { success: false, error: 'Grupo não encontrado.' };
+    }
+    if (!canSetAdministrativeRole(session, existingRole.isAdmin, validatedData.isAdmin)) {
+      return { success: false, error: 'Apenas administradores podem alterar privilégios administrativos.' };
     }
 
     // Name uniqueness check
@@ -163,7 +167,7 @@ export async function updateRoleAction(id: string, rawData: any) {
     await ensureAdminProtection(session.companyId, id, validatedData.isAdmin, validatedData.status);
 
     const updatedRole = await prisma.role.update({
-      where: { id },
+      where: tenantEntityWhere(id, session.companyId),
       data: {
         name: validatedData.name,
         description: validatedData.description,
@@ -199,10 +203,9 @@ export async function updateRoleAction(id: string, rawData: any) {
 
     return { success: true, data: { id: updatedRole.id } };
   } catch (error: any) {
-    console.error('Error updating role:', error);
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
     }
-    return { success: false, error: error.message || 'Erro ao atualizar grupo.' };
+    return { success: false, error: 'Erro ao atualizar grupo.' };
   }
 }

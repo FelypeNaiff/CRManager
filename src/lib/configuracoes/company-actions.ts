@@ -46,11 +46,10 @@ const CompanyFormSchema = z.object({
 export async function getCompanyAction() {
   const session = await requirePermission('CONFIGURACOES_EMPRESA', 'VIEW');
   try {
-    const company = await CompanyService.getActiveCompany();
+    const company = await CompanyService.getActiveCompany(session.companyId);
     return { success: true, data: serializePrisma(company) };
-  } catch (error: any) {
-    console.error('Error in getCompanyAction:', error);
-    return { success: false, error: error.message || 'Erro ao buscar dados da empresa.' };
+  } catch {
+    return { success: false, error: 'Erro ao buscar dados da empresa.' };
   }
 }
 
@@ -98,11 +97,10 @@ export async function updateCompanyAction(rawData: any, updateType?: 'contatos' 
 
     return { success: true, data: serializePrisma(updatedCompany) };
   } catch (error: any) {
-    console.error('Error in updateCompanyAction:', error);
     if (error instanceof z.ZodError) {
       const fieldErrors = error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
       return { success: false, error: `Dados inválidos: ${fieldErrors}` };
     }
-    return { success: false, error: error.message || 'Erro ao salvar dados da empresa.' };
+    return { success: false, error: 'Erro ao salvar dados da empresa.' };
   }
 }

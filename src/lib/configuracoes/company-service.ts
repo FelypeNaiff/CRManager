@@ -1,5 +1,4 @@
 import { prisma } from '@/lib/prisma';
-import { getActiveProfileSession } from '@/lib/auth/actions';
 
 export interface CompanyDataInput {
   razaoSocial: string;
@@ -42,14 +41,9 @@ export const CompanyService = {
   /**
    * Retrieves the active company based on the current profile session.
    */
-  async getActiveCompany() {
-    const session = await getActiveProfileSession();
-    if (!session) {
-      throw new Error('Usuário não autenticado ou sessão de perfil inválida.');
-    }
-
+  async getActiveCompany(companyId: string) {
     const company = await prisma.company.findUnique({
-      where: { id: session.companyId },
+      where: { id: companyId },
     });
 
     return company;

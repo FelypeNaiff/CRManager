@@ -6,6 +6,7 @@ import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { hashPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-service';
 import { z } from 'zod';
+import { tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 
 const UserCreateSchema = z.object({
   name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
@@ -54,7 +55,6 @@ export async function getUsersAction() {
     });
     return { success: true, data: serializePrisma(users) };
   } catch (error: any) {
-    console.error('Error fetching users:', error);
     return { success: false, error: 'Erro ao buscar usuários.' };
   }
 }
@@ -66,7 +66,7 @@ export async function getUserByIdAction(id: string) {
   const session = await requirePermission('USUARIOS', 'VIEW');
   try {
     const user = await prisma.user.findFirst({
-      where: { id, companyId: session.companyId },
+      where: tenantEntityWhere(id, session.companyId),
       select: {
         id: true,
         name: true,
@@ -86,7 +86,6 @@ export async function getUserByIdAction(id: string) {
     
     return { success: true, data: serializePrisma(user) };
   } catch (error: any) {
-    console.error('Error fetching user:', error);
     return { success: false, error: 'Erro ao buscar usuário.' };
   }
 }
@@ -139,7 +138,6 @@ export async function createUserAction(rawData: any) {
 
     return { success: true, data: { id: newUser.id } };
   } catch (error: any) {
-    console.error('Error creating user:', error);
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
     }
@@ -156,7 +154,7 @@ export async function updateUserAction(id: string, rawData: any) {
     const validatedData = UserUpdateSchema.parse(rawData);
 
     const existingUser = await prisma.user.findFirst({
-      where: { id, companyId: session.companyId },
+      where: tenantEntityWhere(id, session.companyId),
     });
 
     if (!existingUser) {
@@ -164,7 +162,7 @@ export async function updateUserAction(id: string, rawData: any) {
     }
 
     const updatedUser = await prisma.user.update({
-      where: { id },
+      where: tenantEntityWhere(id, session.companyId),
       data: {
         name: validatedData.name,
         cargo: validatedData.cargo,
@@ -191,7 +189,6 @@ export async function updateUserAction(id: string, rawData: any) {
 
     return { success: true, data: { id: updatedUser.id } };
   } catch (error: any) {
-    console.error('Error updating user:', error);
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
     }
@@ -206,7 +203,7 @@ export async function resetUserPinAction(userId: string) {
   const session = await requirePermission('USUARIOS', 'UPDATE'); // Requires manage permissions
   try {
     const existingUser = await prisma.user.findFirst({
-      where: { id: userId, companyId: session.companyId },
+      where: tenantEntityWhere(userId, session.companyId),
     });
 
     if (!existingUser) {
@@ -217,7 +214,7 @@ export async function resetUserPinAction(userId: string) {
     const hash = await hashPin(tempPin);
 
     await prisma.user.update({
-      where: { id: userId },
+      where: tenantEntityWhere(userId, session.companyId),
       data: {
         authorizationPinHash: hash,
         pinResetRequired: true,
@@ -237,7 +234,6 @@ export async function resetUserPinAction(userId: string) {
     // It is NEVER returned again.
     return { success: true, tempPin };
   } catch (error: any) {
-    console.error('Error resetting user PIN:', error);
     return { success: false, error: 'Erro ao resetar o PIN do usuário.' };
   }
 }
@@ -251,7 +247,7 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
   const session = await requirePermission('USUARIOS', 'UPDATE'); 
   try {
     const user = await prisma.user.findFirst({
-      where: { id: userId, companyId: session.companyId },
+      where: tenantEntityWhere(userId, session.companyId),
     });
 
     if (!user) {
@@ -274,7 +270,7 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
     const newHash = await hashPin(newPin);
 
     await prisma.user.update({
-      where: { id: userId },
+      where: tenantEntityWhere(userId, session.companyId),
       data: {
         authorizationPinHash: newHash,
         pinResetRequired: false,
@@ -293,7 +289,6 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
 
     return { success: true };
   } catch (error: any) {
-    console.error('Error changing user PIN:', error);
     return { success: false, error: 'Erro ao alterar o PIN de autorização.' };
   }
 }

@@ -52,13 +52,12 @@ const OperationalSettingsFormSchema = z.object({
  * Action to fetch current operational settings.
  */
 export async function getOperationalSettingsAction() {
-  const session = await requireAuth();
+  const session = await requirePermission('CONFIGURACOES_OPERACIONAIS', 'VIEW');
   try {
     const settings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId);
     return { success: true, data: serializePrisma(JSON.parse(JSON.stringify(settings)),) };
-  } catch (error: any) {
-    console.error('Error in getOperationalSettingsAction:', error);
-    return { success: false, error: error.message || 'Erro ao carregar configurações.' };
+  } catch {
+    return { success: false, error: 'Erro ao carregar configurações.' };
   }
 }
 
@@ -66,7 +65,7 @@ export async function getOperationalSettingsAction() {
  * Action to update operational settings.
  */
 export async function updateOperationalSettingsAction(rawData: any) {
-  const session = await requirePermission('CONFIGURACOES_EMPRESA', 'UPDATE');
+  const session = await requirePermission('CONFIGURACOES_OPERACIONAIS', 'UPDATE');
   try {
     const validatedData = OperationalSettingsFormSchema.parse(rawData);
     const updated = await OperationalSettingsService.updateOperationalSettings(
@@ -86,12 +85,11 @@ export async function updateOperationalSettingsAction(rawData: any) {
 
     return { success: true, data: serializePrisma(JSON.parse(JSON.stringify(updated)),) };
   } catch (error: any) {
-    console.error('Error in updateOperationalSettingsAction:', error);
     if (error instanceof z.ZodError) {
       const fieldErrors = error.errors.map(err => `${err.path.join('.')}: ${err.message}`).join(', ');
       return { success: false, error: `Dados inválidos: ${fieldErrors}` };
     }
-    return { success: false, error: error.message || 'Erro ao atualizar configurações.' };
+    return { success: false, error: 'Erro ao atualizar configurações.' };
   }
 }
 
@@ -111,9 +109,8 @@ export async function validateDiscountPolicyAction(data: {
       saleTotal: data.saleTotal,
     });
     return { success: true, ...result };
-  } catch (error: any) {
-    console.error('Error in validateDiscountPolicyAction:', error);
-    return { success: false, error: error.message || 'Erro ao validar desconto.' };
+  } catch {
+    return { success: false, error: 'Erro ao validar desconto.' };
   }
 }
 
@@ -133,9 +130,8 @@ export async function validateCashRegisterPolicyAction(data: {
       userId: session.userId,
     });
     return { success: true, ...result };
-  } catch (error: any) {
-    console.error('Error in validateCashRegisterPolicyAction:', error);
-    return { success: false, error: error.message || 'Erro ao validar caixa.' };
+  } catch {
+    return { success: false, error: 'Erro ao validar caixa.' };
   }
 }
 
@@ -156,8 +152,7 @@ export async function validateSalePolicyAction(data: {
       isDraft: data.isDraft,
     });
     return { success: true, ...result };
-  } catch (error: any) {
-    console.error('Error in validateSalePolicyAction:', error);
-    return { success: false, error: error.message || 'Erro ao validar regras de venda.' };
+  } catch {
+    return { success: false, error: 'Erro ao validar regras de venda.' };
   }
 }
