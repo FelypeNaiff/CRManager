@@ -2,14 +2,19 @@ import { prisma } from "@/lib/prisma";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
 
 export class SellerCommissionService {
+  constructor(
+    private readonly getSettings: typeof OperationalSettingsService.getOrCreateOperationalSettings =
+      OperationalSettingsService.getOrCreateOperationalSettings,
+  ) {}
+
   async processSaleCommission(tx: any, sale: any) {
     // Busca o vendedor na tabela Seller
-    const seller = await tx.seller.findUnique({
-      where: { id: sale.sellerId }
+    const seller = await tx.seller.findFirst({
+      where: { id: sale.sellerId, companyId: sale.companyId }
     });
     if (!seller || seller.status !== 'ACTIVE') return;
 
-    const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
+    const settings = await this.getSettings(sale.companyId, tx);
 
     // Se empresa habilita metas e há metas ativas, soma
     if (settings.enableSellerGoals) {
@@ -54,12 +59,12 @@ export class SellerCommissionService {
   }
 
   async rollbackSaleCommission(tx: any, sale: any) {
-    const seller = await tx.seller.findUnique({
-      where: { id: sale.sellerId }
+    const seller = await tx.seller.findFirst({
+      where: { id: sale.sellerId, companyId: sale.companyId }
     });
     if (!seller || seller.status !== 'ACTIVE') return;
 
-    const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
+    const settings = await this.getSettings(sale.companyId, tx);
 
     if (settings.enableSellerGoals) {
       const now = new Date(sale.createdAt); // Data original da venda
@@ -82,7 +87,7 @@ export class SellerCommissionService {
     if (settings.enableCommissions) {
       // Procura comissão atrelada
       const commissions = await tx.sellerCommission.findMany({
-        where: { saleId: sale.id }
+        where: { saleId: sale.id, sellerId: seller.id }
       });
 
       for (const commission of commissions) {
