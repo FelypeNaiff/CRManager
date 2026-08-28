@@ -13,7 +13,6 @@ const UserCreateSchema = z.object({
   email: z.string().email('E-mail inválido'),
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
-  commissionRate: z.number().min(0).max(100).default(0),
   maxDiscountPercentage: z.number().min(0).max(100).optional().nullable(),
   pin: z.string().min(4, 'PIN deve conter no mínimo 4 dígitos').max(8, 'PIN deve conter no máximo 8 dígitos').optional().nullable(),
   observacoes: z.string().optional().nullable(),
@@ -23,7 +22,6 @@ const UserUpdateSchema = z.object({
   name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)').optional(),
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
-  commissionRate: z.number().min(0).max(100).optional(),
   maxDiscountPercentage: z.number().min(0).max(100).optional().nullable(),
   observacoes: z.string().optional().nullable(),
 });
@@ -42,7 +40,6 @@ export async function getUsersAction() {
         email: true,
         status: true,
         cargo: true,
-        commissionRate: true,
         maxDiscountPercentage: true,
         updatedAt: true,
         role: {
@@ -73,7 +70,6 @@ export async function getUserByIdAction(id: string) {
         email: true,
         status: true,
         cargo: true,
-        commissionRate: true,
         maxDiscountPercentage: true,
         updatedAt: true,
         roleId: true,
@@ -119,7 +115,6 @@ export async function createUserAction(rawData: any) {
         email: validatedData.email,
         cargo: validatedData.cargo,
         status: validatedData.status,
-        commissionRate: validatedData.commissionRate,
         maxDiscountPercentage: validatedData.maxDiscountPercentage,
         authorizationPinHash,
         pinAccessHash: 'N/A', // Placeholder since login is not fully managed here yet according to requirements
@@ -168,7 +163,6 @@ export async function updateUserAction(id: string, rawData: any) {
         cargo: validatedData.cargo,
         status: validatedData.status,
         permitirAcesso: validatedData.status === 'ACTIVE' ? true : existingUser.permitirAcesso,
-        commissionRate: validatedData.commissionRate,
         maxDiscountPercentage: validatedData.maxDiscountPercentage,
       },
     });

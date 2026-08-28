@@ -26,7 +26,6 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
     email: '',
     cargo: '',
     status: 'ACTIVE',
-    commissionRate: 0,
     maxDiscountPercentage: '',
     pin: '',
     confirmPin: '',
@@ -60,7 +59,6 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
           email: u.email, // email is usually readonly on edit, but let's just populate
           cargo: u.cargo || '',
           status: u.status,
-          commissionRate: Number(u.commissionRate || 0),
           maxDiscountPercentage: u.maxDiscountPercentage !== null ? String(u.maxDiscountPercentage) : '',
           pin: '', // Never populate pin on edit
           confirmPin: '',
@@ -106,7 +104,6 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
         email: form.email,
         cargo: form.cargo,
         status: form.status,
-        commissionRate: Number(form.commissionRate),
         maxDiscountPercentage: form.maxDiscountPercentage !== '' ? Number(form.maxDiscountPercentage) : null,
         observacoes: form.observacoes,
         ...( !isEditing && { pin: form.pin } )
@@ -188,17 +185,6 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
             </div>
 
             <div className="grid grid-cols-2 gap-4">
-              <ConfigInputField
-                label="Comissão Individual (%)"
-                id="commissionRate"
-                type="number"
-                step="0.01"
-                min="0"
-                max="100"
-                value={form.commissionRate}
-                onChange={(e) => setForm({ ...form, commissionRate: Number(e.target.value) })}
-                description="Deixe 0 para usar do grupo"
-              />
               <ConfigInputField
                 label="Limite de Desconto (%)"
                 id="maxDiscountPercentage"

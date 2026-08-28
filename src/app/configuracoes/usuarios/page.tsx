@@ -103,7 +103,6 @@ export default function UsuariosPage() {
               <ConfigDataTableRow>
                 <ConfigDataTableHead>Nãome & E-mail</ConfigDataTableHead>
                 <ConfigDataTableHead>Cargo / Grupo</ConfigDataTableHead>
-                <ConfigDataTableHead>Comissão</ConfigDataTableHead>
                 <ConfigDataTableHead>Limite Desc.</ConfigDataTableHead>
                 <ConfigDataTableHead>Status</ConfigDataTableHead>
                 <ConfigDataTableHead>Última Att.</ConfigDataTableHead>
@@ -113,13 +112,13 @@ export default function UsuariosPage() {
             <ConfigDataTableBody>
               {loading ? (
                 <ConfigDataTableRow>
-                  <ConfigDataTableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <ConfigDataTableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Carregando usuários...
                   </ConfigDataTableCell>
                 </ConfigDataTableRow>
               ) : filteredUsers.length === 0 ? (
                 <ConfigDataTableRow>
-                  <ConfigDataTableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <ConfigDataTableCell colSpan={6} className="text-center py-8 text-muted-foreground">
                     Nenhum usuário encontrado.
                   </ConfigDataTableCell>
                 </ConfigDataTableRow>
@@ -133,9 +132,6 @@ export default function UsuariosPage() {
                     <ConfigDataTableCell>
                       <div className="text-sm">{user.cargo || '-'}</div>
                       <div className="text-xs text-muted-foreground">{user.role?.name || 'Sem grupo'}</div>
-                    </ConfigDataTableCell>
-                    <ConfigDataTableCell>
-                      {user.commissionRate ? `${Number(user.commissionRate)}%` : '-'}
                     </ConfigDataTableCell>
                     <ConfigDataTableCell>
                       {user.maxDiscountPercentage !== null ? `${Number(user.maxDiscountPercentage)}%` : '-'}
