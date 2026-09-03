@@ -12,6 +12,9 @@ export interface ReportFilters {
 
 export class CommercialReportService {
   // Public callers must provide companyId derived from ServerAuthContext.
+  constructor(
+    private readonly goalsDb: Pick<typeof prisma, 'sellerGoal' | 'sellerCommission'> = prisma
+  ) {}
   
   private getDateFilter(filters: ReportFilters) {
     if (filters.startDate || filters.endDate) {
@@ -249,47 +252,61 @@ export class CommercialReportService {
 
   // 5. Relatório de Metas e Comissões
   async getGoalsAndCommissionsReport(filters: ReportFilters) {
-    const goals = await prisma.sellerGoal.findMany({
+    const goals = await this.goalsDb.sellerGoal.findMany({
       where: {
-        user: { companyId: filters.companyId },
-        ...(filters.sellerId ? { userId: filters.sellerId } : {}),
+        seller: { companyId: filters.companyId },
+        ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
       },
-      include: { user: { select: { name: true } } }
+      include: { seller: { select: { name: true } } }
     });
 
-    const commissions = await prisma.sellerCommission.findMany({
+    const commissions = await this.goalsDb.sellerCommission.findMany({
       where: {
-        user: { companyId: filters.companyId },
-        ...(filters.sellerId ? { userId: filters.sellerId } : {}),
+        seller: { companyId: filters.companyId },
+        ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
         sale: {
           ...(filters.startDate || filters.endDate ? this.getDateFilter(filters) : {})
         }
-      }
+      },
+      include: { seller: { select: { name: true } } }
     });
 
-    const userStats = new Map<string, any>();
+    const sellerStats = new Map<string, {
+      sellerName: string;
+      target: number;
+      achieved: number;
+      pendingComm: number;
+      paidComm: number;
+      cancelledComm: number;
+    }>();
+
+    const ensureSeller = (sellerId: string, sellerName: string) => {
+      if (!sellerStats.has(sellerId)) {
+        sellerStats.set(sellerId, {
+          sellerName, target: 0, achieved: 0,
+          pendingComm: 0, paidComm: 0, cancelledComm: 0,
+        });
+      }
+      return sellerStats.get(sellerId)!;
+    };
 
     for (const g of goals) {
-      if (!userStats.has(g.userId)) {
-        userStats.set(g.userId, { sellerName: g.user.name, target: 0, achieved: 0, pendingComm: 0, paidComm: 0, cancelledComm: 0 });
-      }
-      const u = userStats.get(g.userId);
-      u.target += g.targetAmount.toNumber();
-      u.achieved += g.achievedAmount.toNumber();
+      const stats = ensureSeller(g.sellerId, g.seller.name);
+      stats.target += g.targetAmount.toNumber();
+      stats.achieved += g.achievedAmount.toNumber();
     }
 
     for (const c of commissions) {
-      if (!userStats.has(c.userId)) continue; // Only tracking those with goals or we should init others too
-      const u = userStats.get(c.userId);
+      const stats = ensureSeller(c.sellerId, c.seller.name);
       const amt = c.amount.toNumber();
-      if (c.status === "PENDING") u.pendingComm += amt;
-      if (c.status === "PAID") u.paidComm += amt;
-      if (c.status === "CANCELLED") u.cancelledComm += amt;
+      if (c.status === "PENDING") stats.pendingComm += amt;
+      if (c.status === "PAID") stats.paidComm += amt;
+      if (c.status === "CANCELLED") stats.cancelledComm += amt;
     }
 
-    return Array.from(userStats.values()).map(u => ({
-      ...u,
-      percentAchieved: u.target > 0 ? (u.achieved / u.target) * 100 : 0
+    return Array.from(sellerStats.values()).map(stats => ({
+      ...stats,
+      percentAchieved: stats.target > 0 ? (stats.achieved / stats.target) * 100 : 0
     })).sort((a, b) => b.percentAchieved - a.percentAchieved); // ranking by % achieved
   }
 
