@@ -22,3 +22,12 @@ export function tenantResourceWhere(id: string, companyId: string) {
 export function tenantListWhere(companyId: string) {
   return { companyId } as const;
 }
+
+export function sellerGoalForSaleWhere(sellerId: string, companyId: string, at: Date) {
+  return {
+    sellerId,
+    seller: { companyId },
+    periodStart: { lte: at },
+    periodEnd: { gte: at },
+  } as const;
+}

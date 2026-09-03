@@ -62,9 +62,20 @@ export class SellerCommissionService {
     const seller = await tx.seller.findFirst({
       where: { id: sale.sellerId, companyId: sale.companyId }
     });
-    if (!seller || seller.status !== 'ACTIVE') return;
+    if (!seller) return;
 
     const settings = await this.getSettings(sale.companyId, tx);
+
+    const commissions = settings.enableCommissions
+      ? await tx.sellerCommission.findMany({
+          where: { saleId: sale.id, sellerId: seller.id }
+        })
+      : [];
+
+    // A comissão cancelada funciona como marcador persistente do rollback desta venda.
+    if (commissions.length > 0 && commissions.every((commission: any) => commission.status === "CANCELLED")) {
+      return;
+    }
 
     if (settings.enableSellerGoals) {
       const now = new Date(sale.createdAt); // Data original da venda
@@ -77,20 +88,21 @@ export class SellerCommissionService {
       });
       
       for (const goal of activeGoals) {
-        await tx.sellerGoal.update({
-          where: { id: goal.id },
+        const decremented = await tx.sellerGoal.updateMany({
+          where: { id: goal.id, achievedAmount: { gte: sale.totalAmount } },
           data: { achievedAmount: { decrement: sale.totalAmount } }
         });
+        if (decremented.count === 0) {
+          await tx.sellerGoal.updateMany({
+            where: { id: goal.id, achievedAmount: { gt: 0 } },
+            data: { achievedAmount: 0 }
+          });
+        }
       }
     }
 
     if (settings.enableCommissions) {
-      // Procura comissão atrelada
-      const commissions = await tx.sellerCommission.findMany({
-        where: { saleId: sale.id, sellerId: seller.id }
-      });
-
-      for (const commission of commissions) {
+      for (const commission of commissions.filter((item: any) => item.status !== "CANCELLED")) {
         await tx.sellerCommission.update({
           where: { id: commission.id },
           data: { status: "CANCELLED" }

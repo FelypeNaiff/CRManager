@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { CancelSaleInput, CreateSaleInput } from './sales-schemas';
-import { scopeCancelSaleInput, scopeCreateSaleInput, tenantListWhere, tenantResourceWhere } from './sales-tenant-security';
+import { scopeCancelSaleInput, scopeCreateSaleInput, sellerGoalForSaleWhere, tenantListWhere, tenantResourceWhere } from './sales-tenant-security';
 
 const createInput = {
   companyId: 'forged-company', sellerId: 'seller-a', subtotal: 10,
@@ -54,4 +54,14 @@ test('sales, payment methods, sellers and searches use only authenticated tenant
   ];
   const where = tenantListWhere('company-a');
   assert.deepEqual(records.filter(record => record.companyId === where.companyId), [records[0]]);
+});
+
+test('exchange locates SellerGoal by canonical sellerId inside the sale tenant', () => {
+  const at = new Date('2026-08-01T12:00:00Z');
+  assert.deepEqual(sellerGoalForSaleWhere('seller-a', 'company-a', at), {
+    sellerId: 'seller-a',
+    seller: { companyId: 'company-a' },
+    periodStart: { lte: at },
+    periodEnd: { gte: at },
+  });
 });

@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ExchangeReturnType, ExchangeReturnCondition, InventoryMovementType } from "@prisma/client";
+import { sellerGoalForSaleWhere } from "./sales-tenant-security";
 
 interface ExchangeReturnItemInput {
   variantId: string;
@@ -158,11 +159,7 @@ export class ExchangeService {
 
       const now = new Date();
       const activeGoal = await tx.sellerGoal.findFirst({
-        where: { 
-          userId: sale.sellerId,
-          periodStart: { lte: now },
-          periodEnd: { gte: now }
-        }
+        where: sellerGoalForSaleWhere(sale.sellerId, data.companyId, now)
       });
 
       if (activeGoal) {
