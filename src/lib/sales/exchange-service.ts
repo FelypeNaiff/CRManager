@@ -18,8 +18,10 @@ export interface ProcessExchangeReturnInput {
 }
 
 export class ExchangeService {
+  constructor(private readonly db: any = prisma) {}
+
   async processExchangeReturn(data: ProcessExchangeReturnInput) {
-    return await prisma.$transaction(async (tx) => {
+    return await this.db.$transaction(async (tx: any) => {
       const sale = await tx.sale.findFirst({
         where: { id: data.saleId, companyId: data.companyId },
         include: { items: true, commissions: true, customer: true }
