@@ -12,8 +12,18 @@ import { tenantResourceWhere } from "./sales-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
 
 export class SalesService {
+  constructor(
+    private readonly db: any = prisma,
+    private readonly dependencies = {
+      operationalSettings: OperationalSettingsService,
+      authorization: authorizationService,
+      receivables: receivablesService,
+      sellerCommission: sellerCommissionService,
+    },
+  ) {}
+
   async createSale(data: CreateSaleInput, operatorUserId: string) {
-    return prisma.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: any) => {
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
@@ -39,7 +49,7 @@ export class SalesService {
       }
 
       // Carregar configurações operacionais da empresa
-      const settings = await OperationalSettingsService.getOrCreateOperationalSettings(data.companyId, tx);
+      const settings = await this.dependencies.operationalSettings.getOrCreateOperationalSettings(data.companyId, tx);
 
       // Validar Caixa Aberto se exigido pelas configurações operacionais
       if (settings.requireOpenCashRegister) {
@@ -78,7 +88,7 @@ export class SalesService {
       const discountPercentage = data.subtotal > 0 ? (data.discountAmount / data.subtotal) * 100 : 0;
       
       if (data.discountAmount > 0 && data.subtotal > 0) {
-        const policy = await OperationalSettingsService.validateDiscountPolicy({
+        const policy = await this.dependencies.operationalSettings.validateDiscountPolicy({
           companyId: data.companyId,
           userId: operatorUserId,
           discountPercent: discountPercentage,
@@ -103,7 +113,7 @@ export class SalesService {
               }
               authorizedByUserId = auth.authorizedByUserId;
             } else {
-              const authReq = await authorizationService.createAuthorizationRequest({
+              const authReq = await this.dependencies.authorization.createAuthorizationRequest({
                 companyId: data.companyId,
                 type: AuthorizationType.DISCOUNT,
                 module: 'PDV',
@@ -137,7 +147,7 @@ export class SalesService {
       const variants = await tx.productVariant.findMany({
         where: { id: { in: variantIds }, companyId: data.companyId, isActive: true }
       });
-      const variantMap = new Map(variants.map(v => [v.id, v]));
+      const variantMap = new Map<string, any>(variants.map((v: any) => [v.id, v]));
 
       for (const item of data.items) {
         const variant = variantMap.get(item.variantId);
@@ -225,7 +235,7 @@ export class SalesService {
       }
 
       // Etapa 4: Processar Pagamentos e Financeiro
-      await receivablesService.generateReceivablesFromSale(sale.id, tx);
+      await this.dependencies.receivables.generateReceivablesFromSale(sale.id, tx);
 
       // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant em lote
       await tx.inventoryMovement.createMany({
@@ -271,14 +281,14 @@ export class SalesService {
       }
 
       // Etapa 8: Integrar comissões e metas
-      await sellerCommissionService.processSaleCommission(tx, sale);
+      await this.dependencies.sellerCommission.processSaleCommission(tx, sale);
 
       return sale;
     });
   }
 
   async cancelSale(data: CancelSaleInput, companyId: string) {
-    return prisma.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: any) => {
       // Travar a venda alvo para evitar concorrência no cancelamento
       await tx.$queryRawUnsafe(
         `SELECT id FROM sales WHERE id = $1 AND company_id = $2 FOR UPDATE`,
@@ -302,7 +312,7 @@ export class SalesService {
       }
 
       // Travar as variantes em ordem alfabética para o estorno de estoque
-      const variantIds = [...new Set(sale.items.map(item => item.variantId))].sort();
+      const variantIds = [...new Set<string>(sale.items.map((item: any) => item.variantId))].sort();
       if (variantIds.length > 0) {
         const placeholders = variantIds.map((_, idx) => `$${idx + 1}`).join(", ");
         await tx.$queryRawUnsafe(
@@ -311,7 +321,7 @@ export class SalesService {
         );
       }
 
-      const settings = await OperationalSettingsService.getOrCreateOperationalSettings(sale.companyId, tx);
+      const settings = await this.dependencies.operationalSettings.getOrCreateOperationalSettings(sale.companyId, tx);
 
       // Verificar se o cancelamento de venda é permitido globalmente
       if (!settings.allowSaleCancellation) {
@@ -343,7 +353,7 @@ export class SalesService {
           }
           // Here we could register the authorizer in the sale or keep it in ActionAuthorization
         } else {
-          const authReq = await authorizationService.createAuthorizationRequest({
+          const authReq = await this.dependencies.authorization.createAuthorizationRequest({
             companyId: sale.companyId,
             type: AuthorizationType.SALE_CANCEL,
             module: 'VENDAS',
@@ -371,11 +381,11 @@ export class SalesService {
       });
 
       // Estornar Contas a Receber e Saldo de Carteira / Dinheiro
-      await receivablesService.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
+      await this.dependencies.receivables.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
 
       // Criar InventoryMovement tipo CANCELLATION e devolver estoque em lote
       await tx.inventoryMovement.createMany({
-        data: sale.items.map(item => ({
+        data: sale.items.map((item: any) => ({
           variantId: item.variantId,
           quantity: item.quantity,
           type: "CANCELLATION",
@@ -407,14 +417,14 @@ export class SalesService {
       });
 
       // Estornar comissões e metas
-      await sellerCommissionService.rollbackSaleCommission(tx, sale);
+      await this.dependencies.sellerCommission.rollbackSaleCommission(tx, sale);
 
       return cancelledSale;
     });
   }
 
   async getSaleById(saleId: string, companyId: string) {
-    return prisma.sale.findFirst({
+    return this.db.sale.findFirst({
       where: tenantResourceWhere(saleId, companyId),
       include: {
         items: true,
@@ -449,8 +459,8 @@ export class SalesService {
     const { skip, take, page, pageSize } = getPaginationArgs(filters);
 
     const [totalCount, sales] = await Promise.all([
-      prisma.sale.count({ where: whereClause }),
-      prisma.sale.findMany({
+      this.db.sale.count({ where: whereClause }),
+      this.db.sale.findMany({
         where: whereClause,
         orderBy: { createdAt: "desc" },
         include: {

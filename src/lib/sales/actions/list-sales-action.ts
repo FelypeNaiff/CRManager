@@ -3,21 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { salesService } from "../sales-service";
 import { requirePermission } from "@/lib/auth/permissions";
+import { createListSalesAction, type ListSalesFilters } from './sales-action-handlers';
 
-export async function listSalesAction(_companyId: string, filters?: {
-  sellerId?: string;
-  customerId?: string;
-  status?: string;
-  startDate?: Date;
-  endDate?: Date;
-  page?: number;
-  pageSize?: number;
-}) {
-  try {
-    const auth = await requirePermission("VENDAS", "VIEW");
-    const result = await salesService.listSales(auth.companyId, filters);
-    return { success: true, ...result };
-  } catch {
-    return { success: false, error: "Não foi possível listar as vendas." };
-  }
-}
+const handler = createListSalesAction({ authorize: requirePermission, service: salesService });
+export async function listSalesAction(companyId: string, filters?: ListSalesFilters) { return handler(companyId, filters); }
