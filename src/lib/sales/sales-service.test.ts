@@ -22,12 +22,15 @@ function saleInput(overrides: Record<string, any> = {}) {
   } as any;
 }
 
-function harness(options: { sellerCompany?: string; stocks?: Record<string, number>; saleStatus?: string } = {}) {
+function harness(options: {
+  sellerCompany?: string; stocks?: Record<string, number>; saleStatus?: string;
+  discountPolicy?: any; approvedAuthorization?: any;
+} = {}) {
   const state = {
     stocks: { 'variant-a': 10, 'variant-b': 10, ...options.stocks },
     sales: [] as any[], movements: [] as any[], logs: [] as any[], calls: [] as any[],
   };
-  const depsCalls = { generate: [] as any[], cancel: [] as any[], process: [] as any[], rollback: [] as any[] };
+  const depsCalls = { generate: [] as any[], cancel: [] as any[], process: [] as any[], rollback: [] as any[], authorization: [] as any[], policies: [] as any[] };
 
   const makeTx = () => ({
     company: { findUnique: async ({ where }: any) => where.id === 'company-a' ? { id: 'company-a' } : null },
@@ -35,7 +38,12 @@ function harness(options: { sellerCompany?: string; stocks?: Record<string, numb
     customer: { findFirst: async () => ({ id: 'customer-a' }) },
     paymentMethod: { count: async ({ where }: any) => where.id.in.length },
     cashRegister: { findFirst: async () => null },
-    actionAuthorization: { findFirst: async () => null },
+    actionAuthorization: {
+      findFirst: async ({ where }: any) => {
+        const authorization = options.approvedAuthorization;
+        return authorization && Object.entries(where).every(([key, value]) => authorization[key] === value) ? authorization : null;
+      },
+    },
     saleAuthorization: { create: async ({ data }: any) => data },
     productVariant: {
       findMany: async ({ where }: any) => where.id.in.map((id: string) => ({ id, name: id, availableStock: decimal(state.stocks[id as keyof typeof state.stocks] ?? 0) })),
@@ -77,9 +85,12 @@ function harness(options: { sellerCompany?: string; stocks?: Record<string, numb
   const dependencies: any = {
     operationalSettings: {
       getOrCreateOperationalSettings: async () => ({ requireOpenCashRegister: false, allowSaleWithoutCustomer: true, requireCustomerOnSale: false, allowNegativeStock: false, allowSaleCancellation: true, cancellationTimeLimit: 60, requireAuthorizationToCancelSale: false }),
-      validateDiscountPolicy: async () => ({ allowed: true, limitApplied: 0 }),
+      validateDiscountPolicy: async (params: any) => {
+        depsCalls.policies.push(params);
+        return options.discountPolicy ?? { allowed: true, requiresAuthorization: false, limitApplied: 10 };
+      },
     },
-    authorization: { createAuthorizationRequest: async () => ({ id: 'auth-a' }) },
+    authorization: { createAuthorizationRequest: async (data: any) => { depsCalls.authorization.push(data); return { id: 'auth-a' }; } },
     receivables: {
       generateReceivablesFromSale: async (...args: any[]) => { depsCalls.generate.push(args); },
       cancelReceivablesFromSale: async (...args: any[]) => { depsCalls.cancel.push(args); },
@@ -146,4 +157,53 @@ test('get and list always include the trusted tenant predicate', async () => {
   const result = await service.listSales('company-a', { sellerId: 'seller-a' });
   assert.equal(result.metadata.totalCount, 1);
   assert.equal((result.data[0] as any).id, 'sale-a');
+});
+
+test('discount within or exactly at the policy limit continues without authorization', async () => {
+  for (const discountAmount of [5, 10]) {
+    const { service, state, depsCalls } = harness({ discountPolicy: { allowed: true, requiresAuthorization: false, limitApplied: 10 } });
+    const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount, totalAmount: 100 - discountAmount }), 'operator-a');
+    assert.equal(result.id, 'sale-a');
+    assert.equal(state.sales.length, 1);
+    assert.equal(depsCalls.authorization.length, 0);
+    assert.equal(depsCalls.policies[0].companyId, 'company-a');
+    assert.equal(depsCalls.policies[0].userId, 'operator-a');
+  }
+});
+
+test('discount above limit creates a modern pending authorization and stops the sale', async () => {
+  const { service, state, depsCalls } = harness({ discountPolicy: { allowed: false, requiresAuthorization: true, limitApplied: 10 } });
+  const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85 }), 'operator-a');
+  assert.deepEqual(result, { requireAuthorization: true, authorizationId: 'auth-a' });
+  assert.equal(state.sales.length, 0);
+  assert.deepEqual(depsCalls.authorization[0], {
+    companyId: 'company-a', type: 'DISCOUNT', module: 'PDV', requestedByUserId: 'operator-a',
+    percentage: 15, amount: 15, reason: 'Desconto excede o limite', financialImpact: true,
+  });
+});
+
+test('approved discount authorization must match tenant, status, type and module', async () => {
+  const policy = { allowed: false, requiresAuthorization: true, limitApplied: 10 };
+  const valid = { id: 'auth-approved', companyId: 'company-a', status: 'APPROVED', type: 'DISCOUNT', module: 'PDV', authorizedByUserId: 'manager-a' };
+  const accepted = harness({ discountPolicy: policy, approvedAuthorization: valid });
+  const sale: any = await accepted.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a');
+  assert.equal(sale.id, 'sale-a');
+  assert.equal(accepted.state.logs.some(log => log.action === 'AUTHORIZE_DISCOUNT' && log.userId === 'manager-a'), true);
+
+  for (const incompatible of [
+    { ...valid, companyId: 'company-b' },
+    { ...valid, status: 'PENDING' },
+    { ...valid, type: 'SALE_CANCEL' },
+    { ...valid, module: 'CAIXA' },
+  ]) {
+    const denied = harness({ discountPolicy: policy, approvedAuthorization: incompatible });
+    await assert.rejects(denied.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a'), /Autorização de desconto inválida/);
+    assert.equal(denied.state.sales.length, 0);
+  }
+});
+
+test('missing or arbitrary discount authorization is refused', async () => {
+  const { service, state } = harness({ discountPolicy: { allowed: false, requiresAuthorization: true, limitApplied: 10 } });
+  await assert.rejects(service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'arbitrary' }), 'operator-a'), /Autorização de desconto inválida/);
+  assert.equal(state.sales.length, 0);
 });

@@ -180,8 +180,8 @@ export const OperationalSettingsService = {
       };
     }
 
-    const user = await client.user.findUnique({
-      where: { id: params.userId },
+    const user = await client.user.findFirst({
+      where: { id: params.userId, companyId: params.companyId },
       include: {
         role: {
           include: {
