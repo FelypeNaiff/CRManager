@@ -431,9 +431,9 @@ async function validateImports() {
       console.log("\nFase 5: Executando diagnose-go-live...");
       execSync('npx tsx scripts/diagnose-go-live.ts', { stdio: 'inherit' });
 
-      console.log("\nFase 6: Rodando suítes de teste de integração (PDV & Auditoria Financeira)...");
-      execSync('npx tsx scripts/test-pdv-flow.ts', { stdio: 'inherit' });
-      execSync('npx tsx scripts/test-financial-audit.ts', { stdio: 'inherit' });
+      console.log("\nFase 6: Rodando a suíte isolada segura (sem escrita no banco)...");
+      execSync('npm run test:safe', { stdio: 'inherit' });
+      console.log("[INFO] A suíte valida o código isoladamente; a consistência dos dados importados depende do diagnóstico read-only da Fase 5.");
 
       console.log("\n==================================================");
       console.log("🟢 CARGA REAL CONCLUÍDA E VALIDADA COM SUCESSO!");

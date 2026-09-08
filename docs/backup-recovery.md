@@ -54,19 +54,32 @@ Para gerar um backup local completo e criptografado de forma rápida e segura:
 
 ### 2.3 Como Validar o Backup Restaurado
 Após a restauração terminar sem erros:
-1. Altere a variável `DATABASE_URL` do seu ambiente de teste para apontar para a base recém-restaurada.
-2. Execute o comando do Prisma para validar o esquema:
+
+#### A. Validações locais sem banco
+
+Estas verificações não leem nem alteram a base restaurada:
+
+1. Execute a suíte isolada segura:
    ```bash
-   npx prisma db pull
+   npm run test:safe
    ```
-3. Execute o script de testes financeiros do projeto para garantir a consistência das tabelas:
+2. Valide os tipos e o schema local:
    ```bash
-   npx tsx scripts/test-pdv-flow.ts
+   npx tsc --noEmit
+   npx prisma validate
    ```
-4. Faça uma consulta simples de integridade de registros:
+3. Confirme o build de produção:
    ```bash
-   npx tsx -e "import { prisma } from './src/lib/prisma'; prisma.company.count().then(console.log)"
+   npm run build
    ```
+
+#### B. Diagnóstico read-only da base restaurada
+
+Configure `DIRECT_URL` para apontar exclusivamente para a base restaurada e use um usuário com permissão somente de leitura. Faça consultas de contagem e integridade sem executar seeds, imports, migrations, `db push`, `db pull` ou scripts de fluxo. Ainda não existe no projeto um diagnóstico pós-restauração read-only abrangente; essa automação permanece como débito técnico.
+
+#### C. Restauração e importação real
+
+Restauração e importação são operações mutáveis separadas das validações locais. Confirme o destino, mantenha backup recuperável e siga os procedimentos das seções anteriores. Nunca use scripts que criem ou apaguem massa de teste para validar um backup restaurado.
 
 ---
 
