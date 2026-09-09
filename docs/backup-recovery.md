@@ -77,6 +77,8 @@ Estas verificações não leem nem alteram a base restaurada:
 
 Configure `DIRECT_URL` para apontar exclusivamente para a base restaurada e use um usuário com permissão somente de leitura. Faça consultas de contagem e integridade sem executar seeds, imports, migrations, `db push`, `db pull` ou scripts de fluxo. Ainda não existe no projeto um diagnóstico pós-restauração read-only abrangente; essa automação permanece como débito técnico.
 
+Para investigar historicamente a separação entre `User` e `Seller`, restaure um backup anterior a 5 de junho de 2026 exclusivamente em ambiente isolado. A comparação com o estado atual deve ser read-only. Nunca restaure esse backup por cima de produção. Se a auditoria comprovar dados ausentes ou inconsistentes, qualquer recuperação deverá ser feita por uma nova migration ou por um procedimento corretivo separado e auditável; migrations históricas já aplicadas não devem ser editadas ou reexecutadas.
+
 #### C. Restauração e importação real
 
 Restauração e importação são operações mutáveis separadas das validações locais. Confirme o destino, mantenha backup recuperável e siga os procedimentos das seções anteriores. Nunca use scripts que criem ou apaguem massa de teste para validar um backup restaurado.
