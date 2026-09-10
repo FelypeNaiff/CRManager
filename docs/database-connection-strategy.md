@@ -75,31 +75,18 @@ Ainda podem ter finalidade operacional, mas devem adotar alvo administrativo exp
 
 `prisma/seed.ts` é um item adicional `PROTECT`: executa upserts e não deve herdar silenciosamente o alvo de runtime.
 
-### RETIRE — 22
+### RETIRE — saneamento controlado
 
-Scripts históricos, reparos diretos de schema, falsos testes ou fluxos com banco real que devem ser removidos ou substituídos em commits próprios:
+Este lote removeu 18 artefatos sem dependência operacional: 15 itens classificados como inseguros/legados (2 runners PowerShell e 13 scripts) e 3 scripts obsoletos seguros. Os runners foram removidos porque encadeavam ETLs e testes com escrita real sem conexão administrativa explícita, isolamento de tenant ou parada confiável em falhas. `run-products-etl.ts` foi removido depois da eliminação de seus únicos consumidores; além disso, seu módulo ETL de destino já não existia.
 
-- `add-columns-back.ts`
-- `audit-crm-orto-base.ts`
-- `audit.ts`
-- `diagnostic.ts`
-- `drop-columns.ts`
-- `fix-migrations.ts`
-- `recreate-columns.ts`
+Permanecem temporariamente como `DEPRECATE_FIRST`, até que suas referências documentais sejam saneadas:
+
 - `run-etl.ts`
 - `run-financial-etl.ts`
-- `run-products-etl.ts`
-- `test-commercial-reports-flow.ts`
-- `test-concurrency.ts`
 - `test-crm-flow.ts`
-- `test-crm.ts`
-- `test-dashboard-load-flow.ts`
-- `test-financial-audit.ts`
 - `test-financial-flow.ts`
-- `test-go-live-pilot-validation.ts`
-- `test-login-production-flow.ts`
 - `test-products-flow.ts`
-- `test-sales-schema.ts`
-- `truncate.ts`
 
-Esta classificação não autoriza execução ou remoção. Cada grupo deve ser tratado em etapa própria, preservando scripts operacionais até existir substituição segura.
+`test-concurrency.ts` permanece como `KEEP_LEGACY`: seu cenário de concorrência ainda precisa de substituição segura antes da remoção. Ele não deve ser executado contra banco configurado.
+
+O histórico da classificação foi preservado no Git. Qualquer necessidade futura deve ser atendida por fluxo novo, tenant-scoped e protegido pela infraestrutura administrativa, sem restaurar os utilitários removidos.
