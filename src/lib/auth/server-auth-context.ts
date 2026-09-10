@@ -85,6 +85,10 @@ interface NeexUserRecord {
   } | null;
 }
 
+interface SelectedContextDependencies {
+  findSelectedUser(profileId: string, companyId: string): Promise<NeexUserRecord | null>;
+}
+
 export interface ServerAuthResolverDependencies {
   getAuthenticatedIdentity(): Promise<AuthIdentity | null>;
   findNeexUserByVerifiedEmail(email: string): Promise<NeexUserRecord | null>;
@@ -247,23 +251,18 @@ export async function resolveBaseServerAuthContext(): Promise<ServerAuthContext>
   });
 }
 
-export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
-  const baseContext = await resolveBaseServerAuthContext();
-
-  const cookieStore = await cookies();
-  const selectorToken = cookieStore.get(PROFILE_SESSION_COOKIE)?.value;
-  if (!selectorToken) throw new ServerAuthError('INVALID_CONTEXT');
-
+async function resolveSelectedContext(
+  baseContext: ServerAuthContext,
+  selectorToken: string,
+  secret: string,
+  dependencies: SelectedContextDependencies
+): Promise<ServerAuthContext> {
   try {
-    const selector = verifyProfileSelector(
-      selectorToken,
-      getProfileSessionSecret(),
-      baseContext.authUserId
+    const selector = verifyProfileSelector(selectorToken, secret, baseContext.authUserId);
+    const selectedUser = await dependencies.findSelectedUser(
+      selector.profileId,
+      baseContext.companyId
     );
-    const selectedUser = await prisma.user.findFirst({
-      where: { id: selector.profileId, companyId: baseContext.companyId },
-      select: userContextSelect,
-    });
     if (!selectedUser) throw new ServerAuthError('INVALID_CONTEXT');
     return buildContext(baseContext.authUserId, selectedUser);
   } catch (error) {
@@ -271,4 +270,39 @@ export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
     if (error instanceof ProfileSelectorError) throw new ServerAuthError('INVALID_CONTEXT');
     throw error;
   }
+}
+
+/** Test-only verification of the same selected-profile path used in production. */
+export async function resolveSelectedServerAuthContextForTesting(
+  baseContext: ServerAuthContext,
+  selectorToken: string,
+  secret: string,
+  dependencies: SelectedContextDependencies
+): Promise<ServerAuthContext> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new ServerAuthError('INVALID_CONTEXT');
+  }
+  return resolveSelectedContext(baseContext, selectorToken, secret, dependencies);
+}
+
+export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
+  const baseContext = await resolveBaseServerAuthContext();
+
+  const cookieStore = await cookies();
+  const selectorToken = cookieStore.get(PROFILE_SESSION_COOKIE)?.value;
+  if (!selectorToken) throw new ServerAuthError('INVALID_CONTEXT');
+
+  return resolveSelectedContext(
+    baseContext,
+    selectorToken,
+    getProfileSessionSecret(),
+    {
+      findSelectedUser(profileId, companyId) {
+        return prisma.user.findFirst({
+          where: { id: profileId, companyId },
+          select: userContextSelect,
+        });
+      },
+    }
+  );
 }

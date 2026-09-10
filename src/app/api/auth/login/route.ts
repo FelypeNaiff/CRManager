@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { createClient } from '@/lib/supabase/server'
+import { resolveBaseServerAuthContext } from '@/lib/auth/server-auth-context'
+import { routeAuthenticatedLogin } from '@/lib/auth/login-routing'
+import { getProfileSessionCookieOptions } from '@/lib/auth/profile-session'
+import { PROFILE_SESSION_COOKIE } from '@/lib/auth/profile-selector'
+import { cookies } from 'next/headers'
 
 export async function POST(req: NextRequest) {
   try {
@@ -47,9 +52,21 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, error: 'Credenciais inválidas.' }, { status: 401 })
     }
 
-    // Supabase establishes identity. A separate PIN step selects an eligible
-    // operational profile and emits the signed selector cookie.
-    return NextResponse.json({ success: true, redirectTo: '/selecionar-perfil' })
+    // Authorization is resolved again from the authenticated Supabase identity
+    // and fresh Prisma data. Client-supplied role or tenant data is never used.
+    const context = await resolveBaseServerAuthContext()
+    const outcome = routeAuthenticatedLogin(context)
+
+    if (outcome.profileSession) {
+      const cookieStore = await cookies()
+      cookieStore.set(
+        PROFILE_SESSION_COOKIE,
+        outcome.profileSession,
+        getProfileSessionCookieOptions()
+      )
+    }
+
+    return NextResponse.json({ success: true, redirectTo: outcome.redirectTo })
 
   } catch {
     return NextResponse.json({ success: false, error: 'Erro interno do servidor.' }, { status: 500 })

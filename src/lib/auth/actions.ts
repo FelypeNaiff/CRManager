@@ -11,11 +11,9 @@ import {
   ServerAuthError,
 } from './server-auth-context';
 import {
-  createProfileSelector,
-  getProfileSessionSecret,
-  PROFILE_SELECTOR_MAX_AGE_SECONDS,
   PROFILE_SESSION_COOKIE,
 } from './profile-selector';
+import { createProfileSession, getProfileSessionCookieOptions } from './profile-session';
 import { performServerLogout } from './session-logout';
 
 export interface ActiveProfileSession {
@@ -129,7 +127,7 @@ const productionSelectionService = createProfileSelectionService({
   },
   verifyPinValue: verifyPin,
   issueSelector(profileId, authUserId) {
-    return createProfileSelector({ profileId, authUserId }, getProfileSessionSecret());
+    return createProfileSession(profileId, authUserId);
   },
 });
 
@@ -150,13 +148,7 @@ export async function validateProfilePin(profileId: string, pin: string) {
   if (!result.success) return result;
 
   const cookieStore = await cookies();
-  cookieStore.set(PROFILE_SESSION_COOKIE, result.selector, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: PROFILE_SELECTOR_MAX_AGE_SECONDS,
-    path: '/',
-    sameSite: 'lax',
-  });
+  cookieStore.set(PROFILE_SESSION_COOKIE, result.selector, getProfileSessionCookieOptions());
 
   await writeActivityLog({
     companyId: (await resolveBaseServerAuthContext()).companyId,
