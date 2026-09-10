@@ -1,8 +1,8 @@
-import { PrismaClient } from '@prisma/client';
+import type { Prisma } from '@prisma/client';
+import { sanitizeAdminDatabaseError, withReadOnlyAdminDatabase } from '../src/lib/database/admin-script-access';
+import { requireExpectedCompanyId } from './import-admin-access';
 
-const prisma = new PrismaClient();
-
-async function checkDatabase() {
+export async function checkDatabase(prisma: Prisma.TransactionClient, companyId: string) {
   console.log("Iniciando auditoria de banco de dados para PERFORMANCE-01...\n");
 
   // 4. Check for duplicate SKUs within the same company
@@ -12,6 +12,7 @@ async function checkDatabase() {
   // so we need to join with Product to get companyId.
   const variants = await prisma.productVariant.findMany({
     where: {
+      companyId,
       sku: { not: null, not: "" }
     },
     include: {
@@ -19,21 +20,18 @@ async function checkDatabase() {
     }
   });
 
-  const skuMap = new Map<string, string[]>(); // key: companyId+sku, value: variantIds
+  const skuMap = new Map<string, number>();
   variants.forEach(v => {
     if (v.sku && v.product?.companyId) {
-      const key = `${v.product.companyId}::${v.sku}`;
-      const existing = skuMap.get(key) || [];
-      existing.push(v.id);
-      skuMap.set(key, existing);
+      skuMap.set(v.sku, (skuMap.get(v.sku) || 0) + 1);
     }
   });
 
   let hasDuplicates = false;
-  for (const [key, ids] of skuMap.entries()) {
-    if (ids.length > 1) {
+  for (const [, count] of skuMap.entries()) {
+    if (count > 1) {
       hasDuplicates = true;
-      console.log(`DUPLICIDADE ENCONTRADA: ${key} -> variants: ${ids.join(', ')}`);
+      console.log(`DUPLICIDADE ENCONTRADA: grupo com ${count} variantes.`);
     }
   }
   if (!hasDuplicates) {
@@ -45,6 +43,7 @@ async function checkDatabase() {
   console.log("Verificando se existem variações (ProductVariant) sem productId...");
   const orphanedVariants = await prisma.productVariant.count({
     where: {
+      companyId,
       productId: { equals: "" } // Actually productId is String in schema, maybe we should check length or null if it's optional. 
       // Assuming productId is mandatory by schema, we check if there's any invalid ones.
     }
@@ -59,15 +58,18 @@ async function checkDatabase() {
   console.log("Verificando se existem produtos (Product) sem companyId...");
   const orphanedProducts = await prisma.product.count({
     where: {
-      companyId: { equals: "" } // Again, it's mandatory in schema, but could be empty string
+      companyId,
+      id: { equals: "" } // Required IDs cannot be null; this only detects invalid empty values.
     }
   });
   console.log(`Produtos sem companyId válido: ${orphanedProducts}`);
   
-  await prisma.$disconnect();
 }
 
-checkDatabase().catch(e => {
-  console.error(e);
-  process.exit(1);
-});
+if (require.main === module) {
+  void withReadOnlyAdminDatabase(prisma => checkDatabase(prisma, requireExpectedCompanyId()))
+    .catch(error => {
+      console.error(sanitizeAdminDatabaseError(error));
+      process.exitCode = 1;
+    });
+}

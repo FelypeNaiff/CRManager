@@ -1,13 +1,15 @@
-import { PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 import * as XLSX from "xlsx";
 import * as path from "path";
 import * as fs from "fs";
 import { resolveTestIds } from "./resolve-test-ids";
+import { sanitizeAdminDatabaseError, withReadOnlyAdminDatabase } from '../src/lib/database/admin-script-access';
+import { assertExpectedCompany, requireExpectedCompanyId } from './import-admin-access';
 
-const prisma = new PrismaClient();
 const REPORTS_DIR = path.join(__dirname, "../reports");
+const maskId = (id: string) => id.length <= 8 ? '[REDACTED]' : `${id.slice(0, 4)}...${id.slice(-4)}`;
 
-async function runAudit() {
+export async function runAudit(prisma: Prisma.TransactionClient, companyId: string) {
   console.log("==================================================");
   console.log("NEEX TEST DATA AUDIT SERVICE");
   console.log("==================================================");
@@ -22,7 +24,8 @@ async function runAudit() {
   console.log(`Audit Suffix Mode : ${suffix}`);
   console.log("Resolving target test IDs...");
   
-  const ids = await resolveTestIds(prisma);
+  await assertExpectedCompany(prisma, companyId);
+  const ids = await resolveTestIds(prisma, companyId);
 
   // 2. Fetch Detailed Data for Report
   console.log("Fetching details for audit report...");
@@ -33,10 +36,9 @@ async function runAudit() {
     include: { category: true }
   });
   const productsSheetData = products.map(p => ({
-    ID: p.id,
-    Name: p.name,
+    ID: maskId(p.id),
     InternalCode: p.internalCode,
-    Category: p.category?.name || "N/A",
+    HasCategory: Boolean(p.category),
     IsActive: p.isActive ? "Yes" : "No",
     CreatedAt: p.createdAt.toISOString()
   }));
@@ -46,10 +48,7 @@ async function runAudit() {
     where: { id: { in: ids.customers } }
   });
   const customersSheetData = customers.map(c => ({
-    ID: c.id,
-    Name: c.name,
-    Phone: c.phone,
-    Email: c.email || "N/A",
+    ID: maskId(c.id),
     Status: c.status,
     CreatedAt: c.createdAt.toISOString()
   }));
@@ -59,9 +58,7 @@ async function runAudit() {
     where: { id: { in: ids.sellers } }
   });
   const sellersSheetData = sellers.map(s => ({
-    ID: s.id,
-    Name: s.name,
-    Nickname: s.nickname || "N/A",
+    ID: maskId(s.id),
     CommissionRate: s.commissionRate.toNumber(),
     Goal: s.goal ? s.goal.toNumber() : 0,
     Status: s.status
@@ -73,9 +70,9 @@ async function runAudit() {
     include: { customer: true, seller: true }
   });
   const salesSheetData = sales.map(s => ({
-    ID: s.id,
-    Seller: s.seller?.name || "N/A",
-    Customer: s.customer?.name || s.customerNameSnapshot || "N/A",
+    ID: maskId(s.id),
+    HasSeller: Boolean(s.seller),
+    HasCustomer: Boolean(s.customer || s.customerNameSnapshot),
     Subtotal: s.subtotal.toNumber(),
     Discount: s.discountAmount.toNumber(),
     Total: s.totalAmount.toNumber(),
@@ -89,8 +86,8 @@ async function runAudit() {
     include: { customer: true }
   });
   const receivablesSheetData = receivables.map(r => ({
-    ID: r.id,
-    Customer: r.customer?.name || "N/A",
+    ID: maskId(r.id),
+    HasCustomer: Boolean(r.customer),
     OriginalAmount: r.originalAmount.toNumber(),
     PaidAmount: r.paidAmount.toNumber(),
     RemainingAmount: r.remainingAmount.toNumber(),
@@ -104,10 +101,9 @@ async function runAudit() {
     include: { variant: { include: { product: true } } }
   });
   const movementsSheetData = movements.map(m => ({
-    ID: m.id,
-    Product: m.variant?.product?.name || "N/A",
-    Variant: m.variant?.name || "N/A",
-    SKU: m.variant?.sku || "N/A",
+    ID: maskId(m.id),
+    HasProduct: Boolean(m.variant?.product),
+    HasVariant: Boolean(m.variant),
     Quantity: m.quantity.toNumber(),
     Type: m.type,
     Reason: m.reason || "N/A",
@@ -120,8 +116,8 @@ async function runAudit() {
     include: { customer: true }
   });
   const walletsSheetData = wallets.map(w => ({
-    ID: w.id,
-    CustomerName: w.customer?.name || "N/A",
+    ID: maskId(w.id),
+    HasCustomer: Boolean(w.customer),
     Balance: w.balance.toNumber(),
     CreatedAt: w.createdAt.toISOString()
   }));
@@ -131,10 +127,7 @@ async function runAudit() {
     where: { id: { in: ids.bankAccounts } }
   });
   const banksSheetData = banks.map(b => ({
-    ID: b.id,
-    Name: b.name,
-    BankName: b.bankName || "N/A",
-    AccountNumber: b.accountNumber || "N/A",
+    ID: maskId(b.id),
     CurrentBalance: b.currentBalance.toNumber(),
     IsActive: b.isActive ? "Yes" : "No"
   }));
@@ -143,8 +136,7 @@ async function runAudit() {
     where: { id: { in: ids.paymentMethods } }
   });
   const pmsSheetData = pms.map(pm => ({
-    ID: pm.id,
-    Name: pm.name,
+    ID: maskId(pm.id),
     Type: pm.type,
     IsActive: pm.isActive ? "Yes" : "No"
   }));
@@ -155,7 +147,7 @@ async function runAudit() {
   allTableNames.forEach(tableName => {
     const list = ids[tableName];
     list.forEach(id => {
-      detailedIdsSheetData.push({ Table: tableName, ID: id });
+      detailedIdsSheetData.push({ Table: tableName, ID: maskId(id) });
     });
   });
 
@@ -220,7 +212,8 @@ async function runAudit() {
   const jsonPath = path.join(REPORTS_DIR, `${filePrefix}.json`);
 
   XLSX.writeFile(wb, excelPath);
-  fs.writeFileSync(jsonPath, JSON.stringify({ summary: summarySheetData, details: ids }, null, 2));
+  const maskedDetails = Object.fromEntries(Object.entries(ids).map(([key, values]) => [key, values.map(maskId)]));
+  fs.writeFileSync(jsonPath, JSON.stringify({ summary: summarySheetData, details: maskedDetails }, null, 2));
 
   console.log(`Saved audit report to:`);
   console.log(`  Excel: ${excelPath}`);
@@ -231,7 +224,7 @@ async function runAudit() {
     const defaultExcelPath = path.join(REPORTS_DIR, "test-data-audit.xlsx");
     const defaultJsonPath = path.join(REPORTS_DIR, "test-data-audit.json");
     XLSX.writeFile(wb, defaultExcelPath);
-    fs.writeFileSync(defaultJsonPath, JSON.stringify({ summary: summarySheetData, details: ids }, null, 2));
+    fs.writeFileSync(defaultJsonPath, JSON.stringify({ summary: summarySheetData, details: maskedDetails }, null, 2));
     console.log(`Saved default audit report to:`);
     console.log(`  Excel: ${defaultExcelPath}`);
     console.log(`  JSON : ${defaultJsonPath}`);
@@ -242,11 +235,10 @@ async function runAudit() {
   console.log("==================================================");
 }
 
-runAudit()
-  .catch(err => {
-    console.error("Critical error in runAudit:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
-  });
+if (require.main === module) {
+  void withReadOnlyAdminDatabase(prisma => runAudit(prisma, requireExpectedCompanyId()))
+    .catch(error => {
+      console.error(sanitizeAdminDatabaseError(error));
+      process.exitCode = 1;
+    });
+}

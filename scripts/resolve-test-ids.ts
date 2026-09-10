@@ -1,4 +1,4 @@
-import { PrismaClient } from "@prisma/client";
+import type { Prisma } from "@prisma/client";
 
 // Strong patterns: if any mapped text field matches these, the record is test/mock.
 const STRONG_PATTERNS = ["TEST", "TESTE", "AUDIT", "AUDITORIA", "CONCURRENCY"];
@@ -109,11 +109,16 @@ export interface TargetIds {
   inventoryMovements: string[];
 }
 
-export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
+// Accept only the transaction client supplied by withReadOnlyAdminDatabase.
+// companyId is mandatory so test-data discovery cannot scan every tenant.
+export async function resolveTestIds(
+  prisma: Prisma.TransactionClient,
+  companyId: string,
+): Promise<TargetIds> {
   // --- PASS 1: Resolve primary entities ---
 
   // 1. Users
-  const allUsers = await prisma.user.findMany();
+  const allUsers = await prisma.user.findMany({ where: { companyId } });
   const testUsers = allUsers.filter(u => {
     return (
       hasStrongMatch(u.name) ||
@@ -126,7 +131,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const userIds = testUsers.map(u => u.id);
 
   // 2. Sellers
-  const allSellers = await prisma.seller.findMany();
+  const allSellers = await prisma.seller.findMany({ where: { companyId } });
   const testSellers = allSellers.filter(s => {
     return (
       hasStrongMatch(s.name) ||
@@ -138,7 +143,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const sellerIds = testSellers.map(s => s.id);
 
   // 3. Products
-  const allProducts = await prisma.product.findMany();
+  const allProducts = await prisma.product.findMany({ where: { companyId } });
   const testProducts = allProducts.filter(p => {
     return (
       hasStrongMatch(p.name) ||
@@ -151,7 +156,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const productIds = testProducts.map(p => p.id);
 
   // 4. Product Variants
-  const allVariants = await prisma.productVariant.findMany();
+  const allVariants = await prisma.productVariant.findMany({ where: { companyId } });
   const testVariants = allVariants.filter(v => {
     return (
       productIds.includes(v.productId) ||
@@ -164,7 +169,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const variantIds = testVariants.map(v => v.id);
 
   // 5. Customers
-  const allCustomers = await prisma.customer.findMany();
+  const allCustomers = await prisma.customer.findMany({ where: { companyId } });
   const testCustomers = allCustomers.filter(c => {
     return (
       hasStrongMatch(c.name) ||
@@ -176,7 +181,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const customerIds = testCustomers.map(c => c.id);
 
   // 6. Bank Accounts
-  const allBankAccounts = await prisma.bankAccount.findMany();
+  const allBankAccounts = await prisma.bankAccount.findMany({ where: { companyId } });
   const testBankAccounts = allBankAccounts.filter(b => {
     return (
       hasStrongMatch(b.name) ||
@@ -187,7 +192,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const bankAccountIds = testBankAccounts.map(b => b.id);
 
   // 7. Payment Methods
-  const allPaymentMethods = await prisma.paymentMethod.findMany();
+  const allPaymentMethods = await prisma.paymentMethod.findMany({ where: { companyId } });
   const testPaymentMethods = allPaymentMethods.filter(pm => {
     return (
       hasStrongMatch(pm.name) ||
@@ -199,7 +204,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   // --- PASS 2: Resolve secondary/linked entities ---
 
   // 8. Cash Registers
-  const allCashRegisters = await prisma.cashRegister.findMany();
+  const allCashRegisters = await prisma.cashRegister.findMany({ where: { companyId } });
   const testCashRegisters = allCashRegisters.filter(cr => {
     return (
       hasStrongMatch(cr.notes) ||
@@ -212,6 +217,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
 
   // 9. Sales
   const allSales = await prisma.sale.findMany({
+    where: { companyId },
     include: { items: true }
   });
   const testSales = allSales.filter(s => {
@@ -324,7 +330,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   })).map(ph => ph.id);
 
   // 14. Financial Transactions
-  const testFinancialTxs = await prisma.financialTransaction.findMany();
+  const testFinancialTxs = await prisma.financialTransaction.findMany({ where: { companyId } });
   const matchedFinancialTxs = testFinancialTxs.filter(tx => {
     return (
       hasStrongMatch(tx.description) ||
@@ -340,7 +346,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const financialTxIds = matchedFinancialTxs.map(tx => tx.id);
 
   // 15. Accounts Receivable
-  const testReceivables = await prisma.accountsReceivable.findMany();
+  const testReceivables = await prisma.accountsReceivable.findMany({ where: { companyId } });
   const matchedReceivables = testReceivables.filter(ar => {
     return (
       hasStrongMatch(ar.notes) ||
@@ -351,7 +357,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const accountsReceivableIds = matchedReceivables.map(ar => ar.id);
 
   // 16. Cash Movements
-  const testCashMovements = await prisma.cashMovement.findMany();
+  const testCashMovements = await prisma.cashMovement.findMany({ where: { cashRegister: { companyId } } });
   const matchedCashMovements = testCashMovements.filter(cm => {
     return (
       hasStrongMatch(cm.description) ||
@@ -362,7 +368,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const cashMovementIds = matchedCashMovements.map(cm => cm.id);
 
   // 17. Inventory Movements
-  const testInventoryMovements = await prisma.inventoryMovement.findMany();
+  const testInventoryMovements = await prisma.inventoryMovement.findMany({ where: { variant: { companyId } } });
   const matchedInventoryMovements = testInventoryMovements.filter(im => {
     return (
       variantIds.includes(im.variantId) ||
@@ -373,7 +379,7 @@ export async function resolveTestIds(prisma: PrismaClient): Promise<TargetIds> {
   const inventoryMovementIds = matchedInventoryMovements.map(im => im.id);
 
   // 18. Activity Logs
-  const testLogs = await prisma.activityLog.findMany();
+  const testLogs = await prisma.activityLog.findMany({ where: { companyId } });
   const matchedLogs = testLogs.filter(log => {
     return (
       userIds.includes(log.userId) ||
