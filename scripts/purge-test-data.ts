@@ -4,8 +4,12 @@ import * as path from "path";
 import * as fs from "fs";
 import { execSync } from "child_process";
 import { resolveTestIds } from "./resolve-test-ids";
+import {
+  createAdminPrismaClient,
+  resolveAdminDatabaseAccess,
+  sanitizeAdminDatabaseError,
+} from "../src/lib/database/admin-script-access";
 
-const prisma = new PrismaClient();
 const REPORTS_DIR = path.join(__dirname, "../reports");
 
 // Helper to check for running import processes
@@ -47,9 +51,15 @@ function getOSUser(): string {
   return process.env.USERNAME || process.env.USER || "unknown_operator";
 }
 
-async function runPurge() {
+export async function runPurge() {
+  const access = resolveAdminDatabaseAccess({
+    mode: "destructive",
+    allowProductionDestructive: true,
+  });
+  const prisma: PrismaClient = createAdminPrismaClient(access);
+  try {
   const dryRun = process.env.DRY_RUN !== "false";
-  const isProduction = process.env.ENVIRONMENT === "production";
+  const isProduction = access.production;
   const confirmPurge = process.env.CONFIRM_PURGE === "true";
   const backupValidated = process.env.BACKUP_VALIDATED === "true";
 
@@ -68,24 +78,20 @@ async function runPurge() {
   // Scan for active import processes
   const importActive = isRealImportActive();
   if (importActive) {
-    console.error("  [FAIL] Real data import processes are active! Purge aborted to prevent data corruption.");
-    process.exit(1);
+    throw new Error("Real data import processes are active; purge aborted.");
   }
   console.log("  [PASS] No active real import scripts detected.");
 
   // If real execution, enforce all checks
   if (!dryRun) {
     if (!isProduction) {
-      console.error("  [FAIL] Real purge is only allowed when ENVIRONMENT=production.");
-      process.exit(1);
+      throw new Error("Real purge is only allowed for an explicitly identified production target.");
     }
     if (!confirmPurge) {
-      console.error("  [FAIL] Real purge requires CONFIRM_PURGE=true.");
-      process.exit(1);
+      throw new Error("Real purge requires CONFIRM_PURGE=true.");
     }
     if (!backupValidated) {
-      console.error("  [FAIL] Real purge requires BACKUP_VALIDATED=true. Execute and validate backup first.");
-      process.exit(1);
+      throw new Error("Real purge requires BACKUP_VALIDATED=true. Execute and validate backup first.");
     }
   }
 
@@ -132,7 +138,7 @@ async function runPurge() {
 
   if (dryRun) {
     console.log("\n[DRY-RUN COMPLETE] No database modifications were performed.");
-    process.exit(0);
+    return;
   }
 
   // 3. Perform Deletions Sequentially in Safe Order by ID List
@@ -306,8 +312,7 @@ async function runPurge() {
 
     console.log("Purge transaction committed successfully.");
   } catch (err: any) {
-    console.error("  [FAIL] Error occurred during purge transaction. Rollback performed.", err.message);
-    process.exit(1);
+    throw new Error(`Purge transaction failed and was rolled back: ${sanitizeAdminDatabaseError(err)}`);
   }
 
   // 4. Run post-purge build and diagnostics checks
@@ -374,30 +379,17 @@ async function runPurge() {
   XLSX.writeFile(wb, reportPath);
   console.log(`Saved go-live-purge-report.xlsx to: ${reportPath}`);
 
-  // 6. Invoke after-purge audit to produce reports/test-data-audit-after.xlsx
-  console.log("\nExecuting after-purge audit...");
-  try {
-    process.env.AUDIT_SUFFIX = "after";
-    // We execute it in-process or via shell
-    execSync("npx tsx scripts/audit-test-data.ts", {
-      env: { ...process.env, AUDIT_SUFFIX: "after" },
-      stdio: "inherit"
-    });
-    console.log("  [PASS] After-purge audit completed.");
-  } catch (err: any) {
-    console.error("  [WARNING] Failed to run after-purge audit script automatically:", err.message);
-  }
-
   console.log("==================================================");
   console.log("PURGE SERVICE EXECUTED SUCCESSFULLY");
   console.log("==================================================");
+  } finally {
+    await prisma.$disconnect();
+  }
 }
 
-runPurge()
-  .catch(err => {
-    console.error("Critical error in runPurge:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  runPurge().catch(async err => {
+    console.error("Critical error in runPurge:", sanitizeAdminDatabaseError(err));
+    process.exitCode = 1;
   });
+}

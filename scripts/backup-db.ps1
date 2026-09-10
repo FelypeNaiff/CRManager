@@ -38,30 +38,23 @@ if (-not $pgDumpPath) {
     exit 1
 }
 
-# 2. Obter URL de conexão (prioriza DIRECT_URL para pg_dump, senão DATABASE_URL)
-$dbUrl = $env:DIRECT_URL
-if (-not $dbUrl -and (Test-Path ".env")) {
-    Get-Content ".env" | Foreach-Object {
-        $line = $_.Trim()
-        if ($line -match "^DIRECT_URL\s*=\s*`"(.+)`"$" -or $line -match "^DIRECT_URL\s*=\s*'(.+)'$" -or $line -match "^DIRECT_URL\s*=\s*(.+)$") {
-            $dbUrl = $Matches[1].Trim().Trim('"').Trim("'")
-        }
-    }
-}
-if (-not $dbUrl) {
-    $dbUrl = $env:DATABASE_URL
-    if (-not $dbUrl -and (Test-Path ".env")) {
-        Get-Content ".env" | Foreach-Object {
-            $line = $_.Trim()
-            if ($line -match "^DATABASE_URL\s*=\s*`"(.+)`"$" -or $line -match "^DATABASE_URL\s*=\s*'(.+)'$" -or $line -match "^DATABASE_URL\s*=\s*(.+)$") {
-                $dbUrl = $Matches[1].Trim().Trim('"').Trim("'")
-            }
-        }
-    }
-}
+# 2. Exigir alvo administrativo explícito; nunca herdar URLs de runtime/Prisma CLI
+$dbUrl = $env:ADMIN_DATABASE_URL
 
 if (-not $dbUrl) {
-    Write-Host "ERRO: As variáveis de ambiente DIRECT_URL ou DATABASE_URL não estão configuradas e não foram encontradas no arquivo .env." -ForegroundColor Red
+    Write-Host "ERRO: ADMIN_DATABASE_URL é obrigatória para backup; não há fallback para DIRECT_URL ou DATABASE_URL." -ForegroundColor Red
+    exit 1
+}
+
+try {
+    $dbUri = [System.Uri]$dbUrl
+    $usesTransactionPooler = $dbUri.Port -eq 6543 -or $dbUri.Query -match "(?:^|[?&])pgbouncer=true(?:&|$)"
+    if ($usesTransactionPooler) {
+        Write-Host "ERRO: backup exige conexão administrativa direct/session-compatible; Transaction Pooler não é aceito." -ForegroundColor Red
+        exit 1
+    }
+} catch {
+    Write-Host "ERRO: ADMIN_DATABASE_URL não possui formato PostgreSQL válido." -ForegroundColor Red
     exit 1
 }
 
