@@ -1,9 +1,8 @@
 import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
-
-// Flag de Dry Run
-const isDryRun = process.env.DRY_RUN !== 'false';
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access';
 
 // Função auxiliar para substituir caracteres com encoding quebrado
 function fixEncoding(text: string | null): string | null {
@@ -38,7 +37,13 @@ function fixEncoding(text: string | null): string | null {
 // Relatório
 const report: Record<string, { field: string; count: number; preview: { before: string; after: string }[] }[]> = {};
 
-async function processTable(tableName: string, modelName: any, fieldsToFix: string[]) {
+async function processTable(
+  prisma: PrismaClient,
+  isDryRun: boolean,
+  tableName: string,
+  modelName: any,
+  fieldsToFix: string[],
+) {
   const model = prisma[modelName as keyof typeof prisma] as any;
   if (!model) {
     console.warn(`[Aviso] Modelo ${modelName} não encontrado no Prisma.`);
@@ -88,26 +93,27 @@ async function processTable(tableName: string, modelName: any, fieldsToFix: stri
       }
     }
   } catch (err) {
-    console.error(`Erro ao processar tabela ${tableName}:`, err);
+    console.error(`Erro ao processar tabela ${tableName}:`, sanitizeAdminDatabaseError(err));
   }
 }
 
-async function main() {
+export async function main(prisma: PrismaClient) {
+  const isDryRun = process.env.DRY_RUN !== 'false';
   console.log('==================================================');
   console.log(`🚀 INICIANDO SCRIPT DE CORREÇÃO DE ENCODING (DRY_RUN: ${isDryRun})`);
   console.log('==================================================\n');
 
   // Mapeamento de tabelas e campos string
-  await processTable('customers', 'customer', ['name', 'notes']);
-  await processTable('customer_children', 'customerChild', ['name', 'notes']);
-  await processTable('customer_tags', 'customerTag', ['name']);
-  await processTable('customer_histories', 'customerHistory', ['description']);
-  await processTable('customer_interactions', 'customerInteraction', ['notes']);
-  await processTable('products', 'product', ['name', 'description']);
-  await processTable('product_categories', 'productCategory', ['name', 'description']);
-  await processTable('suppliers', 'supplier', ['name']);
-  await processTable('users', 'user', ['name', 'cargo']);
-  await processTable('roles', 'role', ['name', 'description']);
+  await processTable(prisma, isDryRun, 'customers', 'customer', ['name', 'notes']);
+  await processTable(prisma, isDryRun, 'customer_children', 'customerChild', ['name', 'notes']);
+  await processTable(prisma, isDryRun, 'customer_tags', 'customerTag', ['name']);
+  await processTable(prisma, isDryRun, 'customer_histories', 'customerHistory', ['description']);
+  await processTable(prisma, isDryRun, 'customer_interactions', 'customerInteraction', ['notes']);
+  await processTable(prisma, isDryRun, 'products', 'product', ['name', 'description']);
+  await processTable(prisma, isDryRun, 'product_categories', 'productCategory', ['name', 'description']);
+  await processTable(prisma, isDryRun, 'suppliers', 'supplier', ['name']);
+  await processTable(prisma, isDryRun, 'users', 'user', ['name', 'cargo']);
+  await processTable(prisma, isDryRun, 'roles', 'role', ['name', 'description']);
   
   // Exibição do relatório
   console.log('\n==================================================');
@@ -121,11 +127,7 @@ async function main() {
       console.log(`\n📁 Tabela: ${table}`);
       for (const fieldData of fields) {
         console.log(`  🔹 Campo: ${fieldData.field} (${fieldData.count} registros afetados)`);
-        console.log(`     Previews:`);
-        fieldData.preview.forEach((p, i) => {
-          console.log(`       [${i+1}] Antes: "${p.before}"`);
-          console.log(`           Depois: "${p.after}"`);
-        });
+        console.log('     Previews omitted to avoid exposing stored content.');
       }
     }
   }
@@ -140,11 +142,12 @@ async function main() {
   console.log('==================================================\n');
 }
 
-main()
-  .catch((e) => {
-    console.error(e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    prisma => main(prisma),
+    { allowProductionDestructive: true },
+  ).catch((error) => {
+    console.error(sanitizeAdminDatabaseError(error));
+    process.exitCode = 1;
   });
+}

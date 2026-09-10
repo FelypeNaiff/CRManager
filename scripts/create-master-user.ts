@@ -11,8 +11,10 @@
 import { PrismaClient } from '@prisma/client'
 import { createClient } from '@supabase/supabase-js'
 import bcrypt from 'bcryptjs'
-
-const prisma = new PrismaClient()
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access'
 
 function requireEnvironmentVariable(name: string): string {
   const value = process.env[name]?.trim()
@@ -22,8 +24,8 @@ function requireEnvironmentVariable(name: string): string {
   return value
 }
 
-async function createDevelopmentAdminUser() {
-  if (process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production') {
+export async function createDevelopmentAdminUser(prisma: PrismaClient, production: boolean) {
+  if (production) {
     throw new Error('Este utilitário temporário não pode ser executado em produção.')
   }
 
@@ -35,11 +37,14 @@ async function createDevelopmentAdminUser() {
   const bootstrapName = process.env.NEEX_BOOTSTRAP_NAME?.trim() || 'Administrador de Desenvolvimento'
   const bootstrapUsername = process.env.NEEX_BOOTSTRAP_USERNAME?.trim() || bootstrapEmail.split('@')[0]
 
+  // Validate the administrative PostgreSQL target before the first external Auth write.
+  // Supabase Auth and PostgreSQL are still separate systems: this reduces partial
+  // failure risk but cannot provide atomic rollback across both services.
+  await prisma.$connect()
   const supabase = createClient(supabaseUrl, supabaseSecretKey)
   const pinAccessHash = await bcrypt.hash(bootstrapPin, 12)
 
-  try {
-    console.log('[Bootstrap] Iniciando configuração temporária do administrador de desenvolvimento...')
+  console.log('[Bootstrap] Iniciando configuração temporária do administrador de desenvolvimento...')
 
     let authUserId: string
     const { data: { users }, error: fetchError } = await supabase.auth.admin.listUsers()
@@ -119,13 +124,18 @@ async function createDevelopmentAdminUser() {
       },
     })
 
-    console.log('[Bootstrap] Administrador temporário configurado com sucesso.')
-  } finally {
-    await prisma.$disconnect()
-  }
+  console.log('[Bootstrap] Administrador temporário configurado com sucesso.')
 }
 
-createDevelopmentAdminUser().catch((error) => {
-  console.error('[Bootstrap] Falha ao configurar o administrador temporário:', error)
-  process.exitCode = 1
-})
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    (prisma, access) => createDevelopmentAdminUser(prisma, access.production),
+    { allowProductionDestructive: false },
+  ).catch((error) => {
+    console.error(
+      '[Bootstrap] Falha ao configurar o administrador temporário:',
+      sanitizeAdminDatabaseError(error),
+    )
+    process.exitCode = 1
+  })
+}

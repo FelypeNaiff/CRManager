@@ -1,9 +1,11 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access';
 
-const prisma = new PrismaClient();
-
-async function main() {
+export async function main(prisma: PrismaClient) {
   console.log('Starting seed...');
 
   // 1. Create Company
@@ -19,7 +21,7 @@ async function main() {
       email: 'contato@neex.com.br',
     },
   });
-  console.log(`Company created/found: ${company.nomeFantasia} (${company.id})`);
+  console.log('Company created/found.');
 
   // 2. Create Roles
   const adminRole = await prisma.role.upsert({
@@ -38,7 +40,7 @@ async function main() {
       status: 'ACTIVE',
     },
   });
-  console.log(`Role created/found: ${adminRole.name} (${adminRole.id})`);
+  console.log('Administrative role created/found.');
 
   const staffRole = await prisma.role.upsert({
     where: {
@@ -112,7 +114,7 @@ async function main() {
       permitirAcesso: true,
     },
   });
-  console.log(`Admin user created/found: ${adminUser.name} (${adminUser.email})`);
+  console.log('Administrative user created/found.');
 
   const hashedStaffPin = await bcrypt.hash('4321', 10);
   const staffUser = await prisma.user.upsert({
@@ -133,7 +135,7 @@ async function main() {
       permitirAcesso: true,
     },
   });
-  console.log(`Staff user created/found: ${staffUser.name} (${staffUser.email})`);
+  console.log('Staff user created/found.');
 
   // 5. Create Default Payment Methods
   const defaultPaymentMethods = [
@@ -172,11 +174,12 @@ async function main() {
   console.log('Seed completed successfully!');
 }
 
-main()
-  .catch((e) => {
-    console.error('Error during seed execution:', e);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    prisma => main(prisma),
+    { allowProductionDestructive: true },
+  ).catch((error) => {
+    console.error('Error during seed execution:', sanitizeAdminDatabaseError(error));
+    process.exitCode = 1;
   });
+}

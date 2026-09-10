@@ -91,3 +91,15 @@ test('database URLs and password assignments are sanitized from errors', () => {
   assert.match(sanitized, /REDACTED_DATABASE_URL/)
   assert.match(sanitized, /password=\[REDACTED\]/)
 })
+
+test('administrative tokens and API key assignments are sanitized from errors', () => {
+  const token = 'eyJhbGciOiJIUzI1NiJ9.c2Vuc2l0aXZl.c2lnbmF0dXJl'
+  const sanitized = sanitizeAdminDatabaseError(
+    new Error(`authorization Bearer ${token} service_role_key=sensitive api-key=private`),
+  )
+
+  assert.equal(sanitized.includes(token), false)
+  assert.equal(sanitized.includes('sensitive'), false)
+  assert.equal(sanitized.includes('private'), false)
+  assert.match(sanitized, /REDACTED_TOKEN/)
+})

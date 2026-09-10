@@ -85,10 +85,30 @@ export async function withReadOnlyAdminDatabase<T>(
   }
 }
 
+export async function withDestructiveAdminDatabase<T>(
+  operation: (client: PrismaClient, access: AdminDatabaseAccess) => Promise<T>,
+  options: Pick<AdminDatabaseAccessOptions, 'allowProductionDestructive'> = {},
+  environment: AdminDatabaseEnvironment = process.env,
+): Promise<T> {
+  const access = resolveAdminDatabaseAccess(
+    { mode: 'destructive', ...options },
+    environment,
+  )
+  const client = createAdminPrismaClient(access)
+
+  try {
+    return await operation(client, access)
+  } finally {
+    await client.$disconnect()
+  }
+}
+
 export function sanitizeAdminDatabaseError(error: unknown): string {
   const message = error instanceof Error ? error.message : 'Administrative database operation failed.'
 
   return message
     .replace(/postgres(?:ql)?:\/\/[^\s'"`]+/gi, '[REDACTED_DATABASE_URL]')
     .replace(/(password|passwd|pwd)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
+    .replace(/(?:bearer\s+)?eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/gi, '[REDACTED_TOKEN]')
+    .replace(/(api[_-]?key|service[_-]?role[_-]?key|secret|token)\s*[=:]\s*[^\s,;]+/gi, '$1=[REDACTED]')
 }

@@ -1,11 +1,13 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { randomBytes } from 'node:crypto';
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access';
 
-const prisma = new PrismaClient();
-
-async function main() {
-  if (process.env.NODE_ENV === 'production' || process.env.ENVIRONMENT === 'production') {
+export async function main(prisma: PrismaClient, production: boolean) {
+  if (production) {
     throw new Error('Este seed de teste não pode ser executado em produção.');
   }
 
@@ -41,8 +43,15 @@ async function main() {
     }
   });
 
-  console.log(`Created admin user ID: ${user.id}`);
-  console.log(`Created company ID: ${company.id}`);
+  console.log('Test company, role and user created successfully.');
 }
 
-main().finally(() => prisma.$disconnect());
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    (prisma, access) => main(prisma, access.production),
+    { allowProductionDestructive: false },
+  ).catch(error => {
+    console.error('Test seed failed:', sanitizeAdminDatabaseError(error));
+    process.exitCode = 1;
+  });
+}

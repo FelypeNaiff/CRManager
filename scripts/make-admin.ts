@@ -1,7 +1,10 @@
 import { PrismaClient } from '@prisma/client';
-const prisma = new PrismaClient();
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access';
 
-async function main() {
+export async function main(prisma: PrismaClient) {
   const user = await prisma.user.findFirst();
 
   if (user && user.roleId) {
@@ -9,10 +12,18 @@ async function main() {
       where: { id: user.roleId },
       data: { isAdmin: true }
     });
-    console.log(`Role updated to admin for user ${user.email}!`);
+    console.log('Role updated to admin.');
   } else {
     console.log('No user with a roleId found.');
   }
 }
 
-main().finally(() => prisma.$disconnect());
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    prisma => main(prisma),
+    { allowProductionDestructive: true },
+  ).catch(error => {
+    console.error('Admin promotion failed:', sanitizeAdminDatabaseError(error));
+    process.exitCode = 1;
+  });
+}

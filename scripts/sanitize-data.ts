@@ -1,19 +1,12 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from "../src/lib/database/admin-script-access";
 
-const prisma = new PrismaClient();
-
-async function runDataSanitization() {
+export async function runDataSanitization(prisma: PrismaClient, isProduction: boolean) {
   const dryRun = process.env.DRY_RUN !== "false";
-  
-  // Detect if we are in production
-  const dbUrl = process.env.DATABASE_URL || "";
-  const isProduction = 
-    process.env.NODE_ENV === "production" || 
-    process.env.ENVIRONMENT === "production" || 
-    process.env.PRODUCTION === "true" ||
-    dbUrl.includes("supabase.co") ||
-    dbUrl.includes("aws-0-sa-east-1");
 
   const allowProductionSanitize = process.env.ALLOW_PRODUCTION_SANITIZE === "true";
 
@@ -30,7 +23,7 @@ async function runDataSanitization() {
   const company = await prisma.company.findFirst();
   if (!company) {
     console.error("  [FAIL] No company found in database.");
-    process.exit(1);
+    throw new Error('No company found in database.');
   }
 
   let hasCriticalPendingIssues = false;
@@ -101,7 +94,7 @@ async function runDataSanitization() {
         }
       });
       report.usersCorrected.push(`PIN Configured -> User: ${u.name}`);
-      console.log(`  [WRITE] Set temporary PIN ('1234') for user '${u.name}'.`);
+      console.log(`  [WRITE] Set temporary PIN for user '${u.name}'.`);
     } else {
       report.usersPending.push(`User PIN: ${u.name}`);
       console.log(`  [DRY-RUN/BLOCKED] Would set temporary PIN for user '${u.name}'.`);
@@ -267,19 +260,18 @@ async function runDataSanitization() {
   console.log("==================================================");
 
   if (isProduction && hasCriticalPendingIssues) {
-    console.error("  [ERROR] Critical database issues detected on production. Exiting with code 1.");
-    process.exit(1);
+    throw new Error("Critical database issues detected on production.");
   } else {
     console.log("  Audit finished successfully.");
-    process.exit(0);
   }
 }
 
-runDataSanitization()
-  .catch(err => {
-    console.error("Critical script error:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  withDestructiveAdminDatabase(
+    (prisma, access) => runDataSanitization(prisma, access.production),
+    { allowProductionDestructive: true },
+  ).catch(err => {
+    console.error("Critical script error:", sanitizeAdminDatabaseError(err));
+    process.exitCode = 1;
   });
+}
