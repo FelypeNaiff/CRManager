@@ -1,10 +1,13 @@
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
-import { PrismaClient } from '@prisma/client';
-import { execSync } from 'child_process';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { importCrmData } from './import-crm-data';
+import { importFinancialData } from './import-financial-data';
+import { importProductsData } from './import-products-data';
+import { importSellersData } from './import-sellers-data';
+import { assertExpectedCompany, runProtectedImport } from './import-admin-access';
 
-const prisma = new PrismaClient();
 const IMPORTS_DIR = path.join(__dirname, '../imports');
 
 interface ValidationIssue {
@@ -25,16 +28,16 @@ function parseNumber(val: any): number {
   return 0;
 }
 
-async function validateImports() {
+export async function validateImports(
+  prisma: PrismaClient | Prisma.TransactionClient,
+  companyId: string,
+  executeImports = false,
+) {
   console.log("==================================================");
   console.log("NEEX IMPORT VALIDATION & PREVIEW TOOL (GO-LIVE-04B)");
   console.log("==================================================");
 
-  const company = await prisma.company.findFirst();
-  if (!company) {
-    console.error("  [FAIL] No company found in database. Run seeding first.");
-    process.exit(1);
-  }
+  const company = await assertExpectedCompany(prisma, companyId);
 
   if (!fs.existsSync(IMPORTS_DIR)) {
     console.log(`Creating imports directory at: ${IMPORTS_DIR}`);
@@ -402,9 +405,7 @@ async function validateImports() {
   }
 
   // 6. DB WRITE / REAL IMPORT STAGE
-  const confirmImportEnv = process.env.CONFIRM_IMPORT === 'true';
-
-  if (confirmImportEnv) {
+  if (executeImports) {
     if (errors.length > 0) {
       console.error("\n[FAIL] Planilha com erros críticos. Abortando gravação real.");
       console.error("  -> Corrija as inconsistências listadas no relatório antes de prosseguir.");
@@ -415,47 +416,28 @@ async function validateImports() {
     console.log("CONFIRM_IMPORT=true DETECTED. EXECUTING REAL DB WRITES...");
     console.log("==================================================");
 
-    try {
-      console.log("\nFase 1: Importação Financeira...");
-      execSync('npx tsx scripts/import-financial-data.ts', { stdio: 'inherit' });
-
-      console.log("\nFase 2: Importação de Produtos...");
-      execSync('npx tsx scripts/import-products-data.ts', { stdio: 'inherit' });
-
-      console.log("\nFase 3: Importação CRM...");
-      execSync('npx tsx scripts/import-crm-data.ts', { stdio: 'inherit' });
-
-      console.log("\nFase 4: Importação Comercial...");
-      execSync('npx tsx scripts/import-sellers-data.ts', { stdio: 'inherit' });
-
-      console.log("\nFase 5: Executando diagnose-go-live...");
-      execSync('npx tsx scripts/diagnose-go-live.ts', { stdio: 'inherit' });
-
-      console.log("\nFase 6: Rodando a suíte isolada segura (sem escrita no banco)...");
-      execSync('npm run test:safe', { stdio: 'inherit' });
-      console.log("[INFO] A suíte valida o código isoladamente; a consistência dos dados importados depende do diagnóstico read-only da Fase 5.");
-
-      console.log("\n==================================================");
-      console.log("🟢 CARGA REAL CONCLUÍDA E VALIDADA COM SUCESSO!");
-      console.log("==================================================");
-    } catch (err: any) {
-      console.error("\n🔴 FALHA CRÍTICA DURANTE A GRAVAÇÃO REAL:");
-      console.error(err.message);
-      process.exit(1);
-    }
+    if (!('$connect' in prisma)) throw new Error('Write execution requires a destructive administrative client.');
+    console.log("\nFase 1: Importação Financeira...");
+    await importFinancialData(prisma, company.id);
+    console.log("\nFase 2: Importação de Produtos...");
+    await importProductsData(prisma, company.id);
+    console.log("\nFase 3: Importação CRM...");
+    await importCrmData(prisma, company.id);
+    console.log("\nFase 4: Importação Comercial...");
+    await importSellersData(prisma, company.id);
+    console.log("\nImportação administrativa concluída. Execute diagnósticos read-only separadamente.");
   } else {
     console.log("\n[DRY RUN] Nenhuma alteração foi salva no banco de dados.");
-    console.log("Para rodar a importação real definitiva, use o comando:");
-    console.log("  $env:CONFIRM_IMPORT=\"true\"; npx tsx scripts/validate-imports.ts");
+    console.log("A execução real exige IMPORT_MODE=write, CONFIRM_IMPORT=true e as confirmações administrativas.");
     console.log("==================================================");
   }
 }
 
-validateImports()
-  .catch(err => {
-    console.error("Critical error in validateImports:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  void runProtectedImport({
+    preview: (prisma, companyId) => validateImports(prisma, companyId, false),
+    write: (prisma, companyId) => validateImports(prisma, companyId, true),
+  }).catch(() => {
+    process.exitCode = 1;
   });
+}

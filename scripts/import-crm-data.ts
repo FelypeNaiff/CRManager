@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { assertExpectedCompany, runProtectedImport } from './import-admin-access';
 
-const prisma = new PrismaClient();
 const IMPORTS_DIR = path.join(__dirname, '../imports');
 
 function parseNumber(val: any): number {
@@ -22,16 +22,22 @@ function parseDate(val: any): Date | null {
   return isNaN(parsed.getTime()) ? null : parsed;
 }
 
-async function importCrmData() {
+export async function previewCrmData(prisma: Prisma.TransactionClient, companyId: string) {
+  await assertExpectedCompany(prisma, companyId);
+  const clientesPath = path.join(IMPORTS_DIR, 'clientes.xlsx');
+  if (!fs.existsSync(clientesPath)) throw new Error('CRM spreadsheet was not found.');
+  const workbook = XLSX.readFile(clientesPath);
+  const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('cliente')) || workbook.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+  console.log(`[PREVIEW] CRM spreadsheet rows: ${Math.max(rows.length - 1, 0)}. No database writes performed.`);
+}
+
+export async function importCrmData(prisma: PrismaClient, companyId: string) {
   console.log("==================================================");
   console.log("NEEX CRM IMPORT RUNNER (GO-LIVE-04)");
   console.log("==================================================");
 
-  const company = await prisma.company.findFirst();
-  if (!company) {
-    console.error("  [FAIL] No company found in database. Run seeding first.");
-    process.exit(1);
-  }
+  const company = await assertExpectedCompany(prisma, companyId);
 
   const clientesPath = path.join(IMPORTS_DIR, 'clientes.xlsx');
   if (!fs.existsSync(clientesPath)) {
@@ -235,11 +241,8 @@ async function importCrmData() {
   console.log("==================================================");
 }
 
-importCrmData()
-  .catch(err => {
-    console.error("Critical error in importCrmData:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  void runProtectedImport({ preview: previewCrmData, write: importCrmData }).catch(() => {
+    process.exitCode = 1;
   });
+}

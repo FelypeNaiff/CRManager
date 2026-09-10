@@ -1,17 +1,23 @@
-import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { assertExpectedCompany, runProtectedImport } from './import-admin-access';
 
-const prisma = new PrismaClient();
+export async function previewFinancialData(prisma: Prisma.TransactionClient, companyId: string) {
+  await assertExpectedCompany(prisma, companyId);
+  const [bankAccounts, cashRegisters, financialAccounts, costCenters] = await Promise.all([
+    prisma.bankAccount.count({ where: { companyId } }),
+    prisma.cashRegister.count({ where: { companyId } }),
+    prisma.financialAccount.count({ where: { companyId } }),
+    prisma.costCenter.count({ where: { companyId } }),
+  ]);
+  console.log(`[PREVIEW] Existing financial records: bankAccounts=${bankAccounts}, cashRegisters=${cashRegisters}, financialAccounts=${financialAccounts}, costCenters=${costCenters}. No writes performed.`);
+}
 
-async function importFinancialData() {
+export async function importFinancialData(prisma: PrismaClient, companyId: string) {
   console.log("==================================================");
   console.log("NEEX FINANCIAL INITIALIZER (GO-LIVE-04)");
   console.log("==================================================");
 
-  const company = await prisma.company.findFirst();
-  if (!company) {
-    console.error("  [FAIL] No company found in database.");
-    process.exit(1);
-  }
+  const company = await assertExpectedCompany(prisma, companyId);
 
   const activeUser = await prisma.user.findFirst({
     where: { companyId: company.id, status: "ACTIVE" }
@@ -179,11 +185,8 @@ async function importFinancialData() {
   console.log("==================================================");
 }
 
-importFinancialData()
-  .catch(err => {
-    console.error("Critical error in importFinancialData:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  void runProtectedImport({ preview: previewFinancialData, write: importFinancialData }).catch(() => {
+    process.exitCode = 1;
   });
+}

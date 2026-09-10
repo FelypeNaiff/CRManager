@@ -1,9 +1,9 @@
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
+import { assertExpectedCompany, runProtectedImport } from './import-admin-access';
 
-const prisma = new PrismaClient();
 const IMPORTS_DIR = path.join(__dirname, '../imports');
 
 function parseNumber(val: any): number {
@@ -16,16 +16,21 @@ function parseNumber(val: any): number {
   return 0;
 }
 
-async function importSellersData() {
+export async function previewSellersData(prisma: Prisma.TransactionClient, companyId: string) {
+  await assertExpectedCompany(prisma, companyId);
+  const vendedoresPath = path.join(IMPORTS_DIR, 'vendedores.xlsx');
+  if (!fs.existsSync(vendedoresPath)) throw new Error('Sellers spreadsheet was not found.');
+  const workbook = XLSX.readFile(vendedoresPath);
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[workbook.SheetNames[0]], { header: 1 });
+  console.log(`[PREVIEW] Sellers spreadsheet rows: ${Math.max(rows.length - 1, 0)}. No database writes performed.`);
+}
+
+export async function importSellersData(prisma: PrismaClient, companyId: string) {
   console.log("==================================================");
   console.log("NEEX SELLERS IMPORT RUNNER (GO-LIVE-04)");
   console.log("==================================================");
 
-  const company = await prisma.company.findFirst();
-  if (!company) {
-    console.error("  [FAIL] No company found in database.");
-    process.exit(1);
-  }
+  const company = await assertExpectedCompany(prisma, companyId);
 
   const vendedoresPath = path.join(IMPORTS_DIR, 'vendedores.xlsx');
   if (!fs.existsSync(vendedoresPath)) {
@@ -138,11 +143,8 @@ async function importSellersData() {
   console.log("==================================================");
 }
 
-importSellersData()
-  .catch(err => {
-    console.error("Critical error in importSellersData:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  void runProtectedImport({ preview: previewSellersData, write: importSellersData }).catch(() => {
+    process.exitCode = 1;
   });
+}

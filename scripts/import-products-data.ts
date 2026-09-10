@@ -1,10 +1,10 @@
 import fs from 'fs';
 import path from 'path';
 import * as XLSX from 'xlsx';
-import { PrismaClient } from '@prisma/client';
+import type { Prisma, PrismaClient } from '@prisma/client';
 import { Decimal } from '@prisma/client/runtime/library';
+import { assertExpectedCompany, runProtectedImport } from './import-admin-access';
 
-const prisma = new PrismaClient();
 const IMPORTS_DIR = path.join(__dirname, '../imports');
 
 function parseNumber(val: any): number {
@@ -17,16 +17,22 @@ function parseNumber(val: any): number {
   return 0;
 }
 
-async function importProductsData() {
+export async function previewProductsData(prisma: Prisma.TransactionClient, companyId: string) {
+  await assertExpectedCompany(prisma, companyId);
+  const produtosPath = path.join(IMPORTS_DIR, 'produtos.xlsx');
+  if (!fs.existsSync(produtosPath)) throw new Error('Products spreadsheet was not found.');
+  const workbook = XLSX.readFile(produtosPath);
+  const sheetName = workbook.SheetNames.find(n => n.toLowerCase().includes('produto')) || workbook.SheetNames[0];
+  const rows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { header: 1 });
+  console.log(`[PREVIEW] Products spreadsheet rows: ${Math.max(rows.length - 1, 0)}. No database writes performed.`);
+}
+
+export async function importProductsData(prisma: PrismaClient, companyId: string) {
   console.log("==================================================");
   console.log("NEEX PRODUCTS IMPORT RUNNER (GO-LIVE-04)");
   console.log("==================================================");
 
-  const company = await prisma.company.findFirst();
-  if (!company) {
-    console.error("  [FAIL] No company found in database. Run seeding first.");
-    process.exit(1);
-  }
+  const company = await assertExpectedCompany(prisma, companyId);
 
   const activeUser = await prisma.user.findFirst({
     where: { companyId: company.id, status: "ACTIVE" }
@@ -312,11 +318,8 @@ async function importProductsData() {
   console.log("==================================================");
 }
 
-importProductsData()
-  .catch(err => {
-    console.error("Critical error in importProductsData:", err);
-    process.exit(1);
-  })
-  .finally(async () => {
-    await prisma.$disconnect();
+if (require.main === module) {
+  void runProtectedImport({ preview: previewProductsData, write: importProductsData }).catch(() => {
+    process.exitCode = 1;
   });
+}

@@ -1,14 +1,39 @@
 import { MigrationService } from "../src/lib/wallet/migration-service";
+import type { PrismaClient } from '@prisma/client';
+import {
+  sanitizeAdminDatabaseError,
+  withDestructiveAdminDatabase,
+} from '../src/lib/database/admin-script-access';
+import {
+  assertExpectedCompany,
+  requireAdministrativeActorId,
+  requireExpectedCompanyId,
+} from './import-admin-access';
 
-async function run() {
-  try {
-    const result = await MigrationService.migrateHistoricalData();
-    console.log("Migration finished successfully:", result);
-    process.exit(0);
-  } catch (error) {
-    console.error("Migration failed with error:", error);
-    process.exit(1);
-  }
+// This is an administrative data migration, not a Prisma schema migration.
+// Its reconciliation checks make repeated runs partially idempotent, but there is
+// no durable migration marker; always review the target and result before reruns.
+export async function runHistoricalWalletMigration(
+  prisma: PrismaClient,
+  companyId: string,
+  actorUserId: string,
+) {
+  await assertExpectedCompany(prisma, companyId);
+  return MigrationService.migrateHistoricalData(companyId, actorUserId, prisma);
 }
 
-run();
+if (require.main === module) {
+  void withDestructiveAdminDatabase(
+    prisma => runHistoricalWalletMigration(
+      prisma,
+      requireExpectedCompanyId(),
+      requireAdministrativeActorId(),
+    ),
+    { allowProductionDestructive: true },
+  )
+    .then(result => console.log('Administrative data migration completed.', result))
+    .catch(error => {
+      console.error(sanitizeAdminDatabaseError(error));
+      process.exitCode = 1;
+    });
+}
