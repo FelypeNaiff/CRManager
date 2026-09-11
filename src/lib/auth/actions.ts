@@ -36,12 +36,20 @@ interface SelectableProfileRecord {
   status: string;
   permitirAcesso: boolean;
   pinAccessHash: string;
+  role: {
+    status: string;
+    isAdmin: boolean;
+  } | null;
 }
 
 interface ProfileSelectionDependencies {
   resolveBaseContext(): Promise<ServerAuthContext>;
-  listProfiles(companyId: string): Promise<SelectableProfileRecord[]>;
-  findProfile(profileId: string, companyId: string): Promise<SelectableProfileRecord | null>;
+  listProfiles(companyId: string, baseUserId: string): Promise<SelectableProfileRecord[]>;
+  findProfile(
+    profileId: string,
+    companyId: string,
+    baseUserId: string
+  ): Promise<SelectableProfileRecord | null>;
   verifyPinValue(pin: string, hash: string): Promise<boolean>;
   issueSelector(profileId: string, authUserId: string): string;
 }
@@ -51,12 +59,25 @@ function safeSelectionError(error: unknown): string {
   return 'Não foi possível validar o perfil.';
 }
 
+function isEligibleOperationalProfile(
+  profile: SelectableProfileRecord,
+  base: Pick<ServerAuthContext, 'companyId' | 'userId'>
+): boolean {
+  return profile.companyId === base.companyId
+    && profile.id !== base.userId
+    && profile.status === 'ACTIVE'
+    && profile.permitirAcesso
+    && profile.role?.status === 'ACTIVE'
+    && profile.role.isAdmin === false;
+}
+
 function createProfileSelectionService(dependencies: ProfileSelectionDependencies) {
   return {
     async getAvailableProfiles() {
       try {
         const base = await dependencies.resolveBaseContext();
-        const users = await dependencies.listProfiles(base.companyId);
+        const users = (await dependencies.listProfiles(base.companyId, base.userId))
+          .filter((user) => isEligibleOperationalProfile(user, base));
         return {
           success: true as const,
           profiles: users.map((user) => ({
@@ -76,8 +97,8 @@ function createProfileSelectionService(dependencies: ProfileSelectionDependencie
     async validateProfilePin(profileId: string, pin: string) {
       try {
         const base = await dependencies.resolveBaseContext();
-        const user = await dependencies.findProfile(profileId, base.companyId);
-        if (!user || user.status !== 'ACTIVE' || !user.permitirAcesso) {
+        const user = await dependencies.findProfile(profileId, base.companyId, base.userId);
+        if (!user || !isEligibleOperationalProfile(user, base)) {
           return { success: false as const, error: 'Perfil não encontrado ou inativo.' };
         }
         if (!(await dependencies.verifyPinValue(pin, user.pinAccessHash))) {
@@ -106,22 +127,37 @@ function createProfileSelectionService(dependencies: ProfileSelectionDependencie
 
 const productionSelectionService = createProfileSelectionService({
   resolveBaseContext: resolveBaseServerAuthContext,
-  listProfiles(companyId) {
+  listProfiles(companyId, baseUserId) {
     return prisma.user.findMany({
-      where: { companyId, status: 'ACTIVE', permitirAcesso: true },
+      where: {
+        companyId,
+        id: { not: baseUserId },
+        status: 'ACTIVE',
+        permitirAcesso: true,
+        role: { is: { status: 'ACTIVE', isAdmin: false } },
+      },
       select: {
         id: true, companyId: true, name: true, email: true, cargo: true,
         roleId: true, status: true, permitirAcesso: true, pinAccessHash: true,
+        role: { select: { status: true, isAdmin: true } },
       },
       orderBy: { name: 'asc' },
     });
   },
-  findProfile(profileId, companyId) {
+  findProfile(profileId, companyId, baseUserId) {
     return prisma.user.findFirst({
-      where: { id: profileId, companyId },
+      where: {
+        id: profileId,
+        companyId,
+        NOT: { id: baseUserId },
+        status: 'ACTIVE',
+        permitirAcesso: true,
+        role: { is: { status: 'ACTIVE', isAdmin: false } },
+      },
       select: {
         id: true, companyId: true, name: true, email: true, cargo: true,
         roleId: true, status: true, permitirAcesso: true, pinAccessHash: true,
+        role: { select: { status: true, isAdmin: true } },
       },
     });
   },

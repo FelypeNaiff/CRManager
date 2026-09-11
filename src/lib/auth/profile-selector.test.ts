@@ -24,6 +24,7 @@ function profile(overrides: Record<string, unknown> = {}) {
     id: 'profile-a', companyId: 'company-a', name: 'Operator',
     email: 'operator@example.test', cargo: 'Operator', roleId: 'role-a',
     status: 'ACTIVE', permitirAcesso: true, pinAccessHash: 'bcrypt-hash',
+    role: { status: 'ACTIVE', isAdmin: false },
     ...overrides,
   };
 }
@@ -36,11 +37,10 @@ async function service(options: {
 } = {}) {
   return createProfileSelectionServiceForTesting({
     resolveBaseContext: options.base ?? (async () => context()),
-    listProfiles: async (companyId) =>
-      (options.profiles ?? [profile()]).filter((item) => item.companyId === companyId),
-    findProfile: async (profileId, companyId) => {
+    listProfiles: async () => options.profiles ?? [profile()],
+    findProfile: async (profileId) => {
       const selected = options.selected === undefined ? profile() : options.selected;
-      return selected?.id === profileId && selected.companyId === companyId ? selected : null;
+      return selected?.id === profileId ? selected : null;
     },
     verifyPinValue: async () => options.pinValid ?? true,
     issueSelector: (profileId, authUserId) =>
@@ -65,6 +65,41 @@ test('valid identity lists only eligible profiles from its company', async () =>
   assert.equal('companyId' in result.profiles[0], false);
 });
 
+test('admin User does not appear in operational profile selection', async () => {
+  const result = await (await service({
+    profiles: [profile(), profile({ id: 'admin', role: { status: 'ACTIVE', isAdmin: true } })],
+  })).getAvailableProfiles();
+  assert.deepEqual(result.profiles.map((item) => item.id), ['profile-a']);
+});
+
+test('base identity User does not appear in operational profile selection', async () => {
+  const result = await (await service({
+    profiles: [profile(), profile({ id: 'base-user' })],
+  })).getAvailableProfiles();
+  assert.deepEqual(result.profiles.map((item) => item.id), ['profile-a']);
+});
+
+test('inactive User does not appear in operational profile selection', async () => {
+  const result = await (await service({
+    profiles: [profile(), profile({ id: 'inactive', status: 'INACTIVE' })],
+  })).getAvailableProfiles();
+  assert.deepEqual(result.profiles.map((item) => item.id), ['profile-a']);
+});
+
+test('User without access does not appear in operational profile selection', async () => {
+  const result = await (await service({
+    profiles: [profile(), profile({ id: 'blocked', permitirAcesso: false })],
+  })).getAvailableProfiles();
+  assert.deepEqual(result.profiles.map((item) => item.id), ['profile-a']);
+});
+
+test('User with inactive Role does not appear in operational profile selection', async () => {
+  const result = await (await service({
+    profiles: [profile(), profile({ id: 'inactive-role', role: { status: 'INACTIVE', isAdmin: false } })],
+  })).getAvailableProfiles();
+  assert.deepEqual(result.profiles.map((item) => item.id), ['profile-a']);
+});
+
 test('profile from another tenant is refused even when PIN matches', async () => {
   const result = await (await service({ selected: profile({ companyId: 'company-b' }) }))
     .validateProfilePin('profile-a', '1234');
@@ -74,6 +109,20 @@ test('profile from another tenant is refused even when PIN matches', async () =>
 test('inactive profile is refused', async () => {
   const result = await (await service({ selected: profile({ status: 'INACTIVE' }) }))
     .validateProfilePin('profile-a', '1234');
+  assert.equal(result.success, false);
+});
+
+test('direct PIN validation of admin profile is refused', async () => {
+  const result = await (await service({
+    selected: profile({ role: { status: 'ACTIVE', isAdmin: true } }),
+  })).validateProfilePin('profile-a', '1234');
+  assert.equal(result.success, false);
+});
+
+test('direct PIN validation of base identity User is refused', async () => {
+  const result = await (await service({
+    selected: profile({ id: 'base-user' }),
+  })).validateProfilePin('base-user', '1234');
   assert.equal(result.success, false);
 });
 
