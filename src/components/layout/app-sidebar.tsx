@@ -65,6 +65,7 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 
 import { usePermissions } from "@/hooks/use-permissions"
+import { filterNavigationItems } from "@/lib/auth/navigation-permissions"
 
 const navItems = [
   {
@@ -230,19 +231,8 @@ export function AppSidebar() {
   const { canAccessRoute, isLoading } = usePermissions()
 
   const filteredNavItems = React.useMemo(() => {
-    if (isLoading) return navItems // Evita layout shift ou sumiço temporário
-
-    return navItems.filter(item => {
-      // Para itens com submenus, checa se tem acesso ao modulo principal
-      // Não caso de Financeiro, Configuracoes, CRM, etc, usamos a URL padrao ou titulo para checar
-      let basePath = item.url
-      if (!basePath && item.items && item.items.length > 0) {
-        // Pega a URL do primeiro submenu para testar
-        const firstUrl = item.items[0].url || ""
-        basePath = firstUrl.split("?")[0]
-      }
-      return canAccessRoute(basePath || "/")
-    })
+    if (isLoading) return []
+    return filterNavigationItems(navItems, canAccessRoute)
   }, [canAccessRoute, isLoading])
 
   return (

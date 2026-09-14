@@ -3,22 +3,17 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
 import { PERMISSION_CATALOG, TEMPLATES, ADMIN_TEMPLATE, PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
 import { tenantRolePermissionWhere } from '@/lib/auth/admin-tenant-security';
-
-function containsOnlyCatalogPermissions(permissions: { module: string; action: string }[]) {
-  const catalog = new Set(PERMISSION_CATALOG.map(permission => `${permission.module}:${permission.action}`));
-  return permissions.every(permission => catalog.has(`${permission.module}:${permission.action}`));
-}
+import { normalizePermissionMatrix } from './permission-matrix';
 
 export async function getPermissionCatalogAction() {
-  const session = await requirePermission('PERMISSOES', 'VIEW');
+  await requirePermission('GRUPOS_USUARIOS', 'VIEW');
   return { success: true, data: serializePrisma(PERMISSION_CATALOG) };
 }
 
 export async function getRolePermissionsAction(roleId: string) {
-  const session = await requirePermission('PERMISSOES', 'VIEW');
+  const session = await requirePermission('GRUPOS_USUARIOS', 'VIEW');
   
   try {
     const role = await prisma.role.findFirst({
@@ -35,44 +30,11 @@ export async function getRolePermissionsAction(roleId: string) {
   }
 }
 
-/**
- * Helper to ensure we don't break the system by removing critical admin permissions
- * from the last admin role.
- */
-async function ensureAdminPermissionsProtection(companyId: string, roleId: string, incomingPermissions: { module: string, action: string, allowed: boolean }[]) {
-  // Find all ACTIVE admin roles
-  const activeAdminRoles = await prisma.role.findMany({
-    where: { companyId, isAdmin: true, status: 'ACTIVE' }
-  });
-
-  const isCurrentRoleActiveAdmin = activeAdminRoles.some(r => r.id === roleId);
-
-  if (isCurrentRoleActiveAdmin && activeAdminRoles.length === 1) {
-    // This is the last active admin role.
-    // We must ensure it doesn't lose critical permissions.
-    const criticalPermissions = [
-      { module: 'PERMISSOES', action: 'UPDATE' },
-      { module: 'USUARIOS', action: 'UPDATE' },
-      { module: 'GRUPOS_USUARIOS', action: 'UPDATE' },
-      { module: 'CONFIGURACOES', action: 'VIEW' }
-    ];
-
-    for (const cp of criticalPermissions) {
-      const isAllowed = incomingPermissions.some(p => p.module === cp.module && p.action === cp.action && p.allowed);
-      if (!isAllowed) {
-        throw new Error(`Proteção de Segurança: Não é possível remover a permissão ${cp.module}.${cp.action} do único grupo de Administrador ativo no sistema.`);
-      }
-    }
-  }
-}
-
 export async function updateRolePermissionsAction(roleId: string, permissions: { module: string, action: string, allowed: boolean }[]) {
-  const session = await requirePermission('PERMISSOES', 'UPDATE');
+  const session = await requirePermission('GRUPOS_USUARIOS', 'UPDATE');
 
   try {
-    if (!containsOnlyCatalogPermissions(permissions)) {
-      return { success: false, error: 'Matriz de permissões inválida.' };
-    }
+    const allowedPermissions = normalizePermissionMatrix(permissions);
     const role = await prisma.role.findFirst({
       where: { id: roleId, companyId: session.companyId }
     });
@@ -84,46 +46,44 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
       return { success: false, error: 'Apenas administradores podem alterar permissões de grupos administrativos.' };
     }
 
-    await ensureAdminPermissionsProtection(session.companyId, roleId, permissions);
+    if (role.isAdmin) {
+      return { success: true };
+    }
 
     await prisma.$transaction(async (tx) => {
-      // 1. Delete all existing permissions for this role
       await tx.permission.deleteMany({
         where: tenantRolePermissionWhere(roleId, session.companyId)
       });
 
-      // 2. Insert the new ones that are allowed
-      const allowedPermissions = permissions.filter(p => p.allowed).map(p => ({
-        roleId,
-        module: p.module,
-        action: p.action,
-        allowed: true
-      }));
-
       if (allowedPermissions.length > 0) {
         await tx.permission.createMany({
-          data: allowedPermissions
+          data: allowedPermissions.map(permission => ({ roleId, ...permission }))
         });
       }
 
-      await writeActivityLog({
-        companyId: session.companyId,
-        userId: session.userId,
-        action: 'UPDATE',
-        module: 'PERMISSOES',
-        recordId: roleId,
-        details: `Permissões do grupo ${role.name} atualizadas (Matriz salva).`,
+      await tx.activityLog.create({
+        data: {
+          companyId: session.companyId,
+          userId: session.userId,
+          action: 'UPDATE',
+          module: 'PERMISSOES',
+          recordId: roleId,
+          details: `Permissões do grupo ${role.name} atualizadas (Matriz salva).`,
+        },
       });
     });
 
     return { success: true };
   } catch (error: any) {
+    if (error instanceof Error && error.message === 'INVALID_PERMISSION_MATRIX') {
+      return { success: false, error: 'Matriz de permissões inválida.' };
+    }
     return { success: false, error: 'Erro ao atualizar permissões.' };
   }
 }
 
 export async function applyTemplateAction(roleId: string, templateKey: string) {
-  const session = await requirePermission('PERMISSOES', 'UPDATE');
+  const session = await requirePermission('GRUPOS_USUARIOS', 'UPDATE');
 
   try {
     const role = await prisma.role.findFirst({
@@ -135,6 +95,9 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
     }
     if (role.isAdmin && !session.isAdmin) {
       return { success: false, error: 'Apenas administradores podem alterar permissões de grupos administrativos.' };
+    }
+    if (role.isAdmin) {
+      return { success: true };
     }
 
     let templatePermissions: { module: string, action: string, allowed: boolean }[] = [];
@@ -147,14 +110,14 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
       return { success: false, error: 'Template não encontrado.' };
     }
 
-    await ensureAdminPermissionsProtection(session.companyId, roleId, templatePermissions);
+    const allowedPermissions = normalizePermissionMatrix(templatePermissions);
 
     await prisma.$transaction(async (tx) => {
       await tx.permission.deleteMany({
         where: tenantRolePermissionWhere(roleId, session.companyId)
       });
 
-      const dataToInsert = templatePermissions.map(p => ({
+      const dataToInsert = allowedPermissions.map(p => ({
         roleId,
         module: p.module,
         action: p.action,
@@ -167,13 +130,15 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
         });
       }
 
-      await writeActivityLog({
-        companyId: session.companyId,
-        userId: session.userId,
-        action: 'UPDATE',
-        module: 'PERMISSOES',
-        recordId: roleId,
-        details: `Template ${templateKey} aplicado ao grupo ${role.name}.`,
+      await tx.activityLog.create({
+        data: {
+          companyId: session.companyId,
+          userId: session.userId,
+          action: 'UPDATE',
+          module: 'PERMISSOES',
+          recordId: roleId,
+          details: `Template ${templateKey} aplicado ao grupo ${role.name}.`,
+        },
       });
     });
 

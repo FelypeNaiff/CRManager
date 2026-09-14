@@ -10,11 +10,14 @@ import { Button } from '@/components/ui/button';
 import { ShieldAlert, Info, ShieldCheck, Search } from 'lucide-react';
 import { isFormDirty } from '@/lib/utils/form-utils';
 import { Input } from '@/components/ui/input';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId: string }> }) {
   const params = use(props.params);
   const router = useRouter();
   const { toast } = useToast();
+  const { can } = usePermissions();
+  const canUpdatePermissions = can('GRUPOS_USUARIOS', 'UPDATE');
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,7 +49,12 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
       if (roleRes.success && roleRes.data) {
         setRole(roleRes.data.role);
         
-        const permsMap: Record<string, boolean> = {};
+        const permsMap: Record<string, boolean> = Object.fromEntries(
+          (catRes.success && catRes.data ? catRes.data : []).map(permission => [
+            `${permission.module}:${permission.action}`,
+            !!roleRes.data.role.isAdmin,
+          ])
+        );
         roleRes.data.permissions.forEach((p: any) => {
           if (p.allowed) permsMap[`${p.module}:${p.action}`] = true;
         });
@@ -91,10 +99,11 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
   const handleSave = async () => {
     setSaving(true);
     try {
-      const payload = Object.entries(permissions).map(([key, allowed]) => {
-        const [module, action] = key.split(':');
-        return { module, action, allowed };
-      });
+      const payload = catalog.map(({ module, action }) => ({
+        module,
+        action,
+        allowed: !!permissions[`${module}:${action}`],
+      }));
 
       const res = await updateRolePermissionsAction(params.grupoId, payload);
       
@@ -163,7 +172,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
           ]}
         />
         
-        <div className="flex flex-col items-end gap-2 shrink-0">
+        {!role.isAdmin && canUpdatePermissions && <div className="flex flex-col items-end gap-2 shrink-0">
           <div className="text-sm font-medium text-slate-500 mb-1">Aplicar Template Rápido:</div>
           <div className="flex flex-wrap gap-2 justify-end">
             <Button variant="outline" size="sm" onClick={() => handleApplyTemplate('VENDEDOR')} disabled={applying}>Vendedor</Button>
@@ -172,14 +181,14 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
             <Button variant="outline" size="sm" onClick={() => handleApplyTemplate('CONSULTA')} disabled={applying}>Só Consulta</Button>
             <Button variant="default" className="bg-rose-900 text-rose-50 hover:bg-rose-950" size="sm" onClick={() => handleApplyTemplate('ADMIN')} disabled={applying}>Admin Full</Button>
           </div>
-        </div>
+        </div>}
       </div>
 
       {role.isAdmin && (
         <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 flex items-start gap-3">
           <ShieldAlert className="w-5 h-5 text-amber-600 mt-0.5 shrink-0" />
           <div className="text-sm text-amber-900">
-            <strong>Proteção Ativada:</strong> Este é um grupo administrador. O sistema impedirá que você remova permissões críticas (como gerenciar permissões e usuários) se este for o único grupo administrador ativo, garantindo que o sistema não fique sem ROOT.
+            <strong>Acesso administrativo total:</strong> esta Role usa o bypass seguro de <code>isAdmin</code>. A matriz é somente informativa e não precisa armazenar registros individuais de Permission.
           </div>
         </div>
       )}
@@ -234,6 +243,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
                                 type="checkbox" 
                                 className="rounded border-slate-300 text-primary focus:ring-primary h-3.5 w-3.5"
                                 checked={allChecked}
+                                disabled={role.isAdmin || !canUpdatePermissions}
                                 ref={input => { if (input) input.indeterminate = !allChecked && someChecked; }}
                                 onChange={(e) => handleToggleAllModule(moduleName, e.target.checked)}
                               />
@@ -260,6 +270,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
                                   type="checkbox" 
                                   className={`mt-0.5 rounded border-slate-300 focus:ring-primary ${p.critical ? 'text-rose-600 focus:ring-rose-600' : 'text-primary'}`}
                                   checked={isChecked}
+                                  disabled={role.isAdmin || !canUpdatePermissions}
                                   onChange={() => handleToggle(p.module, p.action)}
                                 />
                                 <div className="flex flex-col -mt-0.5">
@@ -292,7 +303,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
           <div className="text-sm font-medium text-slate-500">
             {Object.values(permissions).filter(Boolean).length} permissões concedidas.
           </div>
-          <ConfigFormActions
+          {!role.isAdmin && canUpdatePermissions && <ConfigFormActions
             isSaving={saving}
             isDirty={isDirty}
             onCancel={() => {
@@ -300,7 +311,7 @@ export default function MatrizPermissoesPage(props: { params: Promise<{ grupoId:
             }}
             onSave={handleSave}
             saveLabel="Salvar Matriz"
-          />
+          />}
         </div>
       </div>
     </div>

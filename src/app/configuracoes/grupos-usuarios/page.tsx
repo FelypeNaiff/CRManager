@@ -11,9 +11,11 @@ import RoleFormModal from '@/components/users/role-form-modal';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import Link from 'next/link';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function GruposUsuariosPage() {
   const { toast } = useToast();
+  const { can } = usePermissions();
   const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -60,10 +62,6 @@ export default function GruposUsuariosPage() {
     setIsFormOpen(true);
   };
 
-  const handleNãotImplemented = () => {
-    toast({ title: 'Aviso', description: 'Visualizar Permissões em breve.' });
-  };
-
   const filteredRoles = roles.filter(role => 
     role.name.toLowerCase().includes(searchQuery.toLowerCase())
   );
@@ -77,14 +75,14 @@ export default function GruposUsuariosPage() {
           breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Grupos' }]}
         />
         <div className="flex items-center gap-3 self-start sm:self-auto">
-          <Button variant="secondary" asChild className="bg-rose-900 text-rose-50 hover:bg-rose-950">
+          {can('USUARIOS', 'VIEW') && <Button variant="secondary" asChild className="bg-rose-900 text-rose-50 hover:bg-rose-950">
             <Link href="/configuracoes/usuarios">
               <Users className="h-4 w-4 mr-2" /> Usuários
             </Link>
-          </Button>
-          <Button onClick={handleOpenCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+          </Button>}
+          {can('GRUPOS_USUARIOS', 'CREATE') && <Button onClick={handleOpenCreate} className="bg-emerald-600 hover:bg-emerald-700 text-white">
             <Plus className="mr-2 h-4 w-4" /> Nãovo Grupo
-          </Button>
+          </Button>}
         </div>
       </div>
 
@@ -154,12 +152,12 @@ export default function GruposUsuariosPage() {
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="ghost" size="icon" onClick={handleNãotImplemented} title="Permissões">
-                          <KeyRound className="h-4 w-4 text-purple-600" />
+                        <Button variant="ghost" size="icon" asChild title="Permissões">
+                          <Link href={`/configuracoes/grupos-usuarios/${role.id}/permissoes`}><KeyRound className="h-4 w-4 text-purple-600" /></Link>
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role.id)} title="Editar Grupo">
+                        {can('GRUPOS_USUARIOS', 'UPDATE') && <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role.id)} title="Editar Grupo">
                           <Edit3 className="h-4 w-4 text-amber-600" />
-                        </Button>
+                        </Button>}
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>

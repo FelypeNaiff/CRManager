@@ -20,24 +20,39 @@ const RoleFormSchema = z.object({
  * Ensures there's always at least one active admin role in the company.
  * Throws an error if the operation would leave the company without any active admin role.
  */
-async function ensureAdminProtection(companyId: string, roleIdBeingModified?: string, newIsAdmin?: boolean, newStatus?: string) {
+async function ensureAdminProtection(
+  db: any,
+  companyId: string,
+  actorRoleId: string,
+  roleIdBeingModified?: string,
+  newIsAdmin?: boolean,
+  newStatus?: string,
+) {
   // If the role being modified is still going to be an active admin, we are safe.
   if (newIsAdmin === true && newStatus === 'ACTIVE') {
     return;
   }
 
   // Find all ACTIVE admin roles for this company
-  const activeAdminRoles = await prisma.role.findMany({
+  const activeAdminRoles = await db.role.findMany({
     where: { companyId, isAdmin: true, status: 'ACTIVE' }
   });
 
   // If we are modifying an existing role that was an admin, and we are removing its admin status or deactivating it
   if (roleIdBeingModified) {
-    const roleIsCurrentlyActiveAdmin = activeAdminRoles.some(r => r.id === roleIdBeingModified);
+    const roleIsCurrentlyActiveAdmin = activeAdminRoles.some((role: { id: string }) => role.id === roleIdBeingModified);
     if (roleIsCurrentlyActiveAdmin) {
-      if (activeAdminRoles.length <= 1) {
-        throw new Error('Operação bloqueada: A empresa deve ter no mínimo 1 grupo de Administrador ativo.');
-      }
+      if (actorRoleId === roleIdBeingModified) throw new Error('ADMIN_SELF_LOCKOUT');
+      const otherActiveAdminUsers = await db.user.count({
+        where: {
+          companyId,
+          status: 'ACTIVE',
+          permitirAcesso: true,
+          roleId: { not: roleIdBeingModified },
+          role: { is: { isAdmin: true, status: 'ACTIVE' } },
+        },
+      });
+      if (otherActiveAdminUsers === 0) throw new Error('LAST_ADMIN');
     }
   }
 }
@@ -163,20 +178,27 @@ export async function updateRoleAction(id: string, rawData: any) {
       return { success: false, error: 'Já existe outro grupo com este nome.' };
     }
 
-    // Admin protection
-    await ensureAdminProtection(session.companyId, id, validatedData.isAdmin, validatedData.status);
-
-    const updatedRole = await prisma.role.update({
-      where: tenantEntityWhere(id, session.companyId),
-      data: {
-        name: validatedData.name,
-        description: validatedData.description,
-        status: validatedData.status,
-        isAdmin: validatedData.isAdmin,
-        defaultCommissionRate: validatedData.defaultCommissionRate,
-        defaultMaxDiscountPercentage: validatedData.defaultMaxDiscountPercentage,
-      },
-    });
+    const updatedRole = await prisma.$transaction(async (tx) => {
+      await ensureAdminProtection(
+        tx,
+        session.companyId,
+        session.roleId,
+        id,
+        validatedData.isAdmin,
+        validatedData.status,
+      );
+      return tx.role.update({
+        where: tenantEntityWhere(id, session.companyId),
+        data: {
+          name: validatedData.name,
+          description: validatedData.description,
+          status: validatedData.status,
+          isAdmin: validatedData.isAdmin,
+          defaultCommissionRate: validatedData.defaultCommissionRate,
+          defaultMaxDiscountPercentage: validatedData.defaultMaxDiscountPercentage,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
 
     let details = `Atualizou o grupo: ${updatedRole.name}.`;
     if (existingRole.status !== updatedRole.status) {
@@ -205,6 +227,12 @@ export async function updateRoleAction(id: string, rawData: any) {
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
+    }
+    if (error instanceof Error && error.message === 'ADMIN_SELF_LOCKOUT') {
+      return { success: false, error: 'Você não pode remover o próprio acesso administrativo.' };
+    }
+    if (error instanceof Error && error.message === 'LAST_ADMIN') {
+      return { success: false, error: 'O tenant deve manter ao menos um usuário administrador ativo.' };
     }
     return { success: false, error: 'Erro ao atualizar grupo.' };
   }

@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getUserByIdAction, createUserAction, updateUserAction } from '@/lib/users/user-actions';
+import { getAssignableRolesAction, getUserByIdAction, createUserAction, updateUserAction } from '@/lib/users/user-actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { ConfigInputField, ConfigSelectField, ConfigTextareaField, ConfigFormActions } from '@/components/configuracoes/config-ui';
 import { Loader2 } from 'lucide-react';
@@ -26,6 +26,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
     email: '',
     cargo: '',
     status: 'ACTIVE',
+    roleId: '',
     maxDiscountPercentage: '',
     pin: '',
     confirmPin: '',
@@ -34,9 +35,11 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
 
   const [form, setForm] = useState(defaultForm);
   const [initialData, setInitialData] = useState<any>(null);
+  const [roles, setRoles] = useState<Array<{ id: string; name: string; isAdmin: boolean }>>([]);
 
   useEffect(() => {
     if (isOpen) {
+      void loadRoles();
       if (isEditing) {
         loadUser();
       } else {
@@ -46,6 +49,15 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, userId]);
+
+  const loadRoles = async () => {
+    const result = await getAssignableRolesAction();
+    if (result.success && result.data) {
+      setRoles(result.data);
+    } else {
+      toast({ title: 'Erro', description: result.error || 'Falha ao carregar perfis de permissões.', variant: 'destructive' });
+    }
+  };
 
   const loadUser = async () => {
     if (!userId) return;
@@ -59,6 +71,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
           email: u.email, // email is usually readonly on edit, but let's just populate
           cargo: u.cargo || '',
           status: u.status,
+          roleId: u.roleId || '',
           maxDiscountPercentage: u.maxDiscountPercentage !== null ? String(u.maxDiscountPercentage) : '',
           pin: '', // Never populate pin on edit
           confirmPin: '',
@@ -96,6 +109,9 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
         return toast({ title: 'Atenção', description: 'A confirmação do PIN não confere', variant: 'destructive' });
       }
     }
+    if (!form.roleId) {
+      return toast({ title: 'Atenção', description: 'Selecione um perfil de permissões.', variant: 'destructive' });
+    }
 
     setSaving(true);
     try {
@@ -104,6 +120,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
         email: form.email,
         cargo: form.cargo,
         status: form.status,
+        roleId: form.roleId,
         maxDiscountPercentage: form.maxDiscountPercentage !== '' ? Number(form.maxDiscountPercentage) : null,
         observacoes: form.observacoes,
         ...( !isEditing && { pin: form.pin } )
@@ -183,6 +200,17 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
                 ]}
               />
             </div>
+
+            <ConfigSelectField
+              label="Perfil de permissões *"
+              id="roleId"
+              value={form.roleId}
+              onValueChange={(value) => setForm({ ...form, roleId: value })}
+              options={roles.map((role) => ({
+                label: role.isAdmin ? `${role.name} (Administrador)` : role.name,
+                value: role.id,
+              }))}
+            />
 
             <div className="grid grid-cols-2 gap-4">
               <ConfigInputField

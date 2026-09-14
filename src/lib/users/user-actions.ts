@@ -8,6 +8,7 @@ import { hashPin as hashAuthorizationPin, generateTemporaryPin, validatePin } fr
 import { hashPin as hashAccessPin } from '@/lib/auth/pin';
 import { z } from 'zod';
 import { tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
+import { assertUserRoleAssignmentAllowed } from './user-role-protection';
 
 const UserCreateSchema = z.object({
   name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
@@ -15,6 +16,7 @@ const UserCreateSchema = z.object({
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   maxDiscountPercentage: z.number().min(0).max(100).optional().nullable(),
+  roleId: z.string().min(1, 'Perfil de permissões é obrigatório'),
   pin: z.string().regex(/^\d{4}$/, 'PIN de acesso deve conter exatamente 4 dígitos').optional().nullable(),
   observacoes: z.string().optional().nullable(),
 });
@@ -24,6 +26,7 @@ const UserUpdateSchema = z.object({
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).optional(),
   maxDiscountPercentage: z.number().min(0).max(100).optional().nullable(),
+  roleId: z.string().min(1, 'Perfil de permissões é obrigatório').optional(),
   observacoes: z.string().optional().nullable(),
 });
 
@@ -54,6 +57,25 @@ export async function getUsersAction() {
     return { success: true, data: serializePrisma(users) };
   } catch (error: any) {
     return { success: false, error: 'Erro ao buscar usuários.' };
+  }
+}
+
+/** Lists active tenant Roles that may be assigned through the User form. */
+export async function getAssignableRolesAction() {
+  const session = await requirePermission('USUARIOS', 'VIEW');
+  try {
+    const roles = await prisma.role.findMany({
+      where: {
+        companyId: session.companyId,
+        status: 'ACTIVE',
+        ...(!session.isAdmin ? { isAdmin: false } : {}),
+      },
+      select: { id: true, name: true, isAdmin: true },
+      orderBy: { name: 'asc' },
+    });
+    return { success: true, data: serializePrisma(roles) };
+  } catch {
+    return { success: false, error: 'Erro ao buscar perfis de permissões.' };
   }
 }
 
@@ -108,10 +130,21 @@ export async function createUserAction(rawData: any) {
       return { success: false, error: 'PIN de acesso deve conter exatamente 4 dígitos.' };
     }
     const pinAccessHash = await hashAccessPin(validatedData.pin);
+    const role = await prisma.role.findFirst({
+      where: { id: validatedData.roleId, companyId: session.companyId, status: 'ACTIVE' },
+      select: { id: true, isAdmin: true },
+    });
+    if (!role) {
+      return { success: false, error: 'Perfil de permissões inválido ou inativo.' };
+    }
+    if (role.isAdmin && !session.isAdmin) {
+      return { success: false, error: 'Apenas administradores podem atribuir um perfil administrativo.' };
+    }
 
     const newUser = await prisma.user.create({
       data: {
         companyId: session.companyId,
+        roleId: role.id,
         name: validatedData.name,
         email: validatedData.email,
         cargo: validatedData.cargo,
@@ -178,22 +211,61 @@ export async function updateUserAction(id: string, rawData: any) {
 
     const existingUser = await prisma.user.findFirst({
       where: tenantEntityWhere(id, session.companyId),
+      include: { role: { select: { id: true, isAdmin: true, status: true } } },
     });
 
     if (!existingUser) {
       return { success: false, error: 'Usuário não encontrado.' };
     }
 
-    const updatedUser = await prisma.user.update({
-      where: tenantEntityWhere(id, session.companyId),
-      data: {
-        name: validatedData.name,
-        cargo: validatedData.cargo,
-        status: validatedData.status,
-        permitirAcesso: validatedData.status === 'ACTIVE' ? true : existingUser.permitirAcesso,
-        maxDiscountPercentage: validatedData.maxDiscountPercentage,
-      },
-    });
+    const targetRoleId = validatedData.roleId ?? existingUser.roleId;
+    if (!targetRoleId) {
+      return { success: false, error: 'Perfil de permissões é obrigatório.' };
+    }
+
+    const updatedUser = await prisma.$transaction(async (tx) => {
+      const targetRole = await tx.role.findFirst({
+        where: { id: targetRoleId, companyId: session.companyId, status: 'ACTIVE' },
+        select: { id: true, isAdmin: true },
+      });
+      if (!targetRole) throw new Error('INVALID_ROLE');
+      const nextStatus = validatedData.status ?? existingUser.status;
+      const removesAdministrativeAccess = !!existingUser.role?.isAdmin
+        && (nextStatus !== 'ACTIVE' || !targetRole.isAdmin);
+      let otherActiveAdmins = 0;
+      if (removesAdministrativeAccess) {
+        otherActiveAdmins = await tx.user.count({
+          where: {
+            companyId: session.companyId,
+            id: { not: id },
+            status: 'ACTIVE',
+            permitirAcesso: true,
+            role: { is: { isAdmin: true, status: 'ACTIVE' } },
+          },
+        });
+      }
+      assertUserRoleAssignmentAllowed({
+        actorIsAdmin: session.isAdmin,
+        actorUserId: session.userId,
+        targetUserId: id,
+        currentRoleIsAdmin: !!existingUser.role?.isAdmin,
+        nextRoleIsAdmin: targetRole.isAdmin,
+        nextStatus,
+        otherActiveAdmins,
+      });
+
+      return tx.user.update({
+        where: tenantEntityWhere(id, session.companyId),
+        data: {
+          name: validatedData.name,
+          cargo: validatedData.cargo,
+          status: validatedData.status,
+          roleId: targetRole.id,
+          permitirAcesso: validatedData.status === 'ACTIVE' ? true : existingUser.permitirAcesso,
+          maxDiscountPercentage: validatedData.maxDiscountPercentage,
+        },
+      });
+    }, { isolationLevel: 'Serializable' });
 
     let details = `Atualizou dados do usuário: ${updatedUser.name}.`;
     if (existingUser.status !== updatedUser.status) {
@@ -213,6 +285,18 @@ export async function updateUserAction(id: string, rawData: any) {
   } catch (error: any) {
     if (error instanceof z.ZodError) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
+    }
+    if (error instanceof Error && error.message === 'INVALID_ROLE') {
+      return { success: false, error: 'Perfil de permissões inválido ou inativo.' };
+    }
+    if (error instanceof Error && error.message === 'ADMIN_ROLE_FORBIDDEN') {
+      return { success: false, error: 'Apenas administradores podem atribuir um perfil administrativo.' };
+    }
+    if (error instanceof Error && error.message === 'ADMIN_SELF_LOCKOUT') {
+      return { success: false, error: 'Você não pode remover o próprio acesso administrativo.' };
+    }
+    if (error instanceof Error && error.message === 'LAST_ADMIN') {
+      return { success: false, error: 'O tenant deve manter ao menos um usuário administrador ativo.' };
     }
     return { success: false, error: 'Erro ao atualizar usuário.' };
   }

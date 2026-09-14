@@ -11,9 +11,11 @@ import UserFormModal from '@/components/users/user-form-modal';
 import ResetPinDialog from '@/components/users/reset-pin-dialog';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { usePermissions } from '@/hooks/use-permissions';
 
 export default function UsuariosPage() {
   const { toast } = useToast();
+  const { can } = usePermissions();
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -81,9 +83,9 @@ export default function UsuariosPage() {
           description="Gerencie os acessos, permissões, limites e PINs de acesso da sua equipe."
           breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Usuários' }]}
         />
-        <Button onClick={handleOpenCreate} className="self-start sm:self-auto">
+        {can('USUARIOS', 'CREATE') && <Button onClick={handleOpenCreate} className="self-start sm:self-auto">
           <Plus className="mr-2 h-4 w-4" /> Nãovo Usuário
-        </Button>
+        </Button>}
       </div>
 
       <div className="bg-white p-4 rounded-xl border shadow-sm space-y-4">
@@ -144,12 +146,12 @@ export default function UsuariosPage() {
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenResetPin(user.id)} title="Redefinir PIN de acesso">
+                        {can('USUARIOS', 'RESET_PIN') && <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenResetPin(user.id)} title="Redefinir PIN de acesso">
                           <KeyRound className="h-4 w-4 text-orange-600" />
-                        </Button>
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">
+                        </Button>}
+                        {can('USUARIOS', 'UPDATE') && <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">
                           <Edit2 className="h-4 w-4" />
-                        </Button>
+                        </Button>}
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>
