@@ -32,7 +32,7 @@ export class CommercialReportService {
   async getDashboardMetrics(filters: ReportFilters) {
     const dateFilter = this.getDateFilter(filters);
     
-    const aggregated = await prisma.sale.aggregate({
+    const aggregatedPromise = prisma.sale.aggregate({
       where: {
         companyId: filters.companyId,
         status: { not: "CANCELLED" },
@@ -49,16 +49,11 @@ export class CommercialReportService {
       }
     });
 
-    const grossRevenue = aggregated._sum.subtotal ? Number(aggregated._sum.subtotal) : 0;
-    const totalDiscount = aggregated._sum.discountAmount ? Number(aggregated._sum.discountAmount) : 0;
-    const netRevenue = aggregated._sum.totalAmount ? Number(aggregated._sum.totalAmount) : 0;
-    const totalSalesCount = aggregated._count.id || 0;
-
     const sellerCondition = filters.sellerId ? Prisma.sql`AND s.seller_id = ${filters.sellerId}` : Prisma.empty;
     const startCondition = filters.startDate ? Prisma.sql`AND s.created_at >= ${filters.startDate}` : Prisma.empty;
     const endCondition = filters.endDate ? Prisma.sql`AND s.created_at <= ${filters.endDate}` : Prisma.empty;
 
-    const costRes = await prisma.$queryRaw<any[]>`
+    const costPromise = prisma.$queryRaw<any[]>`
       SELECT COALESCE(SUM(si.cost_price_at_sale * si.quantity), 0) as "totalCost"
       FROM sale_items si
       JOIN sales s ON si.sale_id = s.id
@@ -68,9 +63,7 @@ export class CommercialReportService {
         ${startCondition}
         ${endCondition}
     `;
-    const totalCost = Number(costRes[0]?.totalCost || 0);
-
-    const paymentsGrouped = await prisma.salePayment.groupBy({
+    const paymentsPromise = prisma.salePayment.groupBy({
       by: ['paymentMethodId'],
       where: {
         sale: {
@@ -86,12 +79,7 @@ export class CommercialReportService {
       }
     });
 
-    const paymentsByType: Record<string, number> = {};
-    paymentsGrouped.forEach(pg => {
-      paymentsByType[pg.paymentMethodId] = pg._sum.amount ? Number(pg._sum.amount) : 0;
-    });
-
-    const exchangesRes = await prisma.$queryRaw<any[]>`
+    const exchangesPromise = prisma.$queryRaw<any[]>`
       SELECT COUNT(se.id) as "count"
       FROM sale_exchanges se
       JOIN sales s ON se.original_sale_id = s.id
@@ -100,9 +88,7 @@ export class CommercialReportService {
         ${startCondition}
         ${endCondition}
     `;
-    const exchangesCount = Number(exchangesRes[0]?.count || 0);
-
-    const returnsRes = await prisma.$queryRaw<any[]>`
+    const returnsPromise = prisma.$queryRaw<any[]>`
       SELECT COUNT(sr.id) as "count"
       FROM sale_returns sr
       JOIN sales s ON sr.original_sale_id = s.id
@@ -111,7 +97,26 @@ export class CommercialReportService {
         ${startCondition}
         ${endCondition}
     `;
+    const [aggregated, costRes, paymentsGrouped, exchangesRes, returnsRes] = await Promise.all([
+      aggregatedPromise,
+      costPromise,
+      paymentsPromise,
+      exchangesPromise,
+      returnsPromise,
+    ]);
+
+    const grossRevenue = aggregated._sum.subtotal ? Number(aggregated._sum.subtotal) : 0;
+    const totalDiscount = aggregated._sum.discountAmount ? Number(aggregated._sum.discountAmount) : 0;
+    const netRevenue = aggregated._sum.totalAmount ? Number(aggregated._sum.totalAmount) : 0;
+    const totalSalesCount = aggregated._count.id || 0;
+    const totalCost = Number(costRes[0]?.totalCost || 0);
+    const exchangesCount = Number(exchangesRes[0]?.count || 0);
     const returnsCount = Number(returnsRes[0]?.count || 0);
+
+    const paymentsByType: Record<string, number> = {};
+    paymentsGrouped.forEach(pg => {
+      paymentsByType[pg.paymentMethodId] = pg._sum.amount ? Number(pg._sum.amount) : 0;
+    });
 
     const totalReturns = returnsCount;
     const totalExchanges = exchangesCount;

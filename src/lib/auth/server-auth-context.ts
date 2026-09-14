@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { createClient } from '@/lib/supabase/server';
 import { cookies } from 'next/headers';
+import { cache } from 'react';
 import {
   getProfileSessionSecret,
   PROFILE_SESSION_COOKIE,
@@ -222,10 +223,10 @@ export async function resolveServerAuthContextForTesting(
 }
 
 /**
- * Resolves the current trusted server context without cache. Supabase validates
- * identity on every call and Prisma reloads authorization immediately.
+ * Resolves the current trusted server context once per React server request.
+ * A new request receives a fresh cache scope and reloads authorization.
  */
-export async function resolveBaseServerAuthContext(): Promise<ServerAuthContext> {
+const resolveBaseServerAuthContextForRequest = cache(async (): Promise<ServerAuthContext> => {
   return resolveContextFromDependencies({
     async getAuthenticatedIdentity() {
       const supabase = await createClient();
@@ -249,6 +250,10 @@ export async function resolveBaseServerAuthContext(): Promise<ServerAuthContext>
       });
     },
   });
+});
+
+export async function resolveBaseServerAuthContext(): Promise<ServerAuthContext> {
+  return resolveBaseServerAuthContextForRequest();
 }
 
 async function resolveSelectedContext(
@@ -285,7 +290,7 @@ export async function resolveSelectedServerAuthContextForTesting(
   return resolveSelectedContext(baseContext, selectorToken, secret, dependencies);
 }
 
-export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
+const resolveServerAuthContextForRequest = cache(async (): Promise<ServerAuthContext> => {
   const baseContext = await resolveBaseServerAuthContext();
 
   const cookieStore = await cookies();
@@ -305,4 +310,8 @@ export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
       },
     }
   );
+});
+
+export async function resolveServerAuthContext(): Promise<ServerAuthContext> {
+  return resolveServerAuthContextForRequest();
 }

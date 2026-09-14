@@ -158,6 +158,18 @@ export async function getCustomers(params?: GetCustomersParams) {
   }
 }
 
+export async function getActiveCustomersCount() {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  try {
+    const count = await prisma.customer.count({
+      where: { companyId: session.companyId, status: 'ativo' },
+    });
+    return { success: true as const, data: count };
+  } catch {
+    return { success: false as const, error: 'Erro ao contar clientes ativos.' };
+  }
+}
+
 
 export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
   const session = await requirePermission('CLIENTES', 'CREATE');
@@ -572,7 +584,17 @@ export async function getChildren(customerId?: string) {
       } : {
         customer: { companyId: session.companyId }
       },
-      include: { customer: true },
+      select: {
+        id: true,
+        customerId: true,
+        name: true,
+        birthDate: true,
+        gender: true,
+        shoeSize: true,
+        clothingSize: true,
+        notes: true,
+        customer: { select: { name: true } },
+      },
       orderBy: { name: 'asc' },
     });
     return { success: true, data: serializePrisma(list) };
@@ -798,7 +820,7 @@ export async function getCustomerExchangeReturns(customerId: string) {
 
 const getCachedSegmentationData = unstable_cache(
   async (companyId: string) => {
-    const salesGrouped = await prisma.sale.groupBy({
+    const salesGroupedPromise = prisma.sale.groupBy({
       by: ['customerId'],
       where: {
         companyId: companyId,
@@ -816,14 +838,7 @@ const getCachedSegmentationData = unstable_cache(
       }
     });
 
-    const salesMap = new Map<string, typeof salesGrouped[0]>();
-    salesGrouped.forEach(sg => {
-      if (sg.customerId) {
-        salesMap.set(sg.customerId, sg);
-      }
-    });
-
-    const clients = await prisma.customer.findMany({
+    const clientsPromise = prisma.customer.findMany({
       where: { companyId: companyId, status: { not: 'arquivado' } },
       include: {
         children: true,
@@ -832,8 +847,20 @@ const getCachedSegmentationData = unstable_cache(
       }
     });
 
-    const tags = await prisma.customerTag.findMany({
+    const tagsPromise = prisma.customerTag.findMany({
       where: { companyId: companyId }
+    });
+
+    const [salesGrouped, clients, tags] = await Promise.all([
+      salesGroupedPromise,
+      clientsPromise,
+      tagsPromise,
+    ]);
+    const salesMap = new Map<string, typeof salesGrouped[0]>();
+    salesGrouped.forEach(sg => {
+      if (sg.customerId) {
+        salesMap.set(sg.customerId, sg);
+      }
     });
 
     const stats: Record<string, any> = {};

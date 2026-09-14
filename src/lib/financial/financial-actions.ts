@@ -14,6 +14,7 @@ import {
 } from './financial-schemas';
 import { financialTenantWhere } from './financial-tenant-security';
 import { publicActionError } from '@/lib/auth/public-action-error';
+import { serializeFinancialDashboardData } from './dashboard-serialization';
 
 async function validateFinancialTransactionRelations(
   tx: Prisma.TransactionClient,
@@ -637,12 +638,13 @@ export async function getFinancialDashboardSummary() {
     const totalBalance = bankAccounts.reduce((sum, b) => sum + Number(b.currentBalance), 0);
     const income = Number(monthlyIncome._sum.amount ?? 0);
     const expense = Number(monthlyExpense._sum.amount ?? 0);
+    const serialized = serializeFinancialDashboardData(bankAccounts, openCashRegister);
 
     return {
       success: true,
       data: {
         totalBalance,
-        bankAccounts,
+        bankAccounts: serialized.bankAccounts,
         monthlyIncome: income,
         monthlyExpense: expense,
         monthlyResult: income - expense,
@@ -650,7 +652,7 @@ export async function getFinancialDashboardSummary() {
           count: overdueReceivables._count,
           total: Number(overdueReceivables._sum.remainingAmount ?? 0),
         },
-        openCashRegister,
+        openCashRegister: serialized.openCashRegister,
       },
     };
   } catch (error: any) {

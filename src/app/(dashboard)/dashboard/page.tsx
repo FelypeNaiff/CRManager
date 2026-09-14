@@ -15,10 +15,7 @@ import {
 } from "recharts"
 import Link from "next/link"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { getCustomers } from "@/lib/crm/actions"
-import { getFinancialDashboardSummary, getFinancialTransactions } from "@/lib/financial/financial-actions"
-import { getDashboardMetricsAction } from "@/lib/reports/actions/commercial-report-actions"
-import { listSalesAction } from "@/lib/sales/actions/list-sales-action"
+import { getMainDashboardDataAction } from "@/lib/dashboard/dashboard-actions"
 
 export default function DashboardPage() {
   const { activeProfile } = useProfile()
@@ -43,14 +40,26 @@ export default function DashboardPage() {
         const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0)
         const endOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59)
 
-        // 1. Clientes Ativos
-        const customersRes = await getCustomers()
-        const activeCustomersCount = customersRes.success && customersRes.data 
-          ? customersRes.data.filter((c: any) => c.status === 'ativo').length
+        const sixMonthsAgo = new Date()
+        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
+        sixMonthsAgo.setDate(1)
+        sixMonthsAgo.setHours(0, 0, 0, 0)
+
+        const sevenDaysAgo = new Date()
+        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
+        sevenDaysAgo.setHours(0, 0, 0, 0)
+
+        const dashboardRes = await getMainDashboardDataAction({
+          startOfToday,
+          endOfToday,
+          sixMonthsAgo: sixMonthsAgo.toISOString(),
+          sevenDaysAgo,
+        })
+        const activeCustomersCount = dashboardRes.activeCustomers.success
+          ? dashboardRes.activeCustomers.data
           : 0
 
-        // 2. Resumo Financeiro (Contas, Saldo, Receitas/Despesas do Mês)
-        const finSummaryRes = await getFinancialDashboardSummary()
+        const finSummaryRes = dashboardRes.financialSummary
         const financialSummary = finSummaryRes.success && finSummaryRes.data ? finSummaryRes.data : {
           totalBalance: 0,
           bankAccounts: [],
@@ -59,23 +68,10 @@ export default function DashboardPage() {
           overdueReceivables: { count: 0, total: 0 }
         }
 
-        // 3. Receitas Hoje
-        const metricsRes = await getDashboardMetricsAction({
-          companyId: activeProfile.empresaId,
-          startDate: startOfToday,
-          endDate: endOfToday
-        })
+        const metricsRes = dashboardRes.todayMetrics
         const todayRevenue = metricsRes.success && metricsRes.data ? metricsRes.data.grossRevenue : 0
 
-        // 4. Fluxo de Caixa (Últimos 6 meses)
-        const sixMonthsAgo = new Date()
-        sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 5)
-        sixMonthsAgo.setDate(1)
-        sixMonthsAgo.setHours(0, 0, 0, 0)
-
-        const txsRes = await getFinancialTransactions({
-          startDate: sixMonthsAgo.toISOString()
-        })
+        const txsRes = dashboardRes.transactions
 
         const monthsList: Array<{ name: string; monthNum: number; year: number; entradas: number; saidas: number }> = []
         for (let i = 5; i >= 0; i--) {
@@ -115,14 +111,7 @@ export default function DashboardPage() {
           })
         }
 
-        // 5. Vendas Recentes (Últimos 7 dias)
-        const sevenDaysAgo = new Date()
-        sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6)
-        sevenDaysAgo.setHours(0, 0, 0, 0)
-
-        const salesRes = await listSalesAction(activeProfile.empresaId, {
-          startDate: sevenDaysAgo
-        })
+        const salesRes = dashboardRes.recentSales
 
         const daysList: Array<{ name: string; dateStr: string; total: number }> = []
         for (let i = 6; i >= 0; i--) {
