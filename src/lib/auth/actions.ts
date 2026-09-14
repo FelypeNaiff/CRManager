@@ -96,6 +96,9 @@ function createProfileSelectionService(dependencies: ProfileSelectionDependencie
 
     async validateProfilePin(profileId: string, pin: string) {
       try {
+        if (!/^\d{4}$/.test(pin)) {
+          return { success: false as const, error: 'O PIN de acesso deve conter exatamente 4 dígitos.' };
+        }
         const base = await dependencies.resolveBaseContext();
         const user = await dependencies.findProfile(profileId, base.companyId, base.userId);
         if (!user || !isEligibleOperationalProfile(user, base)) {

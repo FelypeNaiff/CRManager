@@ -89,8 +89,8 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
       if (!form.email || !form.email.includes('@')) {
         return toast({ title: 'Atenção', description: 'E-mail inválido', variant: 'destructive' });
       }
-      if (!form.pin || form.pin.length < 4 || form.pin.length > 8) {
-        return toast({ title: 'Atenção', description: 'O PIN deve ter entre 4 e 8 dígitos', variant: 'destructive' });
+      if (!/^\d{4}$/.test(form.pin)) {
+        return toast({ title: 'Atenção', description: 'O PIN de acesso deve conter exatamente 4 dígitos', variant: 'destructive' });
       }
       if (form.pin !== form.confirmPin) {
         return toast({ title: 'Atenção', description: 'A confirmação do PIN não confere', variant: 'destructive' });
@@ -135,7 +135,7 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
         <DialogHeader>
           <DialogTitle>{isEditing ? 'Editar Usuário' : 'Nãovo Usuário'}</DialogTitle>
           <DialogDescription>
-            {isEditing ? 'Modifique os dados do usuário abaixo.' : 'Preencha os dados para criar um novo usuário e definir seu PIN operacional.'}
+            {isEditing ? 'Modifique os dados do usuário abaixo.' : 'Preencha os dados para criar um novo usuário e definir seu PIN de acesso ao perfil.'}
           </DialogDescription>
         </DialogHeader>
 
@@ -201,19 +201,19 @@ export default function UserFormModal({ isOpen, onClose, userId, onSuccess }: Us
             {!isEditing && (
               <div className="grid grid-cols-2 gap-4 bg-orange-50 p-4 rounded-md border border-orange-100">
                 <ConfigInputField
-                  label="PIN de Autorização *"
+                  label="PIN de Acesso *"
                   id="pin"
                   type="password"
-                  maxLength={8}
+                  maxLength={4}
                   value={form.pin}
                   onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '') })}
-                  description="Apenas números (4 a 8)"
+                  description="Exatamente 4 dígitos; usado na seleção de perfil"
                 />
                 <ConfigInputField
                   label="Confirmar PIN *"
                   id="confirmPin"
                   type="password"
-                  maxLength={8}
+                  maxLength={4}
                   value={form.confirmPin}
                   onChange={(e) => setForm({ ...form, confirmPin: e.target.value.replace(/\D/g, '') })}
                 />

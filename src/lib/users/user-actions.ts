@@ -4,7 +4,8 @@ import { serializePrisma } from '@/lib/serialize';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
 import { writeActivityLog } from '@/lib/auth/activity-log';
-import { hashPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-service';
+import { hashPin as hashAuthorizationPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-service';
+import { hashPin as hashAccessPin } from '@/lib/auth/pin';
 import { z } from 'zod';
 import { tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 
@@ -14,7 +15,7 @@ const UserCreateSchema = z.object({
   cargo: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   maxDiscountPercentage: z.number().min(0).max(100).optional().nullable(),
-  pin: z.string().min(4, 'PIN deve conter no mínimo 4 dígitos').max(8, 'PIN deve conter no máximo 8 dígitos').optional().nullable(),
+  pin: z.string().regex(/^\d{4}$/, 'PIN de acesso deve conter exatamente 4 dígitos').optional().nullable(),
   observacoes: z.string().optional().nullable(),
 });
 
@@ -103,10 +104,10 @@ export async function createUserAction(rawData: any) {
       return { success: false, error: 'Este e-mail já está em uso.' };
     }
 
-    let authorizationPinHash = null;
-    if (validatedData.pin) {
-      authorizationPinHash = await hashPin(validatedData.pin);
+    if (!validatedData.pin) {
+      return { success: false, error: 'PIN de acesso deve conter exatamente 4 dígitos.' };
     }
+    const pinAccessHash = await hashAccessPin(validatedData.pin);
 
     const newUser = await prisma.user.create({
       data: {
@@ -116,8 +117,7 @@ export async function createUserAction(rawData: any) {
         cargo: validatedData.cargo,
         status: validatedData.status,
         maxDiscountPercentage: validatedData.maxDiscountPercentage,
-        authorizationPinHash,
-        pinAccessHash: 'N/A', // Placeholder since login is not fully managed here yet according to requirements
+        pinAccessHash,
         permitirAcesso: validatedData.status === 'ACTIVE',
       },
     });
@@ -137,6 +137,34 @@ export async function createUserAction(rawData: any) {
       return { success: false, error: 'Dados inválidos. Verifique os campos preenchidos.' };
     }
     return { success: false, error: 'Erro ao criar usuário.' };
+  }
+}
+
+/** Define or replaces the four-digit PIN used to select an operational profile. */
+export async function resetUserAccessPinAction(userId: string, newPin: string) {
+  const session = await requirePermission('USUARIOS', 'RESET_PIN');
+  try {
+    if (!/^\d{4}$/.test(newPin)) {
+      return { success: false, error: 'PIN de acesso deve conter exatamente 4 dígitos.' };
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: tenantEntityWhere(userId, session.companyId),
+      select: { id: true },
+    });
+    if (!existingUser) {
+      return { success: false, error: 'Usuário não encontrado.' };
+    }
+
+    const pinAccessHash = await hashAccessPin(newPin);
+    await prisma.user.update({
+      where: tenantEntityWhere(userId, session.companyId),
+      data: { pinAccessHash },
+    });
+
+    return { success: true };
+  } catch {
+    return { success: false, error: 'Erro ao atualizar o PIN de acesso.' };
   }
 }
 
@@ -205,7 +233,7 @@ export async function resetUserPinAction(userId: string) {
     }
 
     const tempPin = generateTemporaryPin();
-    const hash = await hashPin(tempPin);
+    const hash = await hashAuthorizationPin(tempPin);
 
     await prisma.user.update({
       where: tenantEntityWhere(userId, session.companyId),
@@ -261,7 +289,7 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
       return { success: false, error: 'Nãovo PIN deve ter entre 4 e 8 dígitos.' };
     }
 
-    const newHash = await hashPin(newPin);
+    const newHash = await hashAuthorizationPin(newPin);
 
     await prisma.user.update({
       where: tenantEntityWhere(userId, session.companyId),

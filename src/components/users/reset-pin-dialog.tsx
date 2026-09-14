@@ -2,10 +2,11 @@
 
 import React, { useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { resetUserPinAction } from '@/lib/users/user-actions';
+import { resetUserAccessPinAction } from '@/lib/users/user-actions';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { AlertTriangle, KeyRound, CheckCircle2, Copy } from 'lucide-react';
+import { KeyRound } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 
 interface ResetPinDialogProps {
   isOpen: boolean;
@@ -16,18 +17,27 @@ interface ResetPinDialogProps {
 export default function ResetPinDialog({ isOpen, onClose, userId }: ResetPinDialogProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
-  const [generatedPin, setGeneratedPin] = useState<string | null>(null);
+  const [pin, setPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
 
   const handleReset = async () => {
     if (!userId) return;
+    if (!/^\d{4}$/.test(pin)) {
+      return toast({ title: 'Atenção', description: 'O PIN de acesso deve conter exatamente 4 dígitos.', variant: 'destructive' });
+    }
+    if (pin !== confirmPin) {
+      return toast({ title: 'Atenção', description: 'A confirmação do PIN não confere.', variant: 'destructive' });
+    }
     setLoading(true);
     try {
-      const res = await resetUserPinAction(userId);
-      if (res.success && res.tempPin) {
-        setGeneratedPin(res.tempPin);
-        toast({ title: "Sucesso", description: "Operação realizada com sucesso." });
+      const res = await resetUserAccessPinAction(userId, pin);
+      if (res.success) {
+        toast({ title: 'Sucesso', description: 'PIN de acesso atualizado com sucesso.' });
+        setPin('');
+        setConfirmPin('');
+        onClose();
       } else {
-        toast({ title: 'Erro', description: res.error || 'Falha ao resetar PIN', variant: 'destructive' });
+        toast({ title: 'Erro', description: res.error || 'Falha ao atualizar PIN de acesso', variant: 'destructive' });
       }
     } catch (err) {
       toast({ title: 'Erro', description: 'Erro de comunicação.', variant: 'destructive' });
@@ -36,16 +46,10 @@ export default function ResetPinDialog({ isOpen, onClose, userId }: ResetPinDial
     }
   };
 
-  const handleCopy = () => {
-    if (generatedPin) {
-      navigator.clipboard.writeText(generatedPin);
-      toast({ title: 'Copiado', description: 'PIN copiado para a área de transferência.' });
-    }
-  };
-
   const handleClose = () => {
     if (!loading) {
-      setGeneratedPin(null);
+      setPin('');
+      setConfirmPin('');
       onClose();
     }
   };
@@ -56,49 +60,29 @@ export default function ResetPinDialog({ isOpen, onClose, userId }: ResetPinDial
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <KeyRound className="h-5 w-5 text-orange-600" />
-            Reset de PIN de Autorização
+            Redefinir PIN de acesso
           </DialogTitle>
           <DialogDescription>
-            {generatedPin 
-              ? 'PIN temporário gerado com sucesso.'
-              : 'Tem certeza que deseja resetar o PIN de autorização deste usuário? Isso invalidará o PIN atual e gerará um temporário.'
-            }
+            Defina um novo PIN de 4 dígitos para entrar neste perfil pela conta operacional. O PIN atual nunca é exibido.
           </DialogDescription>
         </DialogHeader>
 
-        {generatedPin ? (
-          <div className="flex flex-col items-center justify-center p-6 space-y-4">
-            <CheckCircle2 className="h-12 w-12 text-emerald-500" />
-            <p className="text-sm text-center text-muted-foreground">
-              Forneça este PIN ao usuário. Ele será obrigado a alterá-lo no próximo acesso.
-            </p>
-            <div className="flex items-center gap-3 p-4 bg-slate-100 rounded-lg w-full justify-center text-3xl font-mono font-bold tracking-[0.25em]">
-              {generatedPin}
-            </div>
-            <Button variant="outline" className="w-full" onClick={handleCopy}>
-              <Copy className="h-4 w-4 mr-2" /> Copiar PIN Temporário
-            </Button>
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <label htmlFor="access-pin" className="text-sm font-medium">Novo PIN de acesso</label>
+            <Input id="access-pin" type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={pin} onChange={(event) => setPin(event.target.value.replace(/\D/g, ''))} autoComplete="new-password" />
           </div>
-        ) : (
-          <div className="bg-orange-50 p-4 rounded-lg flex gap-3 text-orange-800 border border-orange-100 mt-2">
-            <AlertTriangle className="h-5 w-5 shrink-0" />
-            <p className="text-sm">
-              Esta ação gravará no log de auditoria e exigirá que o usuário cadastre uma nova senha (PIN) ao autorizar sua próxima operação no PDV ou sistema.
-            </p>
+          <div className="grid gap-2">
+            <label htmlFor="access-pin-confirmation" className="text-sm font-medium">Confirmar PIN de acesso</label>
+            <Input id="access-pin-confirmation" type="password" inputMode="numeric" pattern="[0-9]*" maxLength={4} value={confirmPin} onChange={(event) => setConfirmPin(event.target.value.replace(/\D/g, ''))} autoComplete="new-password" />
           </div>
-        )}
+        </div>
 
         <DialogFooter className="mt-6">
-          {generatedPin ? (
-            <Button onClick={handleClose}>Concluir</Button>
-          ) : (
-            <>
-              <Button variant="outline" onClick={handleClose} disabled={loading}>Cancelar</Button>
-              <Button variant="destructive" onClick={handleReset} disabled={loading}>
-                {loading ? 'Resetando...' : 'Sim, Resetar PIN'}
-              </Button>
-            </>
-          )}
+          <Button variant="outline" onClick={handleClose} disabled={loading}>Cancelar</Button>
+          <Button onClick={handleReset} disabled={loading || pin.length !== 4 || confirmPin.length !== 4}>
+            {loading ? 'Atualizando...' : 'Atualizar PIN de acesso'}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

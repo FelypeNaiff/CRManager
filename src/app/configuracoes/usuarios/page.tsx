@@ -78,7 +78,7 @@ export default function UsuariosPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <ConfigPageHeader
           title="Gestão de Usuários"
-          description="Gerencie os acessos, permissões, limites e PINs de autorização da sua equipe."
+          description="Gerencie os acessos, permissões, limites e PINs de acesso da sua equipe."
           breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Usuários' }]}
         />
         <Button onClick={handleOpenCreate} className="self-start sm:self-auto">
@@ -144,7 +144,7 @@ export default function UsuariosPage() {
                     </ConfigDataTableCell>
                     <ConfigDataTableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenResetPin(user.id)} title="Resetar PIN de Autorização">
+                        <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenResetPin(user.id)} title="Redefinir PIN de acesso">
                           <KeyRound className="h-4 w-4 text-orange-600" />
                         </Button>
                         <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">

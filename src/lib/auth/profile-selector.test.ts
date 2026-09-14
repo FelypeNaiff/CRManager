@@ -34,6 +34,7 @@ async function service(options: {
   profiles?: ReturnType<typeof profile>[];
   selected?: ReturnType<typeof profile> | null;
   pinValid?: boolean;
+  verifyPinValue?: (pin: string, hash: string) => Promise<boolean>;
 } = {}) {
   return createProfileSelectionServiceForTesting({
     resolveBaseContext: options.base ?? (async () => context()),
@@ -42,7 +43,7 @@ async function service(options: {
       const selected = options.selected === undefined ? profile() : options.selected;
       return selected?.id === profileId ? selected : null;
     },
-    verifyPinValue: async () => options.pinValid ?? true,
+    verifyPinValue: options.verifyPinValue ?? (async () => options.pinValid ?? true),
     issueSelector: (profileId, authUserId) =>
       createProfileSelector({ profileId, authUserId }, SECRET, NOW),
   });
@@ -130,6 +131,20 @@ test('incorrect PIN is refused', async () => {
   const result = await (await service({ pinValid: false })).validateProfilePin('profile-a', '9999');
   assert.equal(result.success, false);
 });
+
+for (const invalidPin of ['123', '12345', '12a4']) {
+  test(`invalid access PIN format ${invalidPin} is refused before bcrypt`, async () => {
+    let comparisons = 0;
+    const result = await (await service({
+      verifyPinValue: async () => {
+        comparisons += 1;
+        return true;
+      },
+    })).validateProfilePin('profile-a', invalidPin);
+    assert.equal(result.success, false);
+    assert.equal(comparisons, 0);
+  });
+}
 
 test('correct PIN emits a minimal selector', async () => {
   const result = await (await service()).validateProfilePin('profile-a', '1234');
