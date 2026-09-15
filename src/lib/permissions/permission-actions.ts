@@ -64,7 +64,8 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
       await tx.activityLog.create({
         data: {
           companyId: session.companyId,
-          userId: session.userId,
+          actorUserId: session.userId,
+          authenticatedUserId: session.authenticatedUserId,
           action: 'UPDATE',
           module: 'PERMISSOES',
           recordId: roleId,
@@ -133,7 +134,8 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
       await tx.activityLog.create({
         data: {
           companyId: session.companyId,
-          userId: session.userId,
+          actorUserId: session.userId,
+          authenticatedUserId: session.authenticatedUserId,
           action: 'UPDATE',
           module: 'PERMISSOES',
           recordId: roleId,

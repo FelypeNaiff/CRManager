@@ -3,7 +3,7 @@
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 import { verifyPin } from './pin';
-import { writeActivityLog } from './activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from './activity-log';
 import {
   resolveBaseServerAuthContext,
   resolveServerAuthContext,

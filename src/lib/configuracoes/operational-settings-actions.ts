@@ -3,7 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { z } from 'zod';
 import { requireAuth, requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { OperationalSettingsService } from './operational-settings-service';
 
 const OperationalSettingsFormSchema = z.object({

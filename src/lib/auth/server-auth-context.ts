@@ -19,6 +19,7 @@ export type ServerPermissionMap = Readonly<Record<string, true>>;
  */
 export interface ServerAuthContext {
   authUserId: string;
+  authenticatedUserId: string;
   userId: string;
   companyId: string;
   name: string;
@@ -149,7 +150,11 @@ async function resolveContextFromDependencies(
   return buildContext(identity.id, user);
 }
 
-function buildContext(authUserId: string, user: NeexUserRecord): ServerAuthContext {
+function buildContext(
+  authUserId: string,
+  user: NeexUserRecord,
+  authenticatedUserId: string = user.id
+): ServerAuthContext {
 
   if (!isActiveStatus(user.status)) {
     throw new ServerAuthError('USER_INACTIVE');
@@ -177,6 +182,7 @@ function buildContext(authUserId: string, user: NeexUserRecord): ServerAuthConte
 
   return Object.freeze({
     authUserId,
+    authenticatedUserId,
     userId: user.id,
     companyId: user.company.id,
     name: user.name,
@@ -269,7 +275,7 @@ async function resolveSelectedContext(
       baseContext.companyId
     );
     if (!selectedUser) throw new ServerAuthError('INVALID_CONTEXT');
-    return buildContext(baseContext.authUserId, selectedUser);
+    return buildContext(baseContext.authUserId, selectedUser, baseContext.authenticatedUserId);
   } catch (error) {
     if (error instanceof ServerAuthError) throw error;
     if (error instanceof ProfileSelectorError) throw new ServerAuthError('INVALID_CONTEXT');

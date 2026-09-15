@@ -6,7 +6,7 @@ import { requirePermission } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { getPaginationArgs, buildPaginatedResult, PaginationParams } from '@/lib/performance/pagination';
 import { buildProductSearchWhere } from '@/lib/performance/query-utils';
-import { writeActivityLog } from '../auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '../auth/activity-log';
 import {
   ProductCategorySchema,
   SupplierSchema,

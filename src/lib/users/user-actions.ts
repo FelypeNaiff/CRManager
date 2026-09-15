@@ -3,7 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { hashPin as hashAuthorizationPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-service';
 import { hashPin as hashAccessPin } from '@/lib/auth/pin';
 import { z } from 'zod';

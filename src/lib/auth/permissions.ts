@@ -1,5 +1,5 @@
 import { prisma } from '@/lib/prisma';
-import { writeActivityLog } from './activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from './activity-log';
 import type { ActiveProfileSession } from './actions';
 import { PermissionModule, PermissionAction } from './permission-catalog';
 import {

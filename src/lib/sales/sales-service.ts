@@ -225,7 +225,8 @@ export class SalesService {
         await tx.activityLog.create({
           data: {
             companyId: data.companyId,
-            userId: authorizedByUserId,
+            actorUserId: authorizedByUserId,
+            authenticatedUserId: authorizedByUserId,
             action: "AUTHORIZE_DISCOUNT",
             module: "SALES",
             recordId: sale.id,
@@ -243,7 +244,8 @@ export class SalesService {
           variantId: item.variantId,
           quantity: item.quantity,
           type: "SALE",
-          userId: operatorUserId,
+          actorUserId: operatorUserId,
+          authenticatedUserId: operatorUserId,
           reason: `Venda #${sale.id}`
         }))
       });
@@ -389,7 +391,8 @@ export class SalesService {
           variantId: item.variantId,
           quantity: item.quantity,
           type: "CANCELLATION",
-          userId: data.cancelledByUserId,
+          actorUserId: data.cancelledByUserId,
+          authenticatedUserId: data.cancelledByUserId,
           reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
         }))
       });

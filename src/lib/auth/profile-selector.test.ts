@@ -13,7 +13,7 @@ const NOW = 2_000_000_000;
 
 function context(overrides: Partial<ServerAuthContext> = {}): ServerAuthContext {
   return {
-    authUserId: 'auth-user-a', userId: 'base-user', companyId: 'company-a',
+    authUserId: 'auth-user-a', authenticatedUserId: 'base-user', userId: 'base-user', companyId: 'company-a',
     name: 'Base', email: 'base@example.test', roleId: 'role-a', roleName: 'Base',
     isAdmin: false, permissions: {}, ...overrides,
   };

@@ -3,7 +3,7 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
-import { writeActivityLog } from "../auth/activity-log";
+import { writeLegacyActivityLog as writeActivityLog } from "../auth/activity-log";
 import { itemBelongsToSale, tenantResourceWhere } from "../exchanges/exchange-return-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
 

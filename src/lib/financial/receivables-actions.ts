@@ -71,7 +71,8 @@ export async function settleReceivableAction(receivableId: string) {
         await tx.activityLog.create({
           data: {
             companyId: settlement.companyId,
-            userId: settlement.userId,
+            actorUserId: settlement.userId,
+            authenticatedUserId: settlement.userId,
             action: "SETTLE_RECEIVABLE",
             module: "FINANCEIRO",
             recordId: receivableId,

@@ -3,7 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { CompanyService, CompanyDataInput } from './company-service';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { z } from 'zod';
 
 const CompanyFormSchema = z.object({

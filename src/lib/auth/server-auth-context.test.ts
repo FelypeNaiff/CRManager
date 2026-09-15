@@ -55,6 +55,7 @@ test('resolves a trusted context from valid Supabase and Prisma identities', asy
 
   assert.deepEqual(context, {
     authUserId: 'supabase-user-id',
+    authenticatedUserId: 'neex-user-id',
     userId: 'neex-user-id',
     companyId: 'company-id',
     name: 'Admin',

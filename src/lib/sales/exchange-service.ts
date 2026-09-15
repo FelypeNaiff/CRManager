@@ -205,7 +205,8 @@ export class ExchangeService {
       await tx.activityLog.create({
         data: {
           companyId: data.companyId,
-          userId: data.userId,
+          actorUserId: data.userId,
+          authenticatedUserId: data.userId,
           action: data.type === "RETURN" ? "CREATE_RETURN" : "CREATE_EXCHANGE",
           module: "COMERCIAL",
           recordId: sale.id,

@@ -14,7 +14,7 @@ const NOW = 2_000_000_000;
 
 function context(overrides: Partial<ServerAuthContext> = {}): ServerAuthContext {
   return {
-    authUserId: 'supabase-admin-id',
+    authUserId: 'supabase-admin-id', authenticatedUserId: 'admin-user-id',
     userId: 'admin-user-id',
     companyId: 'company-a',
     name: 'Admin',
@@ -115,6 +115,8 @@ test('admin session is accepted by server context resolution and remains tenant 
   );
 
   assert.deepEqual(lookup, { profileId: 'admin-user-id', companyId: 'company-a' });
+  assert.equal(resolved.authenticatedUserId, 'admin-user-id');
+  assert.equal(resolved.userId, 'admin-user-id');
   assert.equal(resolved.companyId, 'company-a');
   assert.equal(resolved.isAdmin, true);
 });

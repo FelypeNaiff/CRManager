@@ -7,7 +7,7 @@ import { decideRequest, isPublicApi } from './middleware-policy';
 
 function trustedContext(overrides: Partial<ServerAuthContext> = {}): ServerAuthContext {
   return {
-    authUserId: 'auth-id', userId: 'user-id', companyId: 'company-id', name: 'User',
+    authUserId: 'auth-id', authenticatedUserId: 'user-id', userId: 'user-id', companyId: 'company-id', name: 'User',
     email: 'user@example.test', roleId: 'role-id', roleName: 'User', isAdmin: false,
     permissions: {}, ...overrides,
   };

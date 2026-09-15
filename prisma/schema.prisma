@@ -123,7 +123,8 @@ model User {
   pinLastChangedAt            DateTime?              @map("pin_last_changed_at")
   createdAt                   DateTime               @default(now()) @map("created_at")
   updatedAt                   DateTime               @updatedAt @map("updated_at")
-  activityLogs                ActivityLog[]
+  activityLogsAsActor         ActivityLog[]         @relation("ActivityLogActor")
+  activityLogsAsAuthenticated ActivityLog[]         @relation("ActivityLogAuthenticatedUser")
   cashMovements               CashMovement[]         @relation("CashMovementCreatedBy")
   cashRegistersClosed         CashRegister[]         @relation("CashRegisterClosedBy")
   cashRegistersOpened         CashRegister[]         @relation("CashRegisterOpenedBy")
@@ -141,20 +142,25 @@ model User {
 }
 
 model ActivityLog {
-  id        String   @id @default(uuid())
-  companyId String   @map("company_id")
-  userId    String   @map("user_id")
-  action    String
-  module    String
-  recordId  String?  @map("record_id")
-  details   String?
-  createdAt DateTime @default(now()) @map("created_at")
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  user      User     @relation(fields: [userId], references: [id])
+  id                  String   @id @default(uuid())
+  companyId           String   @map("company_id")
+  actorUserId         String   @map("user_id")
+  authenticatedUserId String   @map("authenticated_user_id")
+  action              String
+  module              String
+  recordId            String?  @map("record_id")
+  details             String?
+  metadata            Json?
+  createdAt           DateTime @default(now()) @map("created_at")
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  actorUser            User     @relation("ActivityLogActor", fields: [actorUserId], references: [id])
+  authenticatedUser    User     @relation("ActivityLogAuthenticatedUser", fields: [authenticatedUserId], references: [id])
 
   @@index([companyId, createdAt])
   @@index([companyId, module, action])
-  @@index([userId, createdAt])
+  @@index([actorUserId, createdAt])
+  @@index([companyId, actorUserId, createdAt])
+  @@index([companyId, authenticatedUserId, createdAt])
   @@map("activity_logs")
 }
 

@@ -13,7 +13,7 @@ import {
 
 function trustedContext(overrides: Partial<ServerAuthContext> = {}): ServerAuthContext {
   return {
-    authUserId: 'supabase-user-id',
+    authUserId: 'supabase-user-id', authenticatedUserId: 'user-id',
     userId: 'neex-user-id',
     companyId: 'company-id',
     name: 'Admin',

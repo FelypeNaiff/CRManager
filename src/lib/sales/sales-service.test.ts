@@ -188,7 +188,7 @@ test('approved discount authorization must match tenant, status, type and module
   const accepted = harness({ discountPolicy: policy, approvedAuthorization: valid });
   const sale: any = await accepted.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a');
   assert.equal(sale.id, 'sale-a');
-  assert.equal(accepted.state.logs.some(log => log.action === 'AUTHORIZE_DISCOUNT' && log.userId === 'manager-a'), true);
+  assert.equal(accepted.state.logs.some(log => log.action === 'AUTHORIZE_DISCOUNT' && log.actorUserId === 'manager-a'), true);
 
   for (const incompatible of [
     { ...valid, companyId: 'company-b' },

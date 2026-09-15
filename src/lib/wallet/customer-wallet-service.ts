@@ -3,7 +3,7 @@ import { WalletTransactionType } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { authorizationService } from "@/lib/auth/authorization-service";
-import { writeActivityLog } from "@/lib/auth/activity-log";
+import { writeLegacyActivityLog as writeActivityLog } from "@/lib/auth/activity-log";
 import {
   approvedWalletAuthorizationWhere,
   walletCustomerWhere,

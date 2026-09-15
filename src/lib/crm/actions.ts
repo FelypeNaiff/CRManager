@@ -4,7 +4,7 @@ import { serializePrisma } from '@/lib/serialize';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '../auth/permissions';
 import { safeDate } from '../utils/form-normalizer';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 import { unstable_cache, revalidateTag } from 'next/cache';
@@ -746,7 +746,7 @@ export async function getActivityLogs() {
   try {
     const list = await prisma.activityLog.findMany({
       where: { companyId: session.companyId },
-      include: { user: true },
+      include: { actorUser: true, authenticatedUser: true },
       orderBy: { createdAt: 'desc' },
       take: 100
     });

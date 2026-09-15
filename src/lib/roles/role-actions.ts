@@ -3,7 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { z } from 'zod';
 import { canSetAdministrativeRole, tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 

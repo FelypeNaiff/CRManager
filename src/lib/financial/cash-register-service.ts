@@ -3,7 +3,7 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeActivityLog } from '@/lib/auth/activity-log';
+import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
 import { Prisma } from '@prisma/client';
 import { CashRegisterOpenSchema, CashRegisterCloseSchema, CashMovementSchema } from './financial-schemas';
 import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
