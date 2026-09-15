@@ -3,7 +3,8 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog, writeLegacyActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
 import { hashPin as hashAuthorizationPin, generateTemporaryPin, validatePin } from '@/lib/auth/pin-service';
 import { hashPin as hashAccessPin } from '@/lib/auth/pin';
 import { z } from 'zod';
@@ -141,27 +142,29 @@ export async function createUserAction(rawData: any) {
       return { success: false, error: 'Apenas administradores podem atribuir um perfil administrativo.' };
     }
 
-    const newUser = await prisma.user.create({
-      data: {
-        companyId: session.companyId,
-        roleId: role.id,
-        name: validatedData.name,
-        email: validatedData.email,
-        cargo: validatedData.cargo,
-        status: validatedData.status,
-        maxDiscountPercentage: validatedData.maxDiscountPercentage,
-        pinAccessHash,
-        permitirAcesso: validatedData.status === 'ACTIVE',
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CREATE',
-      module: 'USUARIOS',
-      recordId: newUser.id,
-      details: `Criou o usuário: ${newUser.name} (${newUser.email})`,
+    const newUser = await prisma.$transaction(async tx => {
+      const created = await tx.user.create({
+        data: {
+          companyId: session.companyId,
+          roleId: role.id,
+          name: validatedData.name,
+          email: validatedData.email,
+          cargo: validatedData.cargo,
+          status: validatedData.status,
+          maxDiscountPercentage: validatedData.maxDiscountPercentage,
+          pinAccessHash,
+          permitirAcesso: validatedData.status === 'ACTIVE',
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'USER_CREATE',
+        module: 'USERS',
+        recordId: created.id,
+        details: 'Usuário criado',
+        metadata: { status: created.status, roleId: created.roleId },
+      }, { policy: 'CRITICAL', tx });
+      return created;
     });
 
     return { success: true, data: { id: newUser.id } };
@@ -190,9 +193,18 @@ export async function resetUserAccessPinAction(userId: string, newPin: string) {
     }
 
     const pinAccessHash = await hashAccessPin(newPin);
-    await prisma.user.update({
-      where: tenantEntityWhere(userId, session.companyId),
-      data: { pinAccessHash },
+    await prisma.$transaction(async tx => {
+      await tx.user.update({
+        where: tenantEntityWhere(userId, session.companyId),
+        data: { pinAccessHash },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'USER_ACCESS_PIN_RESET',
+        module: 'USERS',
+        recordId: userId,
+        details: 'PIN de acesso redefinido',
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };
@@ -211,7 +223,7 @@ export async function updateUserAction(id: string, rawData: any) {
 
     const existingUser = await prisma.user.findFirst({
       where: tenantEntityWhere(id, session.companyId),
-      include: { role: { select: { id: true, isAdmin: true, status: true } } },
+      include: { role: { select: { id: true, name: true, isAdmin: true, status: true } } },
     });
 
     if (!existingUser) {
@@ -254,7 +266,7 @@ export async function updateUserAction(id: string, rawData: any) {
         otherActiveAdmins,
       });
 
-      return tx.user.update({
+      const updated = await tx.user.update({
         where: tenantEntityWhere(id, session.companyId),
         data: {
           name: validatedData.name,
@@ -264,22 +276,35 @@ export async function updateUserAction(id: string, rawData: any) {
           permitirAcesso: validatedData.status === 'ACTIVE' ? true : existingUser.permitirAcesso,
           maxDiscountPercentage: validatedData.maxDiscountPercentage,
         },
+        include: { role: { select: { name: true } } },
       });
+      const changes: AuditChanges = {};
+      addAuditChange(changes, 'name', existingUser.name, updated.name);
+      addAuditChange(changes, 'cargo', existingUser.cargo, updated.cargo);
+      addAuditChange(changes, 'status', existingUser.status, updated.status);
+      addAuditChange(changes, 'permitirAcesso', existingUser.permitirAcesso, updated.permitirAcesso);
+      addAuditChange(changes, 'maxDiscountPercentage', existingUser.maxDiscountPercentage, updated.maxDiscountPercentage);
+      if (existingUser.roleId !== updated.roleId) {
+        changes.role = {
+          before: existingUser.role?.name ?? existingUser.roleId,
+          after: updated.role?.name ?? updated.roleId,
+        };
+      }
+      const action = existingUser.roleId !== updated.roleId
+        ? 'USER_ROLE_CHANGE'
+        : existingUser.status !== updated.status || existingUser.permitirAcesso !== updated.permitirAcesso
+          ? 'USER_STATUS_CHANGE'
+          : 'USER_UPDATE';
+      await writeActivityLog({
+        context: session,
+        action,
+        module: 'USERS',
+        recordId: updated.id,
+        details: 'Usuário atualizado',
+        metadata: { changes },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     }, { isolationLevel: 'Serializable' });
-
-    let details = `Atualizou dados do usuário: ${updatedUser.name}.`;
-    if (existingUser.status !== updatedUser.status) {
-      details += ` Status alterado para ${updatedUser.status}.`;
-    }
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'UPDATE',
-      module: 'USUARIOS',
-      recordId: updatedUser.id,
-      details,
-    });
 
     return { success: true, data: { id: updatedUser.id } };
   } catch (error: any) {
@@ -327,7 +352,7 @@ export async function resetUserPinAction(userId: string) {
       },
     });
 
-    await writeActivityLog({
+    await writeLegacyActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'UPDATE',
@@ -384,7 +409,7 @@ export async function changeUserPinAction(userId: string, currentPin: string, ne
       },
     });
 
-    await writeActivityLog({
+    await writeLegacyActivityLog({
       companyId: session.companyId,
       userId: session.userId, // whoever performed the action
       action: 'UPDATE',

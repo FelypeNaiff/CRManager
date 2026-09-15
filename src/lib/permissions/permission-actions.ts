@@ -6,6 +6,8 @@ import { requirePermission } from '@/lib/auth/permissions';
 import { PERMISSION_CATALOG, TEMPLATES, ADMIN_TEMPLATE, PermissionModule, PermissionAction } from '@/lib/auth/permission-catalog';
 import { tenantRolePermissionWhere } from '@/lib/auth/admin-tenant-security';
 import { normalizePermissionMatrix } from './permission-matrix';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { permissionDelta } from '@/lib/auth/audit-changes';
 
 export async function getPermissionCatalogAction() {
   await requirePermission('GRUPOS_USUARIOS', 'VIEW');
@@ -51,6 +53,10 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
     }
 
     await prisma.$transaction(async (tx) => {
+      const previousPermissions = await tx.permission.findMany({
+        where: tenantRolePermissionWhere(roleId, session.companyId),
+        select: { module: true, action: true, allowed: true },
+      });
       await tx.permission.deleteMany({
         where: tenantRolePermissionWhere(roleId, session.companyId)
       });
@@ -61,17 +67,15 @@ export async function updateRolePermissionsAction(roleId: string, permissions: {
         });
       }
 
-      await tx.activityLog.create({
-        data: {
-          companyId: session.companyId,
-          actorUserId: session.userId,
-          authenticatedUserId: session.authenticatedUserId,
-          action: 'UPDATE',
-          module: 'PERMISSOES',
-          recordId: roleId,
-          details: `Permissões do grupo ${role.name} atualizadas (Matriz salva).`,
-        },
-      });
+      const delta = permissionDelta(previousPermissions, allowedPermissions);
+      await writeActivityLog({
+        context: session,
+        action: 'ROLE_PERMISSIONS_UPDATE',
+        module: 'ROLES',
+        recordId: roleId,
+        details: 'Permissões da Role atualizadas',
+        metadata: delta,
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };
@@ -114,6 +118,10 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
     const allowedPermissions = normalizePermissionMatrix(templatePermissions);
 
     await prisma.$transaction(async (tx) => {
+      const previousPermissions = await tx.permission.findMany({
+        where: tenantRolePermissionWhere(roleId, session.companyId),
+        select: { module: true, action: true, allowed: true },
+      });
       await tx.permission.deleteMany({
         where: tenantRolePermissionWhere(roleId, session.companyId)
       });
@@ -131,17 +139,15 @@ export async function applyTemplateAction(roleId: string, templateKey: string) {
         });
       }
 
-      await tx.activityLog.create({
-        data: {
-          companyId: session.companyId,
-          actorUserId: session.userId,
-          authenticatedUserId: session.authenticatedUserId,
-          action: 'UPDATE',
-          module: 'PERMISSOES',
-          recordId: roleId,
-          details: `Template ${templateKey} aplicado ao grupo ${role.name}.`,
-        },
-      });
+      const delta = permissionDelta(previousPermissions, allowedPermissions);
+      await writeActivityLog({
+        context: session,
+        action: 'ROLE_PERMISSIONS_UPDATE',
+        module: 'ROLES',
+        recordId: roleId,
+        details: `Template de permissões aplicado: ${templateKey}`,
+        metadata: delta,
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };

@@ -38,7 +38,9 @@ test('permission writes are tenant scoped and atomic', async () => {
   assert.match(update, /tenantRolePermissionWhere\(roleId, session\.companyId\)/);
   assert.match(update, /tx\.permission\.deleteMany/);
   assert.match(update, /tx\.permission\.createMany/);
-  assert.match(update, /tx\.activityLog\.create/);
+  assert.match(update, /writeActivityLog/);
+  assert.match(update, /policy: 'CRITICAL', tx/);
+  assert.match(update, /permissionDelta\(previousPermissions, allowedPermissions\)/);
 });
 
 test('admin Roles rely on isAdmin bypass instead of redundant Permission rows', async () => {

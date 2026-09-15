@@ -3,7 +3,8 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
 import { z } from 'zod';
 import { canSetAdministrativeRole, tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 
@@ -116,25 +117,27 @@ export async function createRoleAction(rawData: any) {
       return { success: false, error: 'Já existe um grupo com este nome.' };
     }
 
-    const newRole = await prisma.role.create({
-      data: {
-        companyId: session.companyId,
-        name: validatedData.name,
-        description: validatedData.description,
-        status: validatedData.status,
-        isAdmin: validatedData.isAdmin,
-        defaultCommissionRate: validatedData.defaultCommissionRate,
-        defaultMaxDiscountPercentage: validatedData.defaultMaxDiscountPercentage,
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CREATE',
-      module: 'GRUPOS_USUARIOS',
-      recordId: newRole.id,
-      details: `Criou o grupo: ${newRole.name}`,
+    const newRole = await prisma.$transaction(async tx => {
+      const created = await tx.role.create({
+        data: {
+          companyId: session.companyId,
+          name: validatedData.name,
+          description: validatedData.description,
+          status: validatedData.status,
+          isAdmin: validatedData.isAdmin,
+          defaultCommissionRate: validatedData.defaultCommissionRate,
+          defaultMaxDiscountPercentage: validatedData.defaultMaxDiscountPercentage,
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'ROLE_CREATE',
+        module: 'ROLES',
+        recordId: created.id,
+        details: 'Role criada',
+        metadata: { status: created.status, isAdmin: created.isAdmin },
+      }, { policy: 'CRITICAL', tx });
+      return created;
     });
 
     return { success: true, data: { id: newRole.id } };
@@ -187,7 +190,7 @@ export async function updateRoleAction(id: string, rawData: any) {
         validatedData.isAdmin,
         validatedData.status,
       );
-      return tx.role.update({
+      const updated = await tx.role.update({
         where: tenantEntityWhere(id, session.companyId),
         data: {
           name: validatedData.name,
@@ -198,30 +201,23 @@ export async function updateRoleAction(id: string, rawData: any) {
           defaultMaxDiscountPercentage: validatedData.defaultMaxDiscountPercentage,
         },
       });
+      const changes: AuditChanges = {};
+      addAuditChange(changes, 'name', existingRole.name, updated.name);
+      addAuditChange(changes, 'description', existingRole.description, updated.description);
+      addAuditChange(changes, 'status', existingRole.status, updated.status);
+      addAuditChange(changes, 'isAdmin', existingRole.isAdmin, updated.isAdmin);
+      addAuditChange(changes, 'defaultCommissionRate', existingRole.defaultCommissionRate, updated.defaultCommissionRate);
+      addAuditChange(changes, 'defaultMaxDiscountPercentage', existingRole.defaultMaxDiscountPercentage, updated.defaultMaxDiscountPercentage);
+      await writeActivityLog({
+        context: session,
+        action: existingRole.status !== updated.status ? 'ROLE_STATUS_CHANGE' : 'ROLE_UPDATE',
+        module: 'ROLES',
+        recordId: updated.id,
+        details: 'Role atualizada',
+        metadata: { changes },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     }, { isolationLevel: 'Serializable' });
-
-    let details = `Atualizou o grupo: ${updatedRole.name}.`;
-    if (existingRole.status !== updatedRole.status) {
-      details += ` Status alterado para ${updatedRole.status}.`;
-    }
-    if (existingRole.isAdmin !== updatedRole.isAdmin) {
-      details += ` isAdmin alterado para ${updatedRole.isAdmin}.`;
-    }
-    if (Number(existingRole.defaultCommissionRate) !== Number(updatedRole.defaultCommissionRate)) {
-      details += ` Comissão alterada.`;
-    }
-    if (Number(existingRole.defaultMaxDiscountPercentage) !== Number(updatedRole.defaultMaxDiscountPercentage)) {
-      details += ` Limite de desconto alterado.`;
-    }
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'UPDATE',
-      module: 'GRUPOS_USUARIOS',
-      recordId: updatedRole.id,
-      details,
-    });
 
     return { success: true, data: { id: updatedRole.id } };
   } catch (error: any) {

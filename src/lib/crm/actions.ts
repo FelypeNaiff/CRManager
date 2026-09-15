@@ -4,7 +4,8 @@ import { serializePrisma } from '@/lib/serialize';
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '../auth/permissions';
 import { safeDate } from '../utils/form-normalizer';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog, writeLegacyActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
 import { customerWalletService } from '@/lib/wallet/customer-wallet-service';
 import { z } from 'zod';
 import { unstable_cache, revalidateTag } from 'next/cache';
@@ -188,37 +189,38 @@ export async function createCustomer(rawData: z.infer<typeof CustomerSchema>) {
       return { success: false, error: 'Este número de telefone já está cadastrado para outro cliente nesta empresa.' };
     }
 
-    const customer = await prisma.customer.create({
-      data: {
-        companyId: session.companyId,
-        name: data.name,
-        email: data.email || null,
-        phone: data.phone,
-        cpf: data.cpf || null,
-        birthDay: data.birthDay || null,
-        birthMonth: data.birthMonth || null,
-        birthYear: data.birthYear || null,
-        instagram: data.instagram || null,
-        notes: data.notes || null,
-        status: data.status,
-      },
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: customer.id,
-        actionType: 'CADASTRO',
-        description: `Cliente cadastrado por ${session.name}`,
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CREATE',
-      module: 'CRM Clientes',
-      recordId: customer.id,
-      details: `Criou o cliente ${customer.name}`,
+    const customer = await prisma.$transaction(async tx => {
+      const created = await tx.customer.create({
+        data: {
+          companyId: session.companyId,
+          name: data.name,
+          email: data.email || null,
+          phone: data.phone,
+          cpf: data.cpf || null,
+          birthDay: data.birthDay || null,
+          birthMonth: data.birthMonth || null,
+          birthYear: data.birthYear || null,
+          instagram: data.instagram || null,
+          notes: data.notes || null,
+          status: data.status,
+        },
+      });
+      await tx.customerHistory.create({
+        data: {
+          customerId: created.id,
+          actionType: 'CADASTRO',
+          description: `Cliente cadastrado por ${session.name}`,
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'CUSTOMER_CREATE',
+        module: 'CUSTOMERS',
+        recordId: created.id,
+        details: 'Cliente criado',
+        metadata: { status: created.status },
+      }, { policy: 'CRITICAL', tx });
+      return created;
     });
 
     return { success: true, data: serializePrisma(customer) };
@@ -233,7 +235,7 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
     const data = CustomerSchema.parse(rawData);
 
     const ownedCustomer = await prisma.customer.findFirst({
-      where: tenantWhere(id, session.companyId), select: { id: true },
+      where: tenantWhere(id, session.companyId),
     });
     if (!ownedCustomer) return { success: false, error: 'Cliente não encontrado.' };
 
@@ -250,37 +252,43 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
       return { success: false, error: 'Outro cliente já possui este telefone cadastrado.' };
     }
 
-    const customer = await prisma.customer.update({
-      where: tenantWhere(id, session.companyId),
-      data: {
-        name: data.name,
-        email: data.email || null,
-        phone: data.phone,
-        cpf: data.cpf || null,
-        birthDay: data.birthDay || null,
-        birthMonth: data.birthMonth || null,
-        birthYear: data.birthYear || null,
-        instagram: data.instagram || null,
-        notes: data.notes || null,
-        status: data.status,
-      },
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: customer.id,
-        actionType: 'EDICAO',
-        description: `Dados do cliente atualizados por ${session.name}`,
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'UPDATE',
-      module: 'CRM Clientes',
-      recordId: customer.id,
-      details: `Editou dados do cliente ${customer.name}`,
+    const customer = await prisma.$transaction(async tx => {
+      const updated = await tx.customer.update({
+        where: tenantWhere(id, session.companyId),
+        data: {
+          name: data.name,
+          email: data.email || null,
+          phone: data.phone,
+          cpf: data.cpf || null,
+          birthDay: data.birthDay || null,
+          birthMonth: data.birthMonth || null,
+          birthYear: data.birthYear || null,
+          instagram: data.instagram || null,
+          notes: data.notes || null,
+          status: data.status,
+        },
+      });
+      await tx.customerHistory.create({
+        data: {
+          customerId: updated.id,
+          actionType: 'EDICAO',
+          description: `Dados do cliente atualizados por ${session.name}`,
+        },
+      });
+      const changes: AuditChanges = {};
+      for (const field of ['name', 'email', 'phone', 'cpf', 'birthDay', 'birthMonth', 'birthYear', 'instagram', 'notes'] as const) {
+        addAuditChange(changes, field, ownedCustomer[field], updated[field], { sensitive: true });
+      }
+      addAuditChange(changes, 'status', ownedCustomer.status, updated.status);
+      await writeActivityLog({
+        context: session,
+        action: ownedCustomer.status !== updated.status ? 'CUSTOMER_STATUS_CHANGE' : 'CUSTOMER_UPDATE',
+        module: 'CUSTOMERS',
+        recordId: updated.id,
+        details: 'Cliente atualizado',
+        metadata: { changes },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     });
 
     return { success: true, data: serializePrisma(customer) };
@@ -292,26 +300,26 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
 export async function deleteCustomer(id: string) {
   const session = await requirePermission('CLIENTES', 'DELETE');
   try {
-    const customer = await prisma.customer.update({
-      where: tenantWhere(id, session.companyId),
-      data: { status: 'arquivado' },
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: customer.id,
-        actionType: 'EXCLUSAO',
-        description: `Cliente marcado como arquivado (soft delete) por ${session.name}`,
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'SOFT_DELETE',
-      module: 'CRM Clientes',
-      recordId: customer.id,
-      details: `Arquivou o cliente ${customer.name}`,
+    const customer = await prisma.$transaction(async tx => {
+      const before = await tx.customer.findFirst({ where: tenantWhere(id, session.companyId), select: { id: true, status: true } });
+      if (!before) throw new Error('CUSTOMER_NOT_FOUND');
+      const updated = await tx.customer.update({ where: tenantWhere(id, session.companyId), data: { status: 'arquivado' } });
+      await tx.customerHistory.create({
+        data: {
+          customerId: updated.id,
+          actionType: 'EXCLUSAO',
+          description: `Cliente marcado como arquivado (soft delete) por ${session.name}`,
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'CUSTOMER_STATUS_CHANGE',
+        module: 'CUSTOMERS',
+        recordId: updated.id,
+        details: 'Cliente arquivado',
+        metadata: { changes: { status: { before: before.status, after: updated.status } } },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     });
 
     return { success: true };
@@ -332,24 +340,34 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
     });
     if (!customer) return { success: false, error: 'Cliente não encontrado.' };
 
-    const child = await prisma.customerChild.create({
-      data: {
-        customerId: data.customerId,
-        name: data.name,
-        birthDate: data.birthDate ? safeDate(data.birthDate) : null,
-        gender: data.gender || null,
-        shoeSize: data.shoeSize || null,
-        clothingSize: data.clothingSize || null,
-        notes: data.notes || null,
-      },
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: data.customerId,
-        actionType: 'FILHO_ADICIONADO',
-        description: `Filho(a) "${child.name}" cadastrado(a) por ${session.name}`,
-      },
+    const child = await prisma.$transaction(async tx => {
+      const created = await tx.customerChild.create({
+        data: {
+          customerId: data.customerId,
+          name: data.name,
+          birthDate: data.birthDate ? safeDate(data.birthDate) : null,
+          gender: data.gender || null,
+          shoeSize: data.shoeSize || null,
+          clothingSize: data.clothingSize || null,
+          notes: data.notes || null,
+        },
+      });
+      await tx.customerHistory.create({
+        data: {
+          customerId: data.customerId,
+          actionType: 'FILHO_ADICIONADO',
+          description: `Filho(a) "${created.name}" cadastrado(a) por ${session.name}`,
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'CUSTOMER_CHILD_CREATE',
+        module: 'CUSTOMER_CHILDREN',
+        recordId: created.id,
+        details: 'Dependente criado',
+        metadata: { customerId: created.customerId, name: created.name },
+      }, { policy: 'CRITICAL', tx });
+      return created;
     });
 
     return { success: true, data: serializePrisma(child) };
@@ -361,16 +379,23 @@ export async function createChild(rawData: z.infer<typeof ChildSchema>) {
 export async function deleteChild(id: string) {
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
-    const child = await prisma.customerChild.delete({
-      where: tenantChildWhere(id, session.companyId),
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: child.customerId,
-        actionType: 'FILHO_REMOVIDO',
-        description: `Cadastro de filho(a) "${child.name}" removido por ${session.name}`,
-      },
+    await prisma.$transaction(async tx => {
+      const child = await tx.customerChild.delete({ where: tenantChildWhere(id, session.companyId) });
+      await tx.customerHistory.create({
+        data: {
+          customerId: child.customerId,
+          actionType: 'FILHO_REMOVIDO',
+          description: `Cadastro de filho(a) "${child.name}" removido por ${session.name}`,
+        },
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'CUSTOMER_CHILD_DELETE',
+        module: 'CUSTOMER_CHILDREN',
+        recordId: child.id,
+        details: 'Dependente removido',
+        metadata: { customerId: child.customerId, name: child.name },
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };
@@ -494,7 +519,7 @@ export async function adjustWalletBalance(rawData: z.infer<typeof WalletAdjustme
       userId: session.userId,
     });
 
-    await writeActivityLog({
+    await writeLegacyActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'UPDATE',
@@ -607,25 +632,43 @@ export async function updateChild(id: string, rawData: Partial<z.infer<typeof Ch
   const session = await requirePermission('CLIENTES', 'UPDATE');
   try {
     // Custom partial parsing
-    const child = await prisma.customerChild.update({
-      where: tenantChildWhere(id, session.companyId),
-      data: {
-        name: rawData.name,
-        birthDate: rawData.birthDate ? safeDate(rawData.birthDate) ?? undefined : undefined,
-        gender: rawData.gender,
-        shoeSize: rawData.shoeSize,
-        clothingSize: rawData.clothingSize,
-        notes: rawData.notes,
-      },
-      include: { customer: true }
-    });
-
-    await prisma.customerHistory.create({
-      data: {
-        customerId: child.customerId,
-        actionType: 'FILHO_ATUALIZADO',
-        description: `Dados de "${child.name}" atualizados por ${session.name}`,
-      },
+    const child = await prisma.$transaction(async tx => {
+      const before = await tx.customerChild.findFirst({ where: tenantChildWhere(id, session.companyId) });
+      if (!before) throw new Error('CHILD_NOT_FOUND');
+      const updated = await tx.customerChild.update({
+        where: tenantChildWhere(id, session.companyId),
+        data: {
+          name: rawData.name,
+          birthDate: rawData.birthDate ? safeDate(rawData.birthDate) ?? undefined : undefined,
+          gender: rawData.gender,
+          shoeSize: rawData.shoeSize,
+          clothingSize: rawData.clothingSize,
+          notes: rawData.notes,
+        },
+        include: { customer: true }
+      });
+      await tx.customerHistory.create({
+        data: {
+          customerId: updated.customerId,
+          actionType: 'FILHO_ATUALIZADO',
+          description: `Dados de "${updated.name}" atualizados por ${session.name}`,
+        },
+      });
+      const changes: AuditChanges = {};
+      for (const field of ['name', 'gender', 'shoeSize', 'clothingSize'] as const) {
+        addAuditChange(changes, field, before[field], updated[field]);
+      }
+      addAuditChange(changes, 'birthDate', before.birthDate, updated.birthDate, { sensitive: true });
+      addAuditChange(changes, 'notes', before.notes, updated.notes, { sensitive: true });
+      await writeActivityLog({
+        context: session,
+        action: 'CUSTOMER_CHILD_UPDATE',
+        module: 'CUSTOMER_CHILDREN',
+        recordId: updated.id,
+        details: 'Dependente atualizado',
+        metadata: { customerId: updated.customerId, changes },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     });
 
     return { success: true, data: serializePrisma(child) };
