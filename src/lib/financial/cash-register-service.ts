@@ -3,7 +3,8 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { sanitizeAuditDetails } from '@/lib/auth/audit-sanitization';
 import { Prisma } from '@prisma/client';
 import { CashRegisterOpenSchema, CashRegisterCloseSchema, CashMovementSchema } from './financial-schemas';
 import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
@@ -115,16 +116,13 @@ export async function openCashRegister(input: any) {
         },
       });
 
-      return register;
-    });
+      await writeActivityLog({
+        context: session, action: 'CASH_REGISTER_OPEN', module: 'CASH_REGISTER', recordId: register.id,
+        details: 'Caixa aberto.',
+        metadata: { terminalId: register.terminalId, bankAccountId: register.bankAccountId, openingBalance: Number(register.openingBalance), status: register.status },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CRIAR',
-      module: 'CAIXA',
-      recordId: result.id,
-      details: `Caixa aberto com saldo inicial de R$ ${result.openingBalance}.`,
+      return register;
     });
 
     return { success: true, data: serializePrisma(result) };
@@ -209,16 +207,13 @@ export async function closeCashRegister(registerId: string, input: any) {
         },
       });
 
-      return updated;
-    });
+      await writeActivityLog({
+        context: session, action: 'CASH_REGISTER_CLOSE', module: 'CASH_REGISTER', recordId: registerId,
+        details: 'Caixa fechado.',
+        metadata: { expectedBalance: Number(expectedBalance), reportedBalance: Number(parsed.data.closingBalance), difference: Number(difference), status: { before: register.status, after: 'CLOSED' } },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'FECHAR',
-      module: 'CAIXA',
-      recordId: registerId,
-      details: `Caixa fechado. Saldo real: R$ ${result.closingBalance} | Esperado: R$ ${result.expectedBalance} | Diferença: R$ ${result.difference}.`,
+      return updated;
     });
 
     return { success: true, data: serializePrisma(result) };
@@ -334,6 +329,15 @@ export async function addCashMovement(input: any) {
         data: { currentBalance: { increment: new Prisma.Decimal(balanceDelta) } },
       });
 
+      await writeActivityLog({
+        context: session,
+        action: parsed.data.type === 'REFORCO' ? 'CASH_SUPPLY' : parsed.data.type === 'SANGRIA' ? 'CASH_WITHDRAWAL' : 'CASH_ADJUSTMENT',
+        module: 'CASH_REGISTER',
+        recordId: mov.id,
+        details: `${typeLabel} de caixa registrado.`,
+        metadata: { cashRegisterId: register.id, amount: Number(parsed.data.amount), reason: sanitizeAuditDetails(parsed.data.description ?? undefined), origin: parsed.data.type },
+      }, { policy: 'CRITICAL', tx });
+
       return mov;
     });
 
@@ -341,15 +345,6 @@ export async function addCashMovement(input: any) {
     if (movement && 'requireAuthorization' in movement) {
       return movement;
     }
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: parsed.data.type,
-      module: 'CAIXA',
-      recordId: parsed.data.cashRegisterId,
-      details: `${typeLabel} de R$ ${parsed.data.amount} realizado no caixa.`,
-    });
 
     return { success: true, data: serializePrisma(movement) };
   } catch {

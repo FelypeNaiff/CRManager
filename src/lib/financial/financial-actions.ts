@@ -3,7 +3,8 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog as writeModernActivityLog, writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { sanitizeAuditDetails } from '@/lib/auth/audit-sanitization';
 import { Prisma } from '@prisma/client';
 import {
   BankAccountSchema,
@@ -480,16 +481,25 @@ export async function createFinancialTransaction(input: any) {
         });
       }
 
-      return newTx;
-    });
+      await writeModernActivityLog({
+        context: session,
+        action: 'FINANCIAL_TRANSACTION_CREATE',
+        module: 'FINANCIAL',
+        recordId: newTx.id,
+        details: 'Lançamento financeiro criado.',
+        metadata: {
+          type: newTx.type,
+          direction: newTx.direction,
+          amount: Number(newTx.amount),
+          status: newTx.status,
+          bankAccountId: newTx.bankAccountId,
+          costCenterId: newTx.costCenterId,
+          dueDate: newTx.dueDate?.toISOString() ?? null,
+          origin: 'MANUAL',
+        },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CRIAR',
-      module: 'FINANCEIRO',
-      recordId: transaction.id,
-      details: `Transação financeira "${transaction.description}" de R$ ${transaction.amount} (${transaction.direction}) criada.`,
+      return newTx;
     });
 
     return { success: true, data: serializePrisma(transaction) };
@@ -568,16 +578,20 @@ export async function cancelFinancialTransaction(id: string, reason: string) {
         });
       }
 
-      return updated;
-    });
+      await writeModernActivityLog({
+        context: session,
+        action: 'FINANCIAL_TRANSACTION_CANCEL',
+        module: 'FINANCIAL',
+        recordId: id,
+        details: 'Lançamento financeiro cancelado.',
+        metadata: {
+          status: { before: transaction.status, after: 'CANCELLED' },
+          amount: Number(transaction.amount),
+          reason: sanitizeAuditDetails(reason),
+        },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CANCELAR',
-      module: 'FINANCEIRO',
-      recordId: id,
-      details: `Transação "${id}" cancelada. Motivo: ${reason}`,
+      return updated;
     });
 
     return { success: true, data: serializePrisma(result) };

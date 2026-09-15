@@ -6,6 +6,7 @@ import { requirePermission } from "@/lib/auth/permissions";
 import { receivablesService } from "./receivables-service";
 import { revalidatePath } from "next/cache";
 import { scopeReceivablesList, secureReceivableSettlement } from './receivables-tenant-security';
+import { writeActivityLog } from '@/lib/auth/activity-log';
 
 export async function getAccountsReceivableAction(companyId: string, filters?: {
   status?: string;
@@ -68,17 +69,14 @@ export async function settleReceivableAction(receivableId: string) {
         where: { id: settlement.receivableId, companyId: settlement.companyId },
       });
       if (rec) {
-        await tx.activityLog.create({
-          data: {
-            companyId: settlement.companyId,
-            actorUserId: settlement.userId,
-            authenticatedUserId: settlement.userId,
-            action: "SETTLE_RECEIVABLE",
-            module: "FINANCEIRO",
-            recordId: receivableId,
-            details: `Baixa manual do título ${receivableId} no valor de ${rec.originalAmount}`
-          }
-        });
+        await writeActivityLog({
+          context: session,
+          action: 'RECEIVABLE_PAYMENT',
+          module: 'RECEIVABLES',
+          recordId: receivableId,
+          details: 'Baixa manual de conta a receber registrada.',
+          metadata: { amount: Number(rec.originalAmount), status: rec.status, origin: 'MANUAL_SETTLEMENT' },
+        }, { policy: 'CRITICAL', tx });
       }
     });
 

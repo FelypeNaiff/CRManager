@@ -3,7 +3,9 @@ import { WalletTransactionType } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { authorizationService } from "@/lib/auth/authorization-service";
-import { writeLegacyActivityLog as writeActivityLog } from "@/lib/auth/activity-log";
+import { writeActivityLog } from "@/lib/auth/activity-log";
+import type { ServerAuthContext } from "@/lib/auth/server-auth-context";
+import { sanitizeAuditDetails } from "@/lib/auth/audit-sanitization";
 import {
   approvedWalletAuthorizationWhere,
   walletCustomerWhere,
@@ -136,7 +138,7 @@ export class CustomerWalletService {
   /**
    * Credits a wallet, inserting a ledger transaction.
    */
-  async creditWallet(data: CreditWalletInput, tx: any = prisma) {
+  async creditWallet(data: CreditWalletInput, tx: any = prisma, auditContext?: ServerAuthContext) {
     const execute = async (innerTx: any) => {
       const amountVal = new Decimal(data.amount);
       if (amountVal.lte(0)) throw new Error("O valor do crédito deve ser maior que zero.");
@@ -187,14 +189,11 @@ export class CustomerWalletService {
         }
       });
 
-      await writeActivityLog({
-          companyId: data.companyId,
-          userId: data.userId,
-          action: "CREDITO_CARTEIRA",
-          module: "CARTEIRA",
-          recordId: wallet.id,
-          details: `Crédito de R$ ${amountVal.toFixed(2)} gerado para cliente ${customer.name}.`,
-        });
+      if (auditContext) await writeActivityLog({
+        context: auditContext, action: 'CUSTOMER_WALLET_CREDIT', module: 'CUSTOMER_WALLET', recordId: transaction.id,
+        details: 'Crédito manual em carteira registrado.',
+        metadata: { customerId: data.customerId, walletId: wallet.id, beforeBalance: Number(balanceBefore), afterBalance: Number(balanceAfter), delta: Number(amountVal), origin: 'MANUAL', reason: sanitizeAuditDetails(data.description) },
+      }, { policy: 'CRITICAL', tx: innerTx });
 
       return { wallet: updatedWallet, transaction };
     };
@@ -209,7 +208,7 @@ export class CustomerWalletService {
   /**
    * Debits a wallet, verifying balance.
    */
-  async debitWallet(data: DebitWalletInput, tx: any = prisma) {
+  async debitWallet(data: DebitWalletInput, tx: any = prisma, auditContext?: ServerAuthContext) {
     const execute = async (innerTx: any) => {
       const amountVal = new Decimal(data.amount);
       if (amountVal.lte(0)) throw new Error("O valor do débito deve ser maior que zero.");
@@ -252,14 +251,11 @@ export class CustomerWalletService {
         }
       });
 
-      await writeActivityLog({
-          companyId: data.companyId,
-          userId: data.userId,
-          action: "DEBITO_CARTEIRA",
-          module: "CARTEIRA",
-          recordId: wallet.id,
-          details: `Débito de R$ ${amountVal.toFixed(2)} realizado para cliente ${customer.name}.`,
-        });
+      if (auditContext) await writeActivityLog({
+        context: auditContext, action: 'CUSTOMER_WALLET_DEBIT', module: 'CUSTOMER_WALLET', recordId: transaction.id,
+        details: 'Débito manual em carteira registrado.',
+        metadata: { customerId: data.customerId, walletId: wallet.id, beforeBalance: Number(balanceBefore), afterBalance: Number(balanceAfter), delta: -Number(amountVal), origin: 'MANUAL', reason: sanitizeAuditDetails(data.description) },
+      }, { policy: 'CRITICAL', tx: innerTx });
 
       return { wallet: updatedWallet, transaction };
     };
@@ -340,7 +336,8 @@ export class CustomerWalletService {
       userId: string;
       authorizationId?: string;
     },
-    tx: any = prisma
+    tx: any = prisma,
+    auditContext?: ServerAuthContext,
   ) {
     const customer = await tx.customer.findFirst({
       where: walletCustomerWhere(data.customerId, data.companyId),
@@ -382,7 +379,7 @@ export class CustomerWalletService {
         description: `Ajuste Manual: ${data.reason}`,
         companyId: data.companyId,
         userId: data.userId,
-      }, tx);
+      }, tx, auditContext);
     } else {
       if (settings && !settings.walletAllowManualDebit) {
         if (data.authorizationId) {
@@ -414,7 +411,7 @@ export class CustomerWalletService {
         description: `Ajuste Manual: ${data.reason}`,
         companyId: data.companyId,
         userId: data.userId,
-      }, tx);
+      }, tx, auditContext);
     }
   }
 }

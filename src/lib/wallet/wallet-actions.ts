@@ -84,7 +84,7 @@ export async function creditWalletAction(data: {
       ...data,
       companyId: session.companyId,
       userId: session.userId,
-    });
+    }, undefined, session);
     return { success: true, wallet: result.wallet, transaction: result.transaction };
   } catch {
     return { success: false, error: "Erro ao creditar carteira." };
@@ -103,7 +103,7 @@ export async function debitWalletAction(data: {
       ...data,
       companyId: session.companyId,
       userId: session.userId,
-    });
+    }, undefined, session);
     return { success: true, wallet: result.wallet, transaction: result.transaction };
   } catch (error: unknown) {
     if (error instanceof Error && error.message.startsWith('Saldo insuficiente na carteira do cliente.')) {
@@ -128,7 +128,7 @@ export async function createManualAdjustmentAction(data: {
       companyId: session.companyId,
       userId: session.userId,
       authorizationId: data.authorizationId
-    });
+    }, undefined, session);
     
     if (result && 'requireAuthorization' in result) {
       return { success: false, requireAuthorization: true, authorizationId: result.authorizationId, type: data.type };

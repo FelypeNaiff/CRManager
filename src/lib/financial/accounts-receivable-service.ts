@@ -3,7 +3,8 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { sanitizeAuditDetails } from '@/lib/auth/audit-sanitization';
 import { Prisma } from '@prisma/client';
 import { AccountsReceivableSchema, PayInstallmentSchema } from './financial-schemas';
 import { addDays } from 'date-fns';
@@ -102,16 +103,23 @@ export async function createAccountsReceivable(input: any) {
         createdInstallments.push(receivable);
       }
 
-      return createdInstallments;
-    });
+      await writeActivityLog({
+        context: session,
+        action: 'RECEIVABLE_CREATE',
+        module: 'RECEIVABLES',
+        recordId: createdInstallments[0]?.id,
+        details: 'Conta a receber manual criada.',
+        metadata: {
+          customerId: customerId ?? null,
+          installmentCount: totalInstallments,
+          installmentAmount: Number(installmentAmount),
+          totalAmount: Number(totalAmount),
+          dueDate: baseDueDate.toISOString(),
+          origin: 'MANUAL',
+        },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CRIAR',
-      module: 'FINANCEIRO',
-      recordId: installments[0]?.id,
-      details: `${totalInstallments}x parcela(s) de R$ ${installmentAmount.toFixed(2)} criadas. Total: R$ ${totalAmount}. Descrição: ${description}`,
+      return createdInstallments;
     });
 
     return { success: true, data: serializePrisma(installments) };
@@ -208,16 +216,23 @@ export async function payInstallment(
         });
       }
 
-      return updated;
-    });
+      await writeActivityLog({
+        context: session,
+        action: 'RECEIVABLE_PAYMENT',
+        module: 'RECEIVABLES',
+        recordId: id,
+        details: 'Pagamento de conta a receber registrado.',
+        metadata: {
+          amount: Number(amount),
+          paidAmount: { before: Number(receivable.paidAmount), after: newPaidAmount },
+          remainingAmount: { before: Number(receivable.remainingAmount), after: Math.max(0, newRemainingAmount) },
+          status: { before: receivable.status, after: updated.status },
+          bankAccountId: bankAccountId ?? null,
+          paymentMethodId: paymentMethodId ?? null,
+        },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: result.status === 'PAID' ? 'BAIXA_TOTAL' : 'BAIXA_PARCIAL',
-      module: 'FINANCEIRO',
-      recordId: id,
-      details: `Pagamento de R$ ${amount} registrado na parcela ${result.installmentNumber}/${result.totalInstallments}. Status: ${result.status}. Restante: R$ ${result.remainingAmount}.`,
+      return updated;
     });
 
     return { success: true, data: serializePrisma(result) };
@@ -229,26 +244,17 @@ export async function payInstallment(
 export async function cancelReceivable(id: string, reason?: string) {
   const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
-    const receivable = await prisma.accountsReceivable.findFirst({
-      where: receivableTenantWhere(id, session.companyId),
-    });
-
-    if (!receivable) return { success: false, error: 'Conta a receber não encontrada.' };
-    if (receivable.status === 'PAID') return { success: false, error: 'Não é possível cancelar uma parcela já paga.' };
-    if (receivable.status === 'CANCELLED') return { success: false, error: 'Esta parcela já está cancelada.' };
-
-    await prisma.accountsReceivable.update({
-      where: receivableTenantWhere(id, session.companyId),
-      data: { status: 'CANCELLED' },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CANCELAR',
-      module: 'FINANCEIRO',
-      recordId: id,
-      details: `Parcela ${receivable.installmentNumber}/${receivable.totalInstallments} de R$ ${receivable.originalAmount} cancelada.${reason ? ` Motivo: ${reason}` : ''}`,
+    await prisma.$transaction(async tx => {
+      const receivable = await tx.accountsReceivable.findFirst({ where: receivableTenantWhere(id, session.companyId) });
+      if (!receivable) throw new Error('Conta a receber não encontrada.');
+      if (receivable.status === 'PAID') throw new Error('Não é possível cancelar uma parcela já paga.');
+      if (receivable.status === 'CANCELLED') throw new Error('Esta parcela já está cancelada.');
+      await tx.accountsReceivable.update({ where: receivableTenantWhere(id, session.companyId), data: { status: 'CANCELLED' } });
+      await writeActivityLog({
+        context: session, action: 'RECEIVABLE_CANCEL', module: 'RECEIVABLES', recordId: id,
+        details: 'Conta a receber cancelada.',
+        metadata: { status: { before: receivable.status, after: 'CANCELLED' }, amount: Number(receivable.originalAmount), reason: sanitizeAuditDetails(reason) },
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };
@@ -260,30 +266,17 @@ export async function cancelReceivable(id: string, reason?: string) {
 export async function renegotiateReceivable(id: string, newDueDate: string, notes?: string) {
   const session = await requirePermission('FINANCEIRO', 'UPDATE');
   try {
-    const receivable = await prisma.accountsReceivable.findFirst({
-      where: receivableTenantWhere(id, session.companyId),
-    });
-
-    if (!receivable) return { success: false, error: 'Conta a receber não encontrada.' };
-    if (receivable.status === 'PAID') return { success: false, error: 'Não é possível renegociar uma parcela já paga.' };
-    if (receivable.status === 'CANCELLED') return { success: false, error: 'Não é possível renegociar uma parcela cancelada.' };
-
-    await prisma.accountsReceivable.update({
-      where: receivableTenantWhere(id, session.companyId),
-      data: {
-        dueDate: new Date(newDueDate),
-        status: 'RENEGOTIATED',
-        notes: notes || receivable.notes,
-      },
-    });
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'RENEGOCIAR',
-      module: 'FINANCEIRO',
-      recordId: id,
-      details: `Parcela ${receivable.installmentNumber}/${receivable.totalInstallments} renegociada para ${newDueDate}.${notes ? ` Obs: ${notes}` : ''}`,
+    await prisma.$transaction(async tx => {
+      const receivable = await tx.accountsReceivable.findFirst({ where: receivableTenantWhere(id, session.companyId) });
+      if (!receivable) throw new Error('Conta a receber não encontrada.');
+      if (receivable.status === 'PAID' || receivable.status === 'CANCELLED') throw new Error('Conta a receber não pode ser renegociada.');
+      const dueDate = new Date(newDueDate);
+      await tx.accountsReceivable.update({ where: receivableTenantWhere(id, session.companyId), data: { dueDate, status: 'RENEGOTIATED', notes: notes || receivable.notes } });
+      await writeActivityLog({
+        context: session, action: 'RECEIVABLE_UPDATE', module: 'RECEIVABLES', recordId: id,
+        details: 'Conta a receber renegociada.',
+        metadata: { changes: { dueDate: { before: receivable.dueDate.toISOString(), after: dueDate.toISOString() }, status: { before: receivable.status, after: 'RENEGOTIATED' } } },
+      }, { policy: 'CRITICAL', tx });
     });
 
     return { success: true };
