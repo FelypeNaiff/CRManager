@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { requirePermission } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { Decimal } from '@prisma/client/runtime/library';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
 
 interface ProductImportItem {
   codigo?: string;
@@ -105,6 +107,18 @@ export async function importProductsAction(items: ProductImportItem[]) {
         }
 
         if (existingVariant) {
+          const productChanges: AuditChanges = {};
+          addAuditChange(productChanges, 'name', existingVariant.product.name, nome);
+          addAuditChange(productChanges, 'categoryId', existingVariant.product.categoryId, categoryId);
+          addAuditChange(productChanges, 'supplierId', existingVariant.product.supplierId, supplierId);
+          addAuditChange(productChanges, 'internalCode', existingVariant.product.internalCode, internalCode || existingVariant.product.internalCode);
+          const variantChanges: AuditChanges = {};
+          addAuditChange(variantChanges, 'costPrice', Number(existingVariant.costPrice), Number(costPrice));
+          addAuditChange(variantChanges, 'salePrice', Number(existingVariant.salePrice), Number(salePrice));
+          addAuditChange(variantChanges, 'name', existingVariant.name, item.tamanho || item.cor ? `${item.tamanho || ''} ${item.cor || ''}`.trim() : existingVariant.name);
+          addAuditChange(variantChanges, 'sku', existingVariant.sku, sku || existingVariant.sku);
+          addAuditChange(variantChanges, 'barcode', existingVariant.barcode, barcode || existingVariant.barcode);
+
           // UPDATE
           // Write price history if cost or sale price changed
           if (!existingVariant.costPrice.equals(costPrice) || !existingVariant.salePrice.equals(salePrice)) {
@@ -128,7 +142,7 @@ export async function importProductsAction(items: ProductImportItem[]) {
 
           if (!delta.isZero()) {
             // Register controlled initial adjustment
-            await tx.inventoryMovement.create({
+            const movement = await tx.inventoryMovement.create({
               data: {
                 variantId: existingVariant.id,
                 quantity: delta,
@@ -146,6 +160,23 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 availableStock: currentAvailable.plus(delta)
               }
             });
+
+            await writeActivityLog({
+              context: auth,
+              action: delta.greaterThan(0) ? 'STOCK_ENTRY' : 'STOCK_EXIT',
+              module: 'INVENTORY',
+              recordId: movement.id,
+              details: 'Estoque inicial atualizado por importação de produtos.',
+              metadata: {
+                productId: existingVariant.productId,
+                variantId: existingVariant.id,
+                beforeQuantity: Number(currentStock),
+                afterQuantity: Number(currentStock.plus(delta)),
+                delta: Number(delta),
+                reason: 'GO-LIVE-04',
+                origin: 'PRODUCT_IMPORT',
+              },
+            }, { policy: 'CRITICAL', tx });
           }
 
           // Update other variant/product properties
@@ -170,11 +201,33 @@ export async function importProductsAction(items: ProductImportItem[]) {
             }
           });
 
+          if (Object.keys(productChanges).length > 0) {
+            await writeActivityLog({
+              context: auth,
+              action: 'PRODUCT_UPDATE',
+              module: 'PRODUCTS',
+              recordId: existingVariant.productId,
+              details: `Produto "${nome}" atualizado por importação.`,
+              metadata: { changes: productChanges, origin: 'PRODUCT_IMPORT' },
+            }, { policy: 'CRITICAL', tx });
+          }
+          if (Object.keys(variantChanges).length > 0) {
+            await writeActivityLog({
+              context: auth,
+              action: 'PRODUCT_VARIANT_UPDATE',
+              module: 'PRODUCT_VARIANTS',
+              recordId: existingVariant.id,
+              details: 'Variação atualizada por importação de produtos.',
+              metadata: { productId: existingVariant.productId, changes: variantChanges, origin: 'PRODUCT_IMPORT' },
+            }, { policy: 'CRITICAL', tx });
+          }
+
           updatedCount++;
         } else {
           // CREATE
           // Create product if not exists
           let product: any = null;
+          let productWasCreated = false;
           if (internalCode) {
             product = await tx.product.findFirst({
               where: { companyId, internalCode }
@@ -191,6 +244,23 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 supplierId
               }
             });
+            productWasCreated = true;
+          }
+
+          if (productWasCreated) {
+            await writeActivityLog({
+              context: auth,
+              action: 'PRODUCT_CREATE',
+              module: 'PRODUCTS',
+              recordId: product.id,
+              details: `Produto "${product.name}" criado por importação.`,
+              metadata: {
+                name: product.name,
+                internalCode: product.internalCode,
+                categoryId: product.categoryId,
+                origin: 'PRODUCT_IMPORT',
+              },
+            }, { policy: 'CRITICAL', tx });
           }
 
           // Write initial price history
@@ -221,9 +291,18 @@ export async function importProductsAction(items: ProductImportItem[]) {
             }
           });
 
+          await writeActivityLog({
+            context: auth,
+            action: 'PRODUCT_VARIANT_CREATE',
+            module: 'PRODUCT_VARIANTS',
+            recordId: newVariant.id,
+            details: `Variação "${newVariant.name}" criada por importação.`,
+            metadata: { productId: product.id, sku: newVariant.sku, name: newVariant.name, origin: 'PRODUCT_IMPORT' },
+          }, { policy: 'CRITICAL', tx });
+
           // Geração de estoque inicial
           if (!targetStock.isZero()) {
-            await tx.inventoryMovement.create({
+            const movement = await tx.inventoryMovement.create({
               data: {
                 variantId: newVariant.id,
                 quantity: targetStock,
@@ -240,6 +319,23 @@ export async function importProductsAction(items: ProductImportItem[]) {
                 availableStock: targetStock
               }
             });
+
+            await writeActivityLog({
+              context: auth,
+              action: targetStock.greaterThan(0) ? 'STOCK_ENTRY' : 'STOCK_EXIT',
+              module: 'INVENTORY',
+              recordId: movement.id,
+              details: 'Estoque inicial registrado por importação de produtos.',
+              metadata: {
+                productId: product.id,
+                variantId: newVariant.id,
+                beforeQuantity: 0,
+                afterQuantity: Number(targetStock),
+                delta: Number(targetStock),
+                reason: 'GO-LIVE-04',
+                origin: 'PRODUCT_IMPORT',
+              },
+            }, { policy: 'CRITICAL', tx });
           }
 
           createdCount++;

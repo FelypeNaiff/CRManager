@@ -6,7 +6,9 @@ import { requirePermission } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { getPaginationArgs, buildPaginatedResult, PaginationParams } from '@/lib/performance/pagination';
 import { buildProductSearchWhere } from '@/lib/performance/query-utils';
-import { writeLegacyActivityLog as writeActivityLog } from '../auth/activity-log';
+import { writeActivityLog, writeLegacyActivityLog } from '../auth/activity-log';
+import { addAuditChange, type AuditChanges } from '../auth/audit-changes';
+import { sanitizeAuditDetails } from '../auth/audit-sanitization';
 import {
   ProductCategorySchema,
   SupplierSchema,
@@ -65,7 +67,7 @@ export async function createProductCategory(input: any) {
       },
     });
 
-    await writeActivityLog({
+    await writeLegacyActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
@@ -118,7 +120,7 @@ export async function createSupplier(input: any) {
       },
     });
 
-    await writeActivityLog({
+    await writeLegacyActivityLog({
       companyId: session.companyId,
       userId: session.userId,
       action: 'CRIAR',
@@ -282,16 +284,33 @@ export async function createProduct(input: any) {
         },
       });
 
-      return { product: newProduct, variant: defaultVariant };
-    });
+      await writeActivityLog({
+        context: session,
+        action: 'PRODUCT_CREATE',
+        module: 'PRODUCTS',
+        recordId: newProduct.id,
+        details: `Produto "${newProduct.name}" criado.`,
+        metadata: {
+          name: newProduct.name,
+          internalCode: newProduct.internalCode,
+          categoryId: newProduct.categoryId,
+        },
+      }, { policy: 'CRITICAL', tx });
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CRIAR',
-      module: 'PRODUTOS',
-      recordId: result.product.id,
-      details: `Produto "${result.product.name}" criado com código interno ${result.product.internalCode} e SKU ${result.variant.sku}.`,
+      await writeActivityLog({
+        context: session,
+        action: 'PRODUCT_VARIANT_CREATE',
+        module: 'PRODUCT_VARIANTS',
+        recordId: defaultVariant.id,
+        details: `Variação "${defaultVariant.name}" criada para o produto.`,
+        metadata: {
+          productId: newProduct.id,
+          sku: defaultVariant.sku,
+          name: defaultVariant.name,
+        },
+      }, { policy: 'CRITICAL', tx });
+
+      return { product: newProduct, variant: defaultVariant };
     });
 
     
@@ -334,6 +353,22 @@ export async function updateProduct(id: string, input: any) {
     const oldSale = defaultVariant ? Number(defaultVariant.salePrice) : 0;
     const newCost = parsed.data.costPrice ?? oldCost;
     const newSale = parsed.data.salePrice ?? oldSale;
+    const productChanges: AuditChanges = {};
+    addAuditChange(productChanges, 'name', existing.name, parsed.data.name);
+    addAuditChange(productChanges, 'internalCode', existing.internalCode, parsed.data.internalCode);
+    addAuditChange(productChanges, 'description', existing.description, parsed.data.description);
+    addAuditChange(productChanges, 'categoryId', existing.categoryId, parsed.data.categoryId || null);
+    addAuditChange(productChanges, 'supplierId', existing.supplierId, parsed.data.supplierId || null);
+
+    const variantChanges: AuditChanges = {};
+    if (defaultVariant) {
+      addAuditChange(variantChanges, 'sku', defaultVariant.sku, parsed.data.sku || defaultVariant.sku);
+      addAuditChange(variantChanges, 'barcode', defaultVariant.barcode, parsed.data.barcode || defaultVariant.barcode);
+      addAuditChange(variantChanges, 'barcodeType', defaultVariant.barcodeType, parsed.data.barcodeType || defaultVariant.barcodeType);
+      addAuditChange(variantChanges, 'costPrice', Number(defaultVariant.costPrice), newCost);
+      addAuditChange(variantChanges, 'salePrice', Number(defaultVariant.salePrice), newSale);
+      addAuditChange(variantChanges, 'minimumStock', Number(defaultVariant.minimumStock), parsed.data.minimumStock ?? Number(defaultVariant.minimumStock));
+    }
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Atualizar produto
@@ -381,16 +416,29 @@ export async function updateProduct(id: string, input: any) {
         });
       }
 
-      return updated;
-    });
+      if (Object.keys(productChanges).length > 0) {
+        await writeActivityLog({
+          context: session,
+          action: 'PRODUCT_UPDATE',
+          module: 'PRODUCTS',
+          recordId: id,
+          details: `Produto "${updated.name}" atualizado.`,
+          metadata: { changes: productChanges },
+        }, { policy: 'CRITICAL', tx });
+      }
 
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'EDITAR',
-      module: 'PRODUTOS',
-      recordId: id,
-      details: `Produto "${result.name}" atualizado. Alterações salvas no banco.`,
+      if (defaultVariant && Object.keys(variantChanges).length > 0) {
+        await writeActivityLog({
+          context: session,
+          action: 'PRODUCT_VARIANT_UPDATE',
+          module: 'PRODUCT_VARIANTS',
+          recordId: defaultVariant.id,
+          details: `Variação "${defaultVariant.name}" atualizada.`,
+          metadata: { productId: id, changes: variantChanges },
+        }, { policy: 'CRITICAL', tx });
+      }
+
+      return updated;
     });
 
     
@@ -414,24 +462,37 @@ export async function deleteProduct(id: string) {
 
     const now = new Date();
 
-    await prisma.$transaction([
-      prisma.product.update({
+    await prisma.$transaction(async (tx) => {
+      const variants = await tx.productVariant.findMany({
+        where: { productId: id, companyId: session.companyId, isActive: true },
+        select: { id: true, name: true },
+      });
+      await tx.product.update({
         where: tenantWhere(id, session.companyId),
         data: { isActive: false, archivedAt: now },
-      }),
-      prisma.productVariant.updateMany({
+      });
+      await tx.productVariant.updateMany({
         where: { productId: id, companyId: session.companyId },
         data: { isActive: false, archivedAt: now },
-      }),
-    ]);
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'DELETAR',
-      module: 'PRODUTOS',
-      recordId: id,
-      details: `Produto "${product.name}" inativado/arquivado (Soft Delete).`,
+      });
+      await writeActivityLog({
+        context: session,
+        action: 'PRODUCT_STATUS_CHANGE',
+        module: 'PRODUCTS',
+        recordId: id,
+        details: `Produto "${product.name}" inativado.`,
+        metadata: { changes: { isActive: { before: true, after: false } } },
+      }, { policy: 'CRITICAL', tx });
+      for (const variant of variants) {
+        await writeActivityLog({
+          context: session,
+          action: 'PRODUCT_VARIANT_STATUS_CHANGE',
+          module: 'PRODUCT_VARIANTS',
+          recordId: variant.id,
+          details: `Variação "${variant.name}" inativada.`,
+          metadata: { productId: id, changes: { isActive: { before: true, after: false } } },
+        }, { policy: 'CRITICAL', tx });
+      }
     });
 
     
@@ -627,31 +688,41 @@ export async function createInventoryMovement(input: any) {
         },
       });
 
-      return { successResult: { movement, product: variant.product, newAvailableStock } };
+      const manualAuditAction = type === 'MANUAL_ADJUSTMENT'
+        ? 'STOCK_ADJUSTMENT'
+        : type === 'INITIAL' || type === 'PURCHASE'
+          ? 'STOCK_ENTRY'
+          : type === 'LOSS' || type === 'DAMAGE'
+            ? 'STOCK_EXIT'
+            : null;
+
+      if (manualAuditAction) {
+        await writeActivityLog({
+          context: session,
+          action: manualAuditAction,
+          module: 'INVENTORY',
+          recordId: movement.id,
+          details: `Movimentação manual de estoque registrada para "${variant.product.name}".`,
+          metadata: {
+            productId: variant.product.id,
+            variantId,
+            beforeQuantity: currentStock,
+            afterQuantity: newCurrentStock,
+            delta: quantity,
+            reason: sanitizeAuditDetails(reason ?? undefined) ?? null,
+            origin: type,
+          },
+        }, { policy: 'CRITICAL', tx });
+      }
+
+      return { successResult: { movement } };
     });
 
     if (result && 'requireAuthorization' in result) {
       return result;
     }
 
-    const { movement, product, newAvailableStock } = result.successResult;
-
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'CRIAR',
-      module: 'ESTOQUE',
-      recordId: movement.id,
-      details: `Movimentação de estoque (${type}) de ${quantity} unidades criada para o produto "${product.name}". Nãovo saldo disponível: ${newAvailableStock}.`,
-    });
-
-    const movementWithVariant = await prisma.inventoryMovement.findUnique({
-      where: { id: movement.id },
-      include: { variant: true }
-    });
-    if (movementWithVariant?.variant) {
-      
-    }
+    const { movement } = result.successResult;
 
     return { success: true, data: serializePrisma(movement) };
   } catch (error: any) {
