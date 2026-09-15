@@ -3,6 +3,10 @@ import assert from 'node:assert/strict';
 import { ExchangeService, type ProcessExchangeReturnInput } from './exchange-service';
 
 const decimal = (value: number) => ({ toNumber: () => value });
+const authContext: any = {
+  authUserId: 'auth-base', authenticatedUserId: 'base-user', userId: 'user-a', companyId: 'company-a',
+  name: 'Operador', email: 'operator@example.invalid', roleId: 'role-a', roleName: 'Operador', isAdmin: false, permissions: {},
+};
 
 function input(items: ProcessExchangeReturnInput['items'], overrides: Partial<ProcessExchangeReturnInput> = {}): ProcessExchangeReturnInput {
   return { companyId: 'company-a', saleId: 'sale-a', userId: 'user-a', type: 'RETURN', reason: 'Cliente devolveu', items, ...overrides };
@@ -78,7 +82,7 @@ function harness(options: { existingQuantity?: number; failLog?: boolean; tenant
 
 test('partial RESALE return credits proportional wallet value and restores available stock', async () => {
   const { service, state } = harness();
-  const result = await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }]));
+  const result = await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }]), authContext);
   assert.equal(result.totalCredit, 100);
   assert.equal(state.saleStatus, 'PARTIALLY_RETURNED');
   assert.deepEqual(state.stocks['variant-a'], { current: 11, available: 11 });
@@ -86,7 +90,8 @@ test('partial RESALE return credits proportional wallet value and restores avail
   assert.equal(state.walletBalance, 100);
   assert.equal(state.commission.amount, 20);
   assert.equal(state.goal.achievedAmount, 200);
-  assert.equal(state.logs[0].action, 'CREATE_RETURN');
+  assert.equal(state.logs[0].action, 'RETURN_CREATE');
+  assert.equal(state.logs[0].authenticatedUserId, 'base-user');
   assert.equal(state.returns[0].companyId, 'company-a');
   assert.equal(state.returns[0].customerId, 'customer-a');
 });
@@ -135,7 +140,7 @@ test('historical rollback uses sale sellerId and does not require an active Sell
 
 test('transaction rollback removes stock, wallet, commission, goal and return effects after late failure', async () => {
   const { service, state } = harness({ failLog: true });
-  await assert.rejects(service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }])), /log failed/);
+  await assert.rejects(service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }]), authContext), /log failed/);
   assert.deepEqual(state.stocks['variant-a'], { current: 10, available: 10 });
   assert.equal(state.walletBalance, 0);
   assert.equal(state.commission.amount, 30);

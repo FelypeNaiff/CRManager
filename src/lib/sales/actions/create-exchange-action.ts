@@ -9,7 +9,7 @@ export async function processExchangeReturnAction(data: ProcessExchangeReturnInp
   try {
     const auth = await requirePermission("TROCAS", "CREATE");
     const exchangeService = new ExchangeService();
-    const result = await exchangeService.processExchangeReturn(scopeTenantOperationInput(data, auth));
+    const result = await exchangeService.processExchangeReturn(scopeTenantOperationInput(data, auth), auth);
     return result as any;
   } catch {
     return { success: false, error: "Não foi possível processar a troca." };

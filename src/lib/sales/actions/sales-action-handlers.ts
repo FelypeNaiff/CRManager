@@ -9,7 +9,7 @@ export function createCreateSaleAction(deps: any) {
         ...scopeCreateSaleInput(data, auth),
         items: data.items?.map(item => ({ ...item, barcodeSnapshot: item.barcodeSnapshot ?? '', skuSnapshot: item.skuSnapshot ?? '', productNameSnapshot: item.productNameSnapshot ?? 'Produto sem nome', variantNameSnapshot: item.variantNameSnapshot ?? '' })) || [],
       };
-      const result = await deps.service.createSale(createSaleSchema.parse(normalizedData), auth.userId);
+      const result = await deps.service.createSale(createSaleSchema.parse(normalizedData), auth.userId, auth);
       if (result && 'requireAuthorization' in result) return { success: false, requireAuthorization: true, authorizationId: result.authorizationId };
       try { deps.revalidate('sales-reports'); deps.revalidate('crm-segmentation'); } catch { /* CLI/test mode */ }
       return { success: true, sale: result };
@@ -23,7 +23,7 @@ export function createCancelSaleAction(deps: any) {
   return async (data: CancelSaleInput) => {
     try {
       const auth = await deps.authorize([{ module: 'PDV', action: 'CANCEL_SALE' }, { module: 'VENDAS', action: 'CANCEL' }]);
-      const result = await deps.service.cancelSale(cancelSaleSchema.parse(scopeCancelSaleInput(data, auth)), auth.companyId);
+      const result = await deps.service.cancelSale(cancelSaleSchema.parse(scopeCancelSaleInput(data, auth)), auth.companyId, auth);
       if (result && 'requireAuthorization' in result) return { success: false, requireAuthorization: true, authorizationId: result.authorizationId };
       deps.revalidateTag('sales-reports'); deps.revalidateTag('crm-segmentation');
       deps.revalidatePath('/comercial/vendas'); deps.revalidatePath(`/comercial/vendas/${data.saleId}`);

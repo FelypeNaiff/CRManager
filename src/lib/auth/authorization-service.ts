@@ -2,6 +2,9 @@ import { prisma } from '@/lib/prisma';
 import { validatePin } from './pin-service';
 import { AuthorizationType, AuthorizationStatus, AUTHORIZATION_PERMISSION_MAP } from './authorization-types';
 import { authorizationBelongsToTenant, canonicalAuthorizationModule } from './authorization-security';
+import { writeActivityLog } from './activity-log';
+import type { ServerAuthContext } from './server-auth-context';
+import { sanitizeAuditDetails } from './audit-sanitization';
 
 export class AuthorizationService {
   constructor(
@@ -210,13 +213,31 @@ export class AuthorizationService {
   async approveAuthorizationWithPin(data: {
     authorizationId: string; companyId: string; pin: string;
     approvedAmount?: number; approvedPercentage?: number;
-  }) {
+  }, auditContext?: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
       const auth = await tx.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(data.authorizationId, data.companyId) });
       if (!auth) throw new Error('Autorização não encontrada.');
       if (auth.module !== canonicalAuthorizationModule(auth.type as AuthorizationType)) throw new Error('Contexto de autorização inválido.');
       const authorizer = await this.validateAuthorizationPin(data.companyId, data.pin, auth.type as AuthorizationType, auth.requestedByUserId, data.approvedAmount, data.approvedPercentage);
-      return this.approveAuthorization({ ...data, authorizerId: authorizer.id }, tx);
+      const result = await this.approveAuthorization({ ...data, authorizerId: authorizer.id }, tx);
+      if (auditContext && auth.type === AuthorizationType.DISCOUNT) {
+        await writeActivityLog({
+          context: { ...auditContext, userId: authorizer.id },
+          action: 'SALE_DISCOUNT_AUTHORIZED',
+          module: 'DISCOUNTS',
+          recordId: auth.referenceId ?? auth.id,
+          details: 'Autorização de desconto aprovada.',
+          metadata: {
+            authorizationId: auth.id,
+            requestedByActorUserId: auth.requestedByUserId,
+            authorizedByUserId: authorizer.id,
+            requestedDiscount: Number(auth.percentage ?? auth.amount ?? 0),
+            requesterLimit: Number((auth.metadata as any)?.requesterLimit ?? 0),
+            result: 'APPROVED',
+          },
+        }, { policy: 'CRITICAL', tx });
+      }
+      return result;
     });
   }
 
@@ -254,13 +275,31 @@ export class AuthorizationService {
 
   async rejectAuthorizationWithPin(data: {
     authorizationId: string; companyId: string; pin: string; rejectionReason: string;
-  }) {
+  }, auditContext?: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
       const auth = await tx.actionAuthorization.findFirst({ where: authorizationBelongsToTenant(data.authorizationId, data.companyId) });
       if (!auth) throw new Error('Autorização não encontrada.');
       if (auth.module !== canonicalAuthorizationModule(auth.type as AuthorizationType)) throw new Error('Contexto de autorização inválido.');
       const rejecter = await this.validateAuthorizationPin(data.companyId, data.pin, auth.type as AuthorizationType, auth.requestedByUserId);
-      return this.rejectAuthorization({ ...data, rejecterId: rejecter.id }, tx);
+      const result = await this.rejectAuthorization({ ...data, rejecterId: rejecter.id }, tx);
+      if (auditContext && auth.type === AuthorizationType.DISCOUNT) {
+        await writeActivityLog({
+          context: { ...auditContext, userId: rejecter.id },
+          action: 'SALE_DISCOUNT_AUTHORIZED',
+          module: 'DISCOUNTS',
+          recordId: auth.referenceId ?? auth.id,
+          details: 'Autorização de desconto rejeitada.',
+          metadata: {
+            authorizationId: auth.id,
+            requestedByActorUserId: auth.requestedByUserId,
+            authorizedByUserId: rejecter.id,
+            requestedDiscount: Number(auth.percentage ?? auth.amount ?? 0),
+            result: 'REJECTED',
+            reason: sanitizeAuditDetails(data.rejectionReason),
+          },
+        }, { policy: 'CRITICAL', tx });
+      }
+      return result;
     });
   }
 

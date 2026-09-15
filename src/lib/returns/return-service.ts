@@ -3,7 +3,9 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
-import { writeLegacyActivityLog as writeActivityLog } from "../auth/activity-log";
+import { writeActivityLog } from "../auth/activity-log";
+import type { ServerAuthContext } from "../auth/server-auth-context";
+import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 import { itemBelongsToSale, tenantResourceWhere } from "../exchanges/exchange-return-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
 
@@ -25,7 +27,7 @@ export class ReturnService {
   /**
    * Creates a new SaleReturn, updates inventory, and credits the wallet if WALLET is chosen.
    */
-  async createReturn(data: CreateReturnInput) {
+  async createReturn(data: CreateReturnInput, auditContext?: ServerAuthContext) {
     const sale = await prisma.sale.findFirst({
       where: tenantResourceWhere(data.saleId, data.companyId),
       include: { items: true }
@@ -205,14 +207,23 @@ export class ReturnService {
         }, tx);
       }
 
-      await writeActivityLog({
-        companyId: data.companyId,
-        userId: data.userId,
-        action: "REALIZAR_DEVOLUCAO",
-        module: "Vendas",
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: "RETURN_CREATE",
+        module: "RETURNS",
         recordId: returnRecord.id,
-        details: `Devolução gerada para a venda ${sale.id}. Método: ${data.refundMethod}. Reembolso: R$ ${totalAmount.toFixed(2)}.`,
-      });
+        details: 'Devolução registrada.',
+        metadata: {
+          originalSaleId: sale.id,
+          returnedItems: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          refundAmount: Number(totalAmount),
+          walletCredit: data.refundMethod === 'WALLET' ? Number(totalAmount) : 0,
+          refundMethod: data.refundMethod,
+          stockAdjustment: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          status: 'ACTIVE',
+          reason: sanitizeAuditDetails(data.reason),
+        },
+      }, { policy: 'CRITICAL', tx });
 
       return returnRecord;
     });
@@ -234,7 +245,7 @@ export class ReturnService {
   /**
    * Cancels a return, reverting inventory and debiting wallet (if WALLET was selected).
    */
-  async cancelReturn(id: string, companyId: string, userId: string) {
+  async cancelReturn(id: string, companyId: string, userId: string, auditContext?: ServerAuthContext) {
     const returnRecord = await prisma.saleReturn.findUnique({
       where: { id }
     });
@@ -314,14 +325,20 @@ export class ReturnService {
         }
       });
 
-      await writeActivityLog({
-        companyId: sale.companyId,
-        userId,
-        action: "CANCELAR_DEVOLUCAO",
-        module: "Vendas",
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: "RETURN_CANCEL",
+        module: "RETURNS",
         recordId: returnRecord.id,
-        details: `Devolução #${returnRecord.id} cancelada pelo usuário.`,
-      });
+        details: 'Devolução cancelada.',
+        metadata: {
+          originalSaleId: sale.id,
+          status: { before: 'ACTIVE', after: 'CANCELLED' },
+          refundAmount: Number(returnRecord.totalAmount),
+          walletCreditReverted: returnRecord.refundMethod === 'WALLET' ? Number(returnRecord.totalAmount) : 0,
+          stockAdjustment: items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+        },
+      }, { policy: 'CRITICAL', tx });
 
       return updatedReturn;
     });

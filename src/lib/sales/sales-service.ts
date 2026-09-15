@@ -10,6 +10,9 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { tenantResourceWhere } from "./sales-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
+import { writeActivityLog } from "../auth/activity-log";
+import type { ServerAuthContext } from "../auth/server-auth-context";
+import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 
 export class SalesService {
   constructor(
@@ -22,7 +25,7 @@ export class SalesService {
     },
   ) {}
 
-  async createSale(data: CreateSaleInput, operatorUserId: string) {
+  async createSale(data: CreateSaleInput, operatorUserId: string, auditContext?: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
@@ -121,6 +124,7 @@ export class SalesService {
                 percentage: discountPercentage,
                 amount: data.discountAmount,
                 reason: data.authReason || 'Desconto excede o limite',
+                metadata: { requesterLimit: maxAllowed },
                 financialImpact: true,
               });
               
@@ -222,17 +226,6 @@ export class SalesService {
           }
         });
 
-        await tx.activityLog.create({
-          data: {
-            companyId: data.companyId,
-            actorUserId: authorizedByUserId,
-            authenticatedUserId: authorizedByUserId,
-            action: "AUTHORIZE_DISCOUNT",
-            module: "SALES",
-            recordId: sale.id,
-            details: `Desconto de R$ ${data.discountAmount} (Lim: ${maxAllowed}%) aprovado na venda #${sale.id}`
-          }
-        });
       }
 
       // Etapa 4: Processar Pagamentos e Financeiro
@@ -260,17 +253,56 @@ export class SalesService {
         });
       }
 
-      // Etapa 7: Criar ActivityLog
-      await tx.activityLog.create({
-        data: {
-          companyId: data.companyId,
-          userId: operatorUserId,
-          action: "CREATE_SALE",
-          module: "SALES",
-          recordId: sale.id,
-          details: `Venda criada. Valor Total: ${data.totalAmount}`
+      if (auditContext) {
+        for (const [index, item] of data.items.entries()) {
+          if (Number(item.discount) <= 0) continue;
+          await writeActivityLog({
+            context: auditContext,
+            action: 'SALE_ITEM_DISCOUNT_APPLY',
+            module: 'DISCOUNTS',
+            recordId: sale.items[index]?.id ?? sale.id,
+            details: 'Desconto aplicado a item da venda.',
+            metadata: {
+              saleId: sale.id,
+              variantId: item.variantId,
+              type: item.discountType ?? 'AMOUNT',
+              requested: Number(item.discountValue ?? item.discount),
+              discountAmount: Number(item.discount),
+            },
+          }, { policy: 'CRITICAL', tx });
         }
-      });
+        if (Number(data.discountAmount) > 0) {
+          await writeActivityLog({
+            context: auditContext,
+            action: 'SALE_GLOBAL_DISCOUNT_APPLY',
+            module: 'DISCOUNTS',
+            recordId: sale.id,
+            details: 'Desconto global aplicado à venda.',
+            metadata: {
+              type: data.globalDiscountType ?? 'AMOUNT',
+              requested: Number(data.globalDiscountValue ?? data.discountAmount),
+              discountAmount: Number(data.discountAmount),
+            },
+          }, { policy: 'CRITICAL', tx });
+        }
+        await writeActivityLog({
+          context: auditContext,
+          action: 'SALE_CREATE',
+          module: 'SALES',
+          recordId: sale.id,
+          details: 'Venda registrada.',
+          metadata: {
+            sellerId: sale.sellerId,
+            customerId: sale.customerId,
+            itemCount: sale.items.length,
+            subtotal: Number(sale.subtotal),
+            discountAmount: Number(sale.discountAmount),
+            total: Number(sale.totalAmount),
+            paymentMethodIds: [...new Set(data.payments.map(payment => payment.paymentMethodId))],
+            status: sale.status,
+          },
+        }, { policy: 'CRITICAL', tx });
+      }
 
       if (data.customerId) {
         await tx.customerHistory.create({
@@ -289,7 +321,7 @@ export class SalesService {
     });
   }
 
-  async cancelSale(data: CancelSaleInput, companyId: string) {
+  async cancelSale(data: CancelSaleInput, companyId: string, auditContext?: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
       // Travar a venda alvo para evitar concorrência no cancelamento
       await tx.$queryRawUnsafe(
@@ -407,17 +439,19 @@ export class SalesService {
         });
       }
 
-      // Criar ActivityLog
-      await tx.activityLog.create({
-        data: {
-          companyId: sale.companyId,
-          userId: data.cancelledByUserId,
-          action: "CANCEL_SALE",
-          module: "SALES",
-          recordId: sale.id,
-          details: `Venda cancelada. Motivo: ${data.cancelReason}`
-        }
-      });
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: 'SALE_CANCEL',
+        module: 'SALES',
+        recordId: sale.id,
+        details: 'Venda cancelada.',
+        metadata: {
+          status: { before: sale.status, after: 'CANCELLED' },
+          reason: sanitizeAuditDetails(data.cancelReason),
+          cancelledAmount: Number(sale.totalAmount),
+          cancelledByUserId: auditContext.userId,
+        },
+      }, { policy: 'CRITICAL', tx });
 
       // Estornar comissões e metas
       await this.dependencies.sellerCommission.rollbackSaleCommission(tx, sale);

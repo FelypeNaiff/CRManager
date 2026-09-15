@@ -10,7 +10,7 @@ export async function createExchangeAction(data: Omit<CreateExchangeInput, "user
   try {
     const exchange = await exchangeService.createExchange(scopeTenantOperationInput(
       { ...data, userId: auth.userId }, auth
-    ));
+    ), auth);
     if (exchange && 'requireAuthorization' in exchange) {
       return { success: false, requireAuthorization: true, authorizationId: exchange.authorizationId };
     }
@@ -33,7 +33,7 @@ export async function getExchangeAction(id: string) {
 export async function cancelExchangeAction(id: string) {
   const auth = await requirePermission("TROCAS", "CANCEL");
   try {
-    const exchange = await exchangeService.cancelExchange(id, auth.companyId, auth.userId);
+    const exchange = await exchangeService.cancelExchange(id, auth.companyId, auth.userId, auth);
     return { success: true, exchange };
   } catch {
     return { success: false, error: "Não foi possível cancelar a troca." };

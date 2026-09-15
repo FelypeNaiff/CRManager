@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { ExchangeReturnType, ExchangeReturnCondition, InventoryMovementType } from "@prisma/client";
 import { sellerGoalForSaleWhere } from "./sales-tenant-security";
+import { writeActivityLog } from "../auth/activity-log";
+import type { ServerAuthContext } from "../auth/server-auth-context";
+import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 
 interface ExchangeReturnItemInput {
   variantId: string;
@@ -20,7 +23,7 @@ export interface ProcessExchangeReturnInput {
 export class ExchangeService {
   constructor(private readonly db: any = prisma) {}
 
-  async processExchangeReturn(data: ProcessExchangeReturnInput) {
+  async processExchangeReturn(data: ProcessExchangeReturnInput, auditContext?: ServerAuthContext) {
     return await this.db.$transaction(async (tx: any) => {
       const sale = await tx.sale.findFirst({
         where: { id: data.saleId, companyId: data.companyId },
@@ -201,23 +204,24 @@ export class ExchangeService {
         }
       });
 
-      // ActivityLog
-      await tx.activityLog.create({
-        data: {
-          companyId: data.companyId,
-          actorUserId: data.userId,
-          authenticatedUserId: data.userId,
-          action: data.type === "RETURN" ? "CREATE_RETURN" : "CREATE_EXCHANGE",
-          module: "COMERCIAL",
-          recordId: sale.id,
-          details: JSON.stringify({ 
-            exchangeReturnId: er.id,
-            totalCredit, 
-            reason: data.reason, 
-            status: newStatus 
-          })
-        }
-      });
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: data.type === 'RETURN' ? 'RETURN_CREATE' : 'EXCHANGE_CREATE',
+        module: data.type === 'RETURN' ? 'RETURNS' : 'EXCHANGES',
+        recordId: er.id,
+        details: data.type === 'RETURN' ? 'Devolução comercial registrada.' : 'Troca comercial registrada.',
+        metadata: {
+          originalSaleId: sale.id,
+          returnedItems: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          newItems: [],
+          financialDifference: Number(totalCredit),
+          creditGenerated: Number(totalCredit),
+          stockAdjustment: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          saleStatus: { before: sale.status, after: newStatus },
+          status: er.status,
+          reason: sanitizeAuditDetails(data.reason),
+        },
+      }, { policy: 'CRITICAL', tx });
 
       return { success: true, exchangeReturn: er, totalCredit };
     });

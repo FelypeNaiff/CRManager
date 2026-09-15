@@ -48,7 +48,7 @@ export async function approveAuthorizationWithPinAction(data: {
     const auth = await authorizationService.approveAuthorizationWithPin({
       ...data,
       companyId: session.companyId,
-    });
+    }, session);
 
     revalidatePath('/configuracoes/autorizacoes');
     return { success: true as const, authorization: { id: auth.id, status: auth.status, type: auth.type } };
@@ -68,7 +68,7 @@ export async function rejectAuthorizationWithPinAction(data: {
     const auth = await authorizationService.rejectAuthorizationWithPin({
       ...data,
       companyId: session.companyId,
-    });
+    }, session);
 
     revalidatePath('/configuracoes/autorizacoes');
     return { success: true as const, authorization: { id: auth.id, status: auth.status, type: auth.type } };

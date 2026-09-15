@@ -10,7 +10,7 @@ export async function createReturnAction(data: Omit<CreateReturnInput, "userId">
   try {
     const saleReturn = await returnService.createReturn(scopeTenantOperationInput(
       { ...data, userId: auth.userId }, auth
-    ));
+    ), auth);
     if (saleReturn && 'requireAuthorization' in saleReturn) {
       return { success: false, requireAuthorization: true, authorizationId: (saleReturn as any).authorizationId };
     }
@@ -33,7 +33,7 @@ export async function getReturnAction(id: string) {
 export async function cancelReturnAction(id: string) {
   const auth = await requirePermission("DEVOLUCOES", "CANCEL");
   try {
-    const returnRecord = await returnService.cancelReturn(id, auth.companyId, auth.userId);
+    const returnRecord = await returnService.cancelReturn(id, auth.companyId, auth.userId, auth);
     return { success: true, returnRecord };
   } catch {
     return { success: false, error: "Não foi possível cancelar a devolução." };

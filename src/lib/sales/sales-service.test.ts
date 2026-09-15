@@ -3,6 +3,11 @@ import assert from 'node:assert/strict';
 import { SalesService } from './sales-service';
 
 const decimal = (value: number) => ({ toNumber: () => value });
+const authContext: any = {
+  authUserId: 'auth-base', authenticatedUserId: 'base-user', userId: 'operator-a',
+  companyId: 'company-a', name: 'Operador', email: 'operator@example.invalid',
+  roleId: 'role-a', roleName: 'Operador', isAdmin: false, permissions: {},
+};
 
 function saleInput(overrides: Record<string, any> = {}) {
   return {
@@ -105,7 +110,7 @@ function harness(options: {
 
 test('creates a tenant-scoped sale with multiple items and payment types', async () => {
   const { service, state, depsCalls } = harness();
-  const sale: any = await service.createSale(saleInput(), 'operator-a');
+  const sale: any = await service.createSale(saleInput(), 'operator-a', authContext);
   assert.equal(sale.companyId, 'company-a');
   assert.equal(sale.sellerId, 'seller-a');
   assert.equal(sale.items.length, 2);
@@ -113,7 +118,9 @@ test('creates a tenant-scoped sale with multiple items and payment types', async
   assert.equal(state.stocks['variant-a'], 8);
   assert.equal(state.stocks['variant-b'], 9);
   assert.equal(state.movements.length, 2);
-  assert.equal(state.logs[0].action, 'CREATE_SALE');
+  assert.equal(state.logs[0].action, 'SALE_CREATE');
+  assert.equal(state.logs[0].actorUserId, 'operator-a');
+  assert.equal(state.logs[0].authenticatedUserId, 'base-user');
   assert.equal(depsCalls.generate[0][0], 'sale-a');
   assert.equal(depsCalls.process[0][1].sellerId, 'seller-a');
   assert.equal(depsCalls.process[0][1].companyId, 'company-a');
@@ -135,12 +142,12 @@ test('Seller from another tenant cannot be used', async () => {
 
 test('cancels once, restores stock and delegates financial and commission rollback', async () => {
   const { service, state, depsCalls } = harness();
-  const result: any = await service.cancelSale({ saleId: 'sale-a', cancelReason: 'Cliente desistiu', cancelledByUserId: 'operator-a' }, 'company-a');
+  const result: any = await service.cancelSale({ saleId: 'sale-a', cancelReason: 'Cliente desistiu', cancelledByUserId: 'operator-a' }, 'company-a', authContext);
   assert.equal(result.status, 'CANCELLED');
   assert.equal(state.stocks['variant-a'], 12);
   assert.equal(state.stocks['variant-b'], 11);
   assert.equal(state.movements.every(item => item.type === 'CANCELLATION'), true);
-  assert.equal(state.logs[0].action, 'CANCEL_SALE');
+  assert.equal(state.logs[0].action, 'SALE_CANCEL');
   assert.equal(depsCalls.cancel[0][0], 'sale-a');
   assert.equal(depsCalls.rollback[0][1].sellerId, 'seller-a');
 });
@@ -162,7 +169,7 @@ test('get and list always include the trusted tenant predicate', async () => {
 test('discount within or exactly at the policy limit continues without authorization', async () => {
   for (const discountAmount of [5, 10]) {
     const { service, state, depsCalls } = harness({ discountPolicy: { allowed: true, requiresAuthorization: false, limitApplied: 10 } });
-    const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount, totalAmount: 100 - discountAmount }), 'operator-a');
+    const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount, totalAmount: 100 - discountAmount }), 'operator-a', authContext);
     assert.equal(result.id, 'sale-a');
     assert.equal(state.sales.length, 1);
     assert.equal(depsCalls.authorization.length, 0);
@@ -178,7 +185,7 @@ test('discount above limit creates a modern pending authorization and stops the 
   assert.equal(state.sales.length, 0);
   assert.deepEqual(depsCalls.authorization[0], {
     companyId: 'company-a', type: 'DISCOUNT', module: 'PDV', requestedByUserId: 'operator-a',
-    percentage: 15, amount: 15, reason: 'Desconto excede o limite', financialImpact: true,
+    percentage: 15, amount: 15, reason: 'Desconto excede o limite', metadata: { requesterLimit: 10 }, financialImpact: true,
   });
 });
 
@@ -186,9 +193,9 @@ test('approved discount authorization must match tenant, status, type and module
   const policy = { allowed: false, requiresAuthorization: true, limitApplied: 10 };
   const valid = { id: 'auth-approved', companyId: 'company-a', status: 'APPROVED', type: 'DISCOUNT', module: 'PDV', authorizedByUserId: 'manager-a' };
   const accepted = harness({ discountPolicy: policy, approvedAuthorization: valid });
-  const sale: any = await accepted.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a');
+  const sale: any = await accepted.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a', authContext);
   assert.equal(sale.id, 'sale-a');
-  assert.equal(accepted.state.logs.some(log => log.action === 'AUTHORIZE_DISCOUNT' && log.actorUserId === 'manager-a'), true);
+  assert.equal(accepted.state.logs.some(log => log.action === 'SALE_CREATE' && log.actorUserId === 'operator-a'), true);
 
   for (const incompatible of [
     { ...valid, companyId: 'company-b' },

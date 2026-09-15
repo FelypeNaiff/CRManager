@@ -3,7 +3,9 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { AuthorizationType } from "@prisma/client";
 import { customerWalletService } from "../wallet/customer-wallet-service";
 import { authorizationService } from "../auth/authorization-service";
-import { writeLegacyActivityLog as writeActivityLog } from "../auth/activity-log";
+import { writeActivityLog } from "../auth/activity-log";
+import type { ServerAuthContext } from "../auth/server-auth-context";
+import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 import { itemBelongsToSale, tenantResourceWhere } from "./exchange-return-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
 
@@ -24,7 +26,7 @@ export class ExchangeService {
   /**
    * Creates a new SaleExchange, performs inventory changes, and credits the customer's wallet.
    */
-  async createExchange(data: CreateExchangeInput) {
+  async createExchange(data: CreateExchangeInput, auditContext?: ServerAuthContext) {
     // 1. Check if authorization is required
     const sale = await prisma.sale.findFirst({
       where: tenantResourceWhere(data.saleId, data.companyId),
@@ -206,14 +208,23 @@ export class ExchangeService {
       }, tx);
 
       // Register activity log for audit
-      await writeActivityLog({
-        companyId: data.companyId,
-        userId: data.userId,
-        action: "REALIZAR_TROCA",
-        module: "Vendas",
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: "EXCHANGE_CREATE",
+        module: "EXCHANGES",
         recordId: exchange.id,
-        details: `Troca gerada para a venda ${sale.id}. Crédito: R$ ${creditGenerated.toFixed(2)}.`,
-      });
+        details: 'Troca registrada.',
+        metadata: {
+          originalSaleId: sale.id,
+          returnedItems: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          newItems: [],
+          financialDifference: Number(creditGenerated),
+          creditGenerated: Number(creditGenerated),
+          stockAdjustment: data.items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+          status: 'ACTIVE',
+          reason: sanitizeAuditDetails(data.reason),
+        },
+      }, { policy: 'CRITICAL', tx });
 
       return exchange;
     });
@@ -235,7 +246,7 @@ export class ExchangeService {
   /**
    * Cancels an exchange, reverting inventory and debiting the wallet.
    */
-  async cancelExchange(id: string, companyId: string, userId: string) {
+  async cancelExchange(id: string, companyId: string, userId: string, auditContext?: ServerAuthContext) {
     const exchange = await prisma.saleExchange.findUnique({
       where: { id }
     });
@@ -314,14 +325,19 @@ export class ExchangeService {
         }
       });
 
-      await writeActivityLog({
-        companyId: sale.companyId,
-        userId,
-        action: "CANCELAR_TROCA",
-        module: "Vendas",
+      if (auditContext) await writeActivityLog({
+        context: auditContext,
+        action: "EXCHANGE_CANCEL",
+        module: "EXCHANGES",
         recordId: exchange.id,
-        details: `Troca #${exchange.id} cancelada pelo usuário.`,
-      });
+        details: 'Troca cancelada.',
+        metadata: {
+          originalSaleId: sale.id,
+          status: { before: 'ACTIVE', after: 'CANCELLED' },
+          creditReverted: Number(exchange.creditGenerated),
+          stockAdjustment: items.map(item => ({ variantId: item.variantId, quantity: item.quantity, condition: item.condition })),
+        },
+      }, { policy: 'CRITICAL', tx });
 
       return updatedExchange;
     });
