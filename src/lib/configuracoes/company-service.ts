@@ -52,12 +52,12 @@ export const CompanyService = {
   /**
    * Updates an existing company's data.
    */
-  async updateCompanyData(companyId: string, data: CompanyDataInput) {
+  async updateCompanyData(companyId: string, data: CompanyDataInput, tx?: any) {
     if (!companyId) {
       throw new Error('ID da empresa é obrigatório.');
     }
 
-    const updatedCompany = await prisma.company.update({
+    const updatedCompany = await (tx || prisma).company.update({
       where: { id: companyId },
       data: {
         razaoSocial: data.razaoSocial,

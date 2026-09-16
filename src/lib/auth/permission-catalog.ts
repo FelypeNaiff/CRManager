@@ -182,7 +182,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { module: 'PERMISSOES', action: 'UPDATE', label: 'Alterar Privilégios', description: 'Conceder/Revogar permissões da matriz.', category: 'Segurança', critical: true },
 
   // LOGS
-  { module: 'LOGS', action: 'VIEW', label: 'Visualizar Auditoria', description: 'Ver logs de segurança.', category: 'Segurança', critical: true, routePatterns: ['^/configuracoes/logs'] },
+  { module: 'LOGS', action: 'VIEW', label: 'Visualizar Auditoria', description: 'Ver logs de segurança.', category: 'Segurança', critical: true, routePatterns: ['^/configuracoes/auditoria', '^/configuracoes/logs'] },
   { module: 'LOGS', action: 'EXPORT', label: 'Exportar Logs', description: 'Baixar relatório de auditoria.', category: 'Segurança', critical: false },
 ];
 

@@ -3,7 +3,9 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { z } from 'zod';
 import { requireAuth, requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
+import { prisma } from '@/lib/prisma';
 import { OperationalSettingsService } from './operational-settings-service';
 
 const OperationalSettingsFormSchema = z.object({
@@ -68,19 +70,22 @@ export async function updateOperationalSettingsAction(rawData: any) {
   const session = await requirePermission('CONFIGURACOES_OPERACIONAIS', 'UPDATE');
   try {
     const validatedData = OperationalSettingsFormSchema.parse(rawData);
-    const updated = await OperationalSettingsService.updateOperationalSettings(
-      session.companyId,
-      validatedData
-    );
-
-    // Record activity log
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'UPDATE',
-      module: 'CONFIGURACOES',
-      recordId: updated.id,
-      details: 'Atualização das configurações operacionais e PDV',
+    const updated = await prisma.$transaction(async tx => {
+      const before = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId, tx);
+      const result = await OperationalSettingsService.updateOperationalSettings(session.companyId, validatedData, tx);
+      const changes: AuditChanges = {};
+      for (const [field, after] of Object.entries(validatedData)) {
+        if (field === 'defaultPixKey') {
+          addAuditChange(changes, field, before[field], after, { sensitive: true });
+        } else {
+          addAuditChange(changes, field, before[field], after);
+        }
+      }
+      if (Object.keys(changes).length > 0) await writeActivityLog({
+        context: session, action: 'OPERATIONAL_SETTINGS_UPDATE', module: 'OPERATIONAL_SETTINGS', recordId: result.id,
+        details: 'Configurações operacionais atualizadas.', metadata: { changes },
+      }, { policy: 'CRITICAL', tx });
+      return result;
     });
 
     return { success: true, data: serializePrisma(JSON.parse(JSON.stringify(updated)),) };

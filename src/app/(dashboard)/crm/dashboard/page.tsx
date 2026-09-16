@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Users, Baby, Wallet, TrendingUp, Sparkles, MessageSquare, Loader2, Calendar } from "lucide-react"
-import { getCustomers, getActivityLogs, getSegmentationData } from "@/lib/crm/actions"
+import { getSegmentationData } from "@/lib/crm/actions"
 import { Bar, BarChart, ResponsiveContainer, XAxis, YAxis, Tooltip } from "recharts"
 
 export default function CrmDashboardPage() {
@@ -16,8 +16,6 @@ export default function CrmDashboardPage() {
     ticketMedioGlobal: 0
   })
   
-  const [recentLogs, setRecentLogs] = useState<any[]>([])
-
   useEffect(() => {
     async function loadData() {
       setLoading(true)

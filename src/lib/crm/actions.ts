@@ -784,21 +784,6 @@ export async function getWalletHistory(walletId: string) {
   }
 }
 
-export async function getActivityLogs() {
-  const session = await requirePermission('CLIENTES', 'VIEW');
-  try {
-    const list = await prisma.activityLog.findMany({
-      where: { companyId: session.companyId },
-      include: { actorUser: true, authenticatedUser: true },
-      orderBy: { createdAt: 'desc' },
-      take: 100
-    });
-    return { success: true, data: serializePrisma(list) };
-  } catch (error: any) {
-    return { success: false, error: 'Erro ao buscar logs de auditoria.' };
-  }
-}
-
 /**
  * Returns all exchanges and returns for a customer using the new SaleExchange and SaleReturn models.
  * These replace the legacy ExchangeReturn model (Fase 3 removal is deferred until full validation).

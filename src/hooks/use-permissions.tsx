@@ -83,7 +83,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (routePathname.startsWith('/configuracoes/permissoes')) return can('PERMISSOES', 'VIEW');
     if (routePathname.startsWith('/configuracoes/empresa') || routePathname.startsWith('/configuracoes/dados-empresa') || routePathname.startsWith('/configuracoes/minha-empresa')) return can('CONFIGURACOES_EMPRESA', 'VIEW');
     if (routePathname.startsWith('/configuracoes/configuracoes-operacionais')) return can('CONFIGURACOES_OPERACIONAIS', 'VIEW');
-    if (routePathname.startsWith('/configuracoes/logs')) return can('LOGS', 'VIEW');
+    if (routePathname.startsWith('/configuracoes/auditoria') || routePathname.startsWith('/configuracoes/logs')) return can('LOGS', 'VIEW');
     if (routePathname.startsWith('/configuracoes')) return can('CONFIGURACOES', 'VIEW');
 
     if (routePathname.startsWith('/financeiro') || routePathname.startsWith('/carteira-saldos') || routePathname.startsWith('/contas-a-pagar') || routePathname.startsWith('/contas-a-receber')) return can('FINANCEIRO', 'VIEW');

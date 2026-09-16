@@ -59,8 +59,8 @@ const configRoutes = [
     icon: FileBadge,
   },
   {
-    title: "Logs de Atividades",
-    href: "/configuracoes/logs",
+    title: "Auditoria",
+    href: "/configuracoes/auditoria",
     icon: ScrollText,
   },
 ]

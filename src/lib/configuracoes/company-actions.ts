@@ -3,7 +3,9 @@ import { serializePrisma } from '@/lib/serialize';
 
 import { CompanyService, CompanyDataInput } from './company-service';
 import { requirePermission } from '@/lib/auth/permissions';
-import { writeLegacyActivityLog as writeActivityLog } from '@/lib/auth/activity-log';
+import { writeActivityLog } from '@/lib/auth/activity-log';
+import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
+import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const CompanyFormSchema = z.object({
@@ -61,38 +63,23 @@ export async function updateCompanyAction(rawData: any, updateType?: 'contatos' 
   try {
     const validatedData = CompanyFormSchema.parse(rawData);
 
-    // Call service to update
-    const updatedCompany = await CompanyService.updateCompanyData(
-      session.companyId,
-      validatedData as CompanyDataInput
-    );
-
-    // Determine audit details and module
-    let logModule = 'Minha Empresa';
-    let logDetails = `Atualizou os dados da empresa. Razão Social: ${updatedCompany.razaoSocial}, Fantasia: ${updatedCompany.nomeFantasia}`;
-
-    if (updateType === 'contatos') {
-      logModule = 'CONFIGURACOES';
-      logDetails = 'Atualização dos contatos da empresa';
-    } else if (updateType === 'enderecos') {
-      logModule = 'CONFIGURACOES';
-      logDetails = 'Atualização do endereço da empresa';
-    } else if (updateType === 'fiscal') {
-      logModule = 'CONFIGURACOES';
-      logDetails = 'Atualização dos dados fiscais da empresa';
-    } else if (updateType === 'financeiro-fiscal') {
-      logModule = 'CONFIGURACOES';
-      logDetails = 'Atualização dos parâmetros financeiro-fiscais da empresa';
-    }
-
-    // Record activity log
-    await writeActivityLog({
-      companyId: session.companyId,
-      userId: session.userId,
-      action: 'UPDATE',
-      module: logModule,
-      recordId: updatedCompany.id,
-      details: logDetails,
+    const updatedCompany = await prisma.$transaction(async tx => {
+      const before = await tx.company.findUnique({ where: { id: session.companyId } });
+      if (!before) throw new Error('Empresa não encontrada.');
+      const updated = await CompanyService.updateCompanyData(session.companyId, validatedData as CompanyDataInput, tx);
+      const changes: AuditChanges = {};
+      for (const field of ['nomeFantasia', 'status', 'regimeTributario', 'crt', 'cnae', 'uf', 'cidade', 'regimeApuracao', 'naturezaReceitaPadrao', 'naturezaDespesaPadrao', 'pixTipo'] as const) {
+        addAuditChange(changes, field, before[field], updated[field]);
+      }
+      if (Object.keys(changes).length > 0) await writeActivityLog({
+        context: session,
+        action: updateType === 'financeiro-fiscal' ? 'FINANCIAL_SETTINGS_UPDATE' : 'COMPANY_UPDATE',
+        module: updateType === 'financeiro-fiscal' ? 'FINANCIAL_SETTINGS' : 'COMPANY_SETTINGS',
+        recordId: updated.id,
+        details: updateType === 'financeiro-fiscal' ? 'Parâmetros financeiro-fiscais atualizados.' : 'Dados da empresa atualizados.',
+        metadata: { section: updateType ?? 'company', changes },
+      }, { policy: 'CRITICAL', tx });
+      return updated;
     });
 
     return { success: true, data: serializePrisma(updatedCompany) };
