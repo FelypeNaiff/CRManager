@@ -1,0 +1,30 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+const read=(path:string)=>readFileSync(join(process.cwd(),path),'utf8');
+const suppliers=read('src/app/(dashboard)/fornecedores/page.tsx');
+const groups=read('src/app/(dashboard)/grupos-produtos/page.tsx');
+const variants=read('src/app/(dashboard)/grades-variacoes/page.tsx');
+const certificate=read('src/app/configuracoes/certificado-digital/page.tsx');
+const setup=read('src/app/setup/page.tsx');
+const actions=read('src/lib/crm/products-actions.ts');
+const targets=[suppliers,groups,variants,certificate,setup].join('\n');
+
+test('fornecedores não usam stub',()=>assert.doesNotMatch(suppliers,/legacy|firestore|addDoc|updateDoc|deleteDoc/i));
+test('fornecedores usam backend Supplier completo',()=>['getSuppliers','createSupplier','updateSupplier','archiveSupplier'].forEach(name=>assert.match(suppliers,new RegExp(name))));
+test('grupos não usam stub',()=>assert.doesNotMatch(groups,/legacy|firestore|addDoc|updateDoc|deleteDoc/i));
+test('conceito canônico de grupos é ProductCategory',()=>{assert.match(groups,/getProductCategories/);assert.match(groups,/updateCategory/);assert.match(actions,/prisma\.productCategory/);});
+test('grades usam ProductVariant real',()=>{assert.match(variants,/getProductVariants/);assert.match(actions,/prisma\.productVariant/);});
+test('grades não criam segunda fonte de verdade',()=>assert.doesNotMatch(variants,/gradesVariacoes|collection\(/i));
+test('certificado não usa stub',()=>assert.doesNotMatch(certificate,/legacy|firestore|setDoc|addDoc/i));
+test('certificado não persiste segredo inseguramente',()=>{assert.doesNotMatch(certificate,/input|type="file"|password|privateKey|create|update/);assert.match(certificate,/cofre de segredos/);});
+test('setup não usa auth legado',()=>assert.doesNotMatch(setup,/useAuth|useUser|legacy/));
+test('setup não permite bootstrap inseguro',()=>{assert.match(setup,/redirect\('\/dashboard'\)/);assert.doesNotMatch(setup,/setDoc|create|admin|role/);});
+test('tenant isolation permanece nas novas actions',()=>{assert.match(actions,/companyId: session\.companyId/);assert.match(actions,/tenantWhere\(id, session\.companyId\)/);});
+test('RBAC é aplicado em todas as novas mutations',()=>['CREATE','UPDATE','DELETE'].forEach(permission=>assert.match(actions,new RegExp(`requirePermission\\('PRODUTOS', '${permission}'\\)`))));
+test('auditoria ProductVariant continua canônica e transacional',()=>{assert.match(actions,/PRODUCT_VARIANT_CREATE/);assert.match(actions,/PRODUCT_VARIANT_UPDATE/);assert.match(actions,/PRODUCT_VARIANT_STATUS_CHANGE/);assert.match(actions,/policy: 'CRITICAL'/);});
+test('nenhuma rota alvo possui write no-op',()=>assert.doesNotMatch(targets,/addDoc|updateDoc|deleteDoc|setDoc|writeBatch/));
+test('nenhuma rota alvo depende de legacy stubs',()=>assert.doesNotMatch(targets,/legacy-stubs|legacy-firestore-stubs/));
+test('setup deixou de ser rota pública',()=>{assert.doesNotMatch(read('src/lib/auth/middleware-policy.ts'),/pathname === '\/setup'/);assert.doesNotMatch(read('src/hooks/use-permissions.tsx'),/PUBLIC_PATHS[^;]*\/setup/);});

@@ -20,7 +20,6 @@ export function decideRequest(input: {
   const { pathname, hasSupabaseIdentity, hasValidSelector } = input;
   if (isPublicApi(pathname) || pathname.startsWith('/_next') || pathname === '/favicon.ico') return 'allow';
   if (pathname === '/login') return hasSupabaseIdentity && hasValidSelector ? 'dashboard' : 'allow';
-  if (pathname === '/setup') return 'allow';
   if (pathname.startsWith('/api/')) {
     if (!hasSupabaseIdentity) return 'api-401';
     if (!hasValidSelector) return 'api-403';

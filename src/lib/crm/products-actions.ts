@@ -12,6 +12,7 @@ import { sanitizeAuditDetails } from '../auth/audit-sanitization';
 import {
   ProductCategorySchema,
   SupplierSchema,
+  ProductVariantInputSchema,
   ProductSchema,
   InventoryMovementSchema,
 } from './products-schemas';
@@ -85,6 +86,29 @@ export async function createProductCategory(input: any) {
   }
 }
 
+export async function updateCategory(id: string, input: any) {
+  const session = await requirePermission('PRODUTOS', 'UPDATE');
+  const parsed = ProductCategorySchema.partial().safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+  try {
+    const category = await prisma.productCategory.findFirst({ where: tenantWhere(id, session.companyId) });
+    if (!category) return { success: false, error: 'Categoria não encontrada.' };
+    const updated = await prisma.productCategory.update({ where: tenantWhere(id, session.companyId), data: parsed.data });
+    await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EDITAR', module: 'PRODUTOS', recordId: id, details: `Categoria "${updated.name}" atualizada.` });
+    return { success: true, data: serializePrisma(updated) };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao atualizar categoria.') }; }
+}
+
+export async function archiveProductCategory(id: string) {
+  const session = await requirePermission('PRODUTOS', 'DELETE');
+  try {
+    const result = await prisma.productCategory.updateMany({ where: { id, companyId: session.companyId, isActive: true }, data: { isActive: false, archivedAt: new Date() } });
+    if (!result.count) return { success: false, error: 'Categoria não encontrada.' };
+    await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EXCLUIR', module: 'PRODUTOS', recordId: id, details: 'Categoria inativada.' });
+    return { success: true };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao inativar categoria.') }; }
+}
+
 // =========================================================================
 // Supplier Actions
 // =========================================================================
@@ -133,6 +157,86 @@ export async function createSupplier(input: any) {
   } catch (error: any) {
     return { success: false, error: publicActionError(error, 'Erro ao criar fornecedor.') };
   }
+}
+
+export async function updateSupplier(id: string, input: any) {
+  const session = await requirePermission('PRODUTOS', 'UPDATE');
+  const parsed = SupplierSchema.partial().safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+  try {
+    const supplier = await prisma.supplier.findFirst({ where: tenantWhere(id, session.companyId) });
+    if (!supplier) return { success: false, error: 'Fornecedor não encontrado.' };
+    const updated = await prisma.supplier.update({ where: tenantWhere(id, session.companyId), data: parsed.data });
+    await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EDITAR', module: 'PRODUTOS', recordId: id, details: `Fornecedor "${updated.name}" atualizado.` });
+    return { success: true, data: serializePrisma(updated) };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao atualizar fornecedor.') }; }
+}
+
+export async function archiveSupplier(id: string) {
+  const session = await requirePermission('PRODUTOS', 'DELETE');
+  try {
+    const result = await prisma.supplier.updateMany({ where: { id, companyId: session.companyId, isActive: true }, data: { isActive: false, archivedAt: new Date() } });
+    if (!result.count) return { success: false, error: 'Fornecedor não encontrado.' };
+    await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EXCLUIR', module: 'PRODUTOS', recordId: id, details: 'Fornecedor inativado.' });
+    return { success: true };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao inativar fornecedor.') }; }
+}
+
+export async function getProductVariants() {
+  const session = await requirePermission('PRODUTOS', 'VIEW');
+  try {
+    const variants = await prisma.productVariant.findMany({ where: { companyId: session.companyId, isActive: true }, include: { product: { select: { id: true, name: true } } }, orderBy: [{ product: { name: 'asc' } }, { name: 'asc' }], take: 300 });
+    return { success: true, data: serializePrisma(variants) };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao buscar variações.') }; }
+}
+
+export async function createProductVariant(productId: string, input: any) {
+  const session = await requirePermission('PRODUTOS', 'CREATE');
+  const parsed = ProductVariantInputSchema.safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+  try {
+    const variant = await prisma.$transaction(async tx => {
+      const product = await tx.product.findFirst({ where: { id: productId, companyId: session.companyId, isActive: true }, select: { id: true } });
+      if (!product) throw new Error('Produto não encontrado.');
+      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...parsed.data, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock) } });
+      await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_CREATE', module: 'PRODUCT_VARIANTS', recordId: created.id, details: `Variação "${created.name}" criada.`, metadata: { productId, sku: created.sku, name: created.name } }, { policy: 'CRITICAL', tx });
+      return created;
+    });
+    return { success: true, data: serializePrisma(variant) };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao criar variação.') }; }
+}
+
+export async function updateVariant(id: string, input: any) {
+  const session = await requirePermission('PRODUTOS', 'UPDATE');
+  const parsed = ProductVariantInputSchema.partial().safeParse(input);
+  if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
+  try {
+    const variant = await prisma.$transaction(async tx => {
+      const before = await tx.productVariant.findFirst({ where: tenantWhere(id, session.companyId) });
+      if (!before) throw new Error('Variação não encontrada.');
+      const data: any = { ...parsed.data };
+      for (const field of ['costPrice', 'salePrice', 'minimumStock'] as const) if (data[field] !== undefined) data[field] = new Prisma.Decimal(data[field]);
+      const updated = await tx.productVariant.update({ where: tenantWhere(id, session.companyId), data });
+      const changes: AuditChanges = {};
+      for (const field of ['name','sku','barcode','barcodeType','costPrice','salePrice','minimumStock'] as const) addAuditChange(changes, field, before[field], updated[field]);
+      if (Object.keys(changes).length) await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_UPDATE', module: 'PRODUCT_VARIANTS', recordId: id, details: `Variação "${updated.name}" atualizada.`, metadata: { productId: updated.productId, changes } }, { policy: 'CRITICAL', tx });
+      return updated;
+    });
+    return { success: true, data: serializePrisma(variant) };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao atualizar variação.') }; }
+}
+
+export async function archiveProductVariant(id: string) {
+  const session = await requirePermission('PRODUTOS', 'DELETE');
+  try {
+    await prisma.$transaction(async tx => {
+      const before = await tx.productVariant.findFirst({ where: { id, companyId: session.companyId, isActive: true } });
+      if (!before) throw new Error('Variação não encontrada.');
+      await tx.productVariant.update({ where: tenantWhere(id, session.companyId), data: { isActive: false, archivedAt: new Date() } });
+      await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_STATUS_CHANGE', module: 'PRODUCT_VARIANTS', recordId: id, details: `Variação "${before.name}" inativada.`, metadata: { productId: before.productId, changes: { isActive: { before: true, after: false } } } }, { policy: 'CRITICAL', tx });
+    });
+    return { success: true };
+  } catch (error) { return { success: false, error: publicActionError(error, 'Erro ao inativar variação.') }; }
 }
 
 // =========================================================================

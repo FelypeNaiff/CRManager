@@ -71,7 +71,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
   const canAccessRoute = useCallback((routePathname: string) => {
     if (isAdminRoot) return true;
     
-    const PUBLIC_PATHS = ['/login', '/selecionar-perfil', '/setup'];
+    const PUBLIC_PATHS = ['/login', '/selecionar-perfil'];
     const FREE_AUTH_PATHS = ['/dashboard', '/inbox', '/agenda'];
     if (routePathname === '/') return true;
     if (PUBLIC_PATHS.some(p => routePathname.startsWith(p))) return true;
@@ -87,7 +87,7 @@ export function PermissionsProvider({ children }: { children: ReactNode }) {
     if (routePathname.startsWith('/configuracoes')) return can('CONFIGURACOES', 'VIEW');
 
     if (routePathname.startsWith('/financeiro') || routePathname.startsWith('/carteira-saldos') || routePathname.startsWith('/contas-a-pagar') || routePathname.startsWith('/contas-a-receber')) return can('FINANCEIRO', 'VIEW');
-    if (routePathname.startsWith('/produtos')) return can('PRODUTOS', 'VIEW');
+    if (routePathname.startsWith('/produtos') || routePathname.startsWith('/fornecedores') || routePathname.startsWith('/grupos-produtos') || routePathname.startsWith('/grades-variacoes')) return can('PRODUTOS', 'VIEW');
     if (routePathname.startsWith('/estoque') || routePathname.startsWith('/movimentacoes')) return can('ESTOQUE', 'VIEW');
 
     if (routePathname.startsWith('/clientes') || routePathname.startsWith('/aniversariantes') || routePathname.startsWith('/clientes-com-saldo')) return can('CLIENTES', 'VIEW');

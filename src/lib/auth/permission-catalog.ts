@@ -115,7 +115,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { module: 'CAIXA', action: 'AUTHORIZE_MOVEMENT', label: 'Autorizar Movimentação', description: 'Aprovar sangrias ou suprimentos.', category: 'Financeiro', critical: true },
 
   // PRODUTOS
-  { module: 'PRODUTOS', action: 'VIEW', label: 'Listar Produtos', description: 'Ver o catálogo de produtos.', category: 'Estoque', critical: false, routePatterns: ['^/produtos', '^/products'] },
+  { module: 'PRODUTOS', action: 'VIEW', label: 'Listar Produtos', description: 'Ver o catálogo de produtos.', category: 'Estoque', critical: false, routePatterns: ['^/produtos', '^/products', '^/fornecedores', '^/grupos-produtos', '^/grades-variacoes'] },
   { module: 'PRODUTOS', action: 'CREATE', label: 'Cadastrar Produtos', description: 'Adicionar novos itens ao catálogo.', category: 'Estoque', critical: false },
   { module: 'PRODUTOS', action: 'UPDATE', label: 'Editar Produtos', description: 'Modificar preços, nomes e atributos.', category: 'Estoque', critical: false },
   { module: 'PRODUTOS', action: 'DELETE', label: 'Excluir Produtos', description: 'Remover produtos do sistema.', category: 'Estoque', critical: true },
