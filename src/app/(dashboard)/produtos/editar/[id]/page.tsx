@@ -5,26 +5,24 @@ import { useRouter, useParams } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Package, Save, X, Info, RefreshCw } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { useFirestore } from "@/lib/legacy-stubs"
-import { collection, getDocs, query, orderBy } from "@/lib/legacy-firestore-stubs"
 import {
   getProductById,
   updateProduct,
   getProductCategories,
   getSuppliers,
+  getProductVariants,
   createInventoryMovement
 } from "@/lib/crm/products-actions"
 
 export default function EditarProdutoPage() {
   const router = useRouter()
   const params = useParams<{ id: string }>()
-  const db = useFirestore()
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [initialStock, setInitialStock] = useState(0)
@@ -58,8 +56,7 @@ export default function EditarProdutoPage() {
   })
   const [fornecedores, setFornecedores] = useState<any[]>([])
   const [grupos, setGrupos] = useState<any[]>([])
-  const [grades, setGrades] = useState<any[]>([])
-  const [unidades, setUnidades] = useState<any[]>([])
+  const [variantSuggestions, setVariantSuggestions] = useState<string[]>([])
 
   const custoFinal = useMemo(() => {
     return Number(form.custoBase) + Number(form.despesasAcessorias) + Number(form.outrasDespesas)
@@ -67,9 +64,10 @@ export default function EditarProdutoPage() {
 
   useEffect(() => {
     async function loadSelectData() {
-      const [catRes, supRes] = await Promise.all([
+      const [catRes, supRes, variantsRes] = await Promise.all([
         getProductCategories(),
-        getSuppliers()
+        getSuppliers(),
+        getProductVariants()
       ]);
       if (catRes.success && catRes.data) {
         setGrupos(catRes.data);
@@ -81,25 +79,16 @@ export default function EditarProdutoPage() {
         }));
         setFornecedores(mappedS);
       }
-
-      if (db) {
-        try {
-          const gradesSnap = await getDocs(query(collection(db, "gradesVariacoes"), orderBy("nome", "asc")))
-          setGrades(gradesSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
-        } catch (e) {
-          console.error("Erro ao carregar grades:", e)
-        }
-
-        try {
-          const unitsSnap = await getDocs(query(collection(db, "unidadesProdutos"), orderBy("nome", "asc")))
-          setUnidades(unitsSnap.docs.map((d: any) => ({ id: d.id, ...d.data() })))
-        } catch (e) {
-          console.error("Erro ao carregar unidades:", e)
-        }
+      if (variantsRes.success && variantsRes.data) {
+        setVariantSuggestions([...new Set(
+          variantsRes.data
+            .map((variant: any) => variant.name?.trim())
+            .filter((name: string | undefined) => name && name !== "Único")
+        )].sort((a, b) => a.localeCompare(b, "pt-BR")) as string[])
       }
     }
     loadSelectData();
-  }, [db]);
+  }, []);
 
   useEffect(() => {
     const loadProduto = async () => {
@@ -110,6 +99,15 @@ export default function EditarProdutoPage() {
           const produtoData = res.data
           const defaultVariant = produtoData.variants.find((v: any) => v.name === 'Único') || produtoData.variants[0]
           
+          const productVariants = produtoData.variants
+            .filter((variant: any) => variant.name !== "Único")
+            .map((variant: any) => ({
+              codigoInterno: variant.sku || "",
+              codigoBarras: variant.barcode || "",
+              tamanho: variant.name || "",
+              estoqueAtual: Number(variant.currentStock) || 0,
+            }))
+
           setForm({
             nome: produtoData.name || "",
             codigoInterno: produtoData.internalCode || "",
@@ -123,7 +121,7 @@ export default function EditarProdutoPage() {
             lucroUtilizado: 0,
             valorVenda: defaultVariant ? Number(defaultVariant.salePrice) : 0,
             fornecedorId: produtoData.supplierId || "",
-            possuiVariacoes: "Não",
+            possuiVariacoes: productVariants.length > 0 ? "Sim" : "Não",
             estoqueAtual: defaultVariant ? Number(defaultVariant.currentStock) : 0,
             estoqueMinimo: defaultVariant ? Number(defaultVariant.minimumStock) : 0,
             estoqueMaximo: 0,
@@ -135,7 +133,7 @@ export default function EditarProdutoPage() {
             origem: "0",
             pesoLiquido: 0,
             pesoBruto: 0,
-            variacoes: [],
+            variacoes: productVariants,
           })
           setInitialStock(defaultVariant ? Number(defaultVariant.currentStock) : 0)
         } else {
@@ -155,27 +153,6 @@ export default function EditarProdutoPage() {
 
   const handleFieldChange = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
-  }
-
-  const handleAddVariacao = () => {
-    setForm(prev => ({
-      ...prev,
-      variacoes: [...prev.variacoes, { codigoInterno: "", codigoBarras: "", tamanho: "", estoqueAtual: 0 }],
-    }))
-  }
-
-  const handleVariacaoChange = (index: number, field: string, value: any) => {
-    setForm(prev => {
-      const variacoes = [...prev.variacoes]
-      variacoes[index] = { ...variacoes[index], [field]: value }
-
-      if (field === "tamanho" && value) {
-        const baseCode = prev.codigoInterno ? `${prev.codigoInterno}-` : ""
-        variacoes[index].codigoInterno = `${baseCode}${value}`.trim().replace(/\s+/g, "-").toUpperCase()
-      }
-
-      return { ...prev, variacoes }
-    })
   }
 
   useEffect(() => {
@@ -341,11 +318,9 @@ export default function EditarProdutoPage() {
                     <SelectItem value="CX">Caixa (CX)</SelectItem>
                     <SelectItem value="KG">Quilograma (KG)</SelectItem>
                     <SelectItem value="MT">Metro (MT)</SelectItem>
-                    {unidades?.filter(u => !["UN", "CX", "KG", "MT"].includes(u.sigla)).map(u => (
-                      <SelectItem key={u.id} value={u.sigla}>{u.nome} ({u.sigla})</SelectItem>
-                    ))}
                   </SelectContent>
                 </Select>
+                <p className="text-xs text-muted-foreground">Cadastro de novas unidades indisponível; use uma das unidades fixas suportadas.</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="unidadeConversao">Conversão</Label>
@@ -421,7 +396,7 @@ export default function EditarProdutoPage() {
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="possuiVariacoes">Possui Variações?</Label>
-                    <Select value={form.possuiVariacoes} onValueChange={(v) => handleFieldChange("possuiVariacoes", v)}>
+                    <Select value={form.possuiVariacoes} disabled>
                       <SelectTrigger>
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
@@ -463,15 +438,9 @@ export default function EditarProdutoPage() {
                   <Alert className="bg-cyan-50/50 text-cyan-800 border-cyan-200">
                     <Info className="h-4 w-4" />
                     <AlertDescription>
-                      Escolha abaixo quais são os tipos de grades que seu produto pode ter e adicione as variações.
+                      Variações existentes carregadas do ProductVariant real. Criação e edição devem ser feitas no módulo Grades/Variações.
                     </AlertDescription>
                   </Alert>
-
-                  <div className="flex items-center justify-between gap-4">
-                    <Button onClick={handleAddVariacao} className="bg-slate-900 hover:bg-slate-800 text-white">
-                      + Adicionar nova variação
-                    </Button>
-                  </div>
 
                   {form.variacoes.length === 0 ? (
                     <p className="text-sm text-muted-foreground">Nenhuma variação registrada.</p>
@@ -491,40 +460,21 @@ export default function EditarProdutoPage() {
                           {form.variacoes.map((variacao: any, index: number) => (
                             <tr key={index} className="border-b last:border-0 bg-white">
                               <td className="px-2 py-2">
-                                <Input value={variacao.codigoInterno} onChange={(e) => handleVariacaoChange(index, "codigoInterno", e.target.value)} />
+                                <Input value={variacao.codigoInterno} disabled />
                               </td>
                               <td className="px-2 py-2">
-                                <Input value={variacao.codigoBarras} onChange={(e) => handleVariacaoChange(index, "codigoBarras", e.target.value)} />
+                                <Input value={variacao.codigoBarras} disabled />
                               </td>
                               <td className="px-2 py-2">
                                 <div className="grid gap-2">
-                                  <Select value={variacao.tamanho} onValueChange={(val) => handleVariacaoChange(index, "tamanho", val)}>
-                                    <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
-                                    <SelectContent>
-                                      {grades?.map(grade => (
-                                        <SelectGroup key={grade.id}>
-                                          <SelectLabel>{grade.nome}</SelectLabel>
-                                          {grade.valores?.map((valor: string) => (
-                                            <SelectItem key={`${grade.id}-${valor}`} value={valor}>{valor}</SelectItem>
-                                          ))}
-                                        </SelectGroup>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
-                                  <Input placeholder="Cor" value={variacao.cor || ""} onChange={(e) => handleVariacaoChange(index, "cor", e.target.value)} />
+                                  <Input value={variacao.tamanho} disabled />
                                 </div>
                               </td>
                               <td className="px-2 py-2">
-                                <Input type="number" value={variacao.estoqueAtual} onChange={(e) => handleVariacaoChange(index, "estoqueAtual", Number(e.target.value))} />
+                                <Input type="number" value={variacao.estoqueAtual} disabled />
                               </td>
                               <td className="px-2 py-2 text-center">
-                                <Button variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10" onClick={() => {
-                                  const updated = [...form.variacoes]
-                                  updated.splice(index, 1)
-                                  setForm(prev => ({ ...prev, variacoes: updated }))
-                                }}>
-                                  <X className="h-4 w-4" />
-                                </Button>
+                                <span className="text-xs text-muted-foreground">Somente leitura</span>
                               </td>
                             </tr>
                           ))}
@@ -532,6 +482,7 @@ export default function EditarProdutoPage() {
                       </table>
                     </div>
                   )}
+                  {variantSuggestions.length > 0 && <p className="text-xs text-muted-foreground">Sugestões disponíveis no tenant: {variantSuggestions.length}.</p>}
                 </div>
               </div>
             </div>
