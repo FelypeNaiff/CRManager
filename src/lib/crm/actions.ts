@@ -2,7 +2,7 @@
 import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
-import { requirePermission } from '../auth/permissions';
+import { requireAllPermissions, requirePermission } from '../auth/permissions';
 import { safeDate } from '../utils/form-normalizer';
 import { writeActivityLog, writeLegacyActivityLog } from '@/lib/auth/activity-log';
 import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
@@ -57,15 +57,23 @@ export interface GetCustomersParams {
   tag?: string;
 }
 
-export async function getCustomers(params?: GetCustomersParams) {
-  const session = await requirePermission('CLIENTES', 'VIEW');
+function logCrmPerformance(operation: string, startedAt: number, recordCount: number) {
+  console.info(JSON.stringify({
+    event: 'crm_performance',
+    operation,
+    duration_ms: Math.round((performance.now() - startedAt) * 100) / 100,
+    record_count: recordCount,
+  }));
+}
+
+async function loadCustomersForCompany(companyId: string, params?: GetCustomersParams) {
   try {
     const page = Math.max(1, params?.page || 1);
     const pageSize = Math.min(100, Math.max(1, params?.pageSize || 50));
     const skip = (page - 1) * pageSize;
 
     const whereClause: any = {
-      companyId: session.companyId,
+      companyId,
     };
 
     // Filter status
@@ -106,7 +114,7 @@ export async function getCustomers(params?: GetCustomersParams) {
         SELECT DISTINCT customer_id 
         FROM customer_children cc
         JOIN customers c ON cc.customer_id = c.id
-        WHERE c.company_id = ${session.companyId}
+        WHERE c.company_id = ${companyId}
           AND EXTRACT(MONTH FROM cc.birth_date) = ${currentMonth}
       `;
       const customerIdsFromChildren = childrenMatching.map(cc => cc.customer_id);
@@ -121,24 +129,48 @@ export async function getCustomers(params?: GetCustomersParams) {
       ];
     }
 
+    const queryStartedAt = performance.now();
     const [list, total] = await Promise.all([
       prisma.customer.findMany({
         where: whereClause,
-        include: {
-          children: true,
-          tagRelations: {
-            include: { tag: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          cpf: true,
+          birthDay: true,
+          birthMonth: true,
+          birthYear: true,
+          instagram: true,
+          notes: true,
+          status: true,
+          children: {
+            select: {
+              id: true,
+              name: true,
+              birthDate: true,
+              gender: true,
+              shoeSize: true,
+              clothingSize: true,
+              notes: true,
+            },
           },
-          wallet: true,
+          tagRelations: {
+            select: {
+              tagId: true,
+              tag: { select: { id: true, name: true, color: true } },
+            },
+          },
+          wallet: { select: { balance: true } },
         },
         orderBy: { name: 'asc' },
         skip,
         take: pageSize,
       }),
-      prisma.customer.count({
-        where: whereClause
-      })
+      prisma.customer.count({ where: whereClause }),
     ]);
+    logCrmPerformance('crm_customers_query', queryStartedAt, list.length);
 
     const totalPages = Math.ceil(total / pageSize);
 
@@ -169,6 +201,48 @@ export async function getActiveCustomersCount() {
   } catch {
     return { success: false as const, error: 'Erro ao contar clientes ativos.' };
   }
+}
+
+async function loadTagsForCompany(companyId: string) {
+  const startedAt = performance.now();
+  try {
+    const tags = await prisma.customerTag.findMany({
+      where: { companyId },
+      select: { id: true, name: true, color: true },
+      orderBy: { name: 'asc' },
+    });
+    logCrmPerformance('crm_tags_query', startedAt, tags.length);
+    return { success: true, data: serializePrisma(tags) };
+  } catch {
+    logCrmPerformance('crm_tags_query', startedAt, 0);
+    return { success: false, error: 'Erro ao obter tags.' };
+  }
+}
+
+export async function getCustomers(params?: GetCustomersParams) {
+  const session = await requirePermission('CLIENTES', 'VIEW');
+  return loadCustomersForCompany(session.companyId, params);
+}
+
+export async function getCustomersPageData(params?: GetCustomersParams) {
+  const startedAt = performance.now();
+  const session = await requireAllPermissions([
+    { module: 'CLIENTES', action: 'VIEW' },
+    { module: 'CRM', action: 'VIEW' },
+  ]);
+
+  const [customers, tags] = await Promise.all([
+    loadCustomersForCompany(session.companyId, params),
+    loadTagsForCompany(session.companyId),
+  ]);
+
+  logCrmPerformance(
+    'crm_customers_initial_load',
+    startedAt,
+    customers.success && customers.data ? customers.data.length : 0
+  );
+
+  return { customers, tags };
 }
 
 
@@ -408,15 +482,7 @@ export async function deleteChild(id: string) {
 
 export async function getTags() {
   const session = await requirePermission('CRM', 'VIEW');
-  try {
-    const tags = await prisma.customerTag.findMany({
-      where: { companyId: session.companyId },
-      orderBy: { name: 'asc' },
-    });
-    return { success: true, data: serializePrisma(tags) };
-  } catch (error: any) {
-    return { success: false, error: 'Erro ao obter tags.' };
-  }
+  return loadTagsForCompany(session.companyId);
 }
 
 export async function createTag(name: string, color?: string) {
@@ -601,6 +667,7 @@ export async function getBirthdayList(month: number) {
 
 export async function getChildren(customerId?: string) {
   const session = await requirePermission('CLIENTES', 'VIEW');
+  const startedAt = performance.now();
   try {
     const list = await prisma.customerChild.findMany({
       where: customerId ? {
@@ -622,8 +689,10 @@ export async function getChildren(customerId?: string) {
       },
       orderBy: { name: 'asc' },
     });
+    logCrmPerformance('crm_children_initial_load', startedAt, list.length);
     return { success: true, data: serializePrisma(list) };
   } catch (error: any) {
+    logCrmPerformance('crm_children_initial_load', startedAt, 0);
     return { success: false, error: 'Erro ao buscar filhos.' };
   }
 }

@@ -71,14 +71,13 @@ import { safeInteger, safeNumber } from "@/lib/utils/form-normalizer"
 import { useProfile } from "@/lib/contexts/profile-context"
 import { usePermissions } from "@/hooks/use-permissions"
 import {
-  getCustomers,
+  getCustomersPageData,
   createCustomer,
   updateCustomer,
   deleteCustomer,
   createChild,
   updateChild,
   deleteChild,
-  getTags,
   addTagToCustomer,
   removeTagFromCustomer,
   adjustWalletBalance,
@@ -258,16 +257,13 @@ export default function ClientesPage() {
     setIsLoading(true)
     setError(null)
     try {
-      const [custRes, tagsRes] = await Promise.all([
-        getCustomers({
-          page: currentPage,
-          pageSize: 50,
-          search: searchTerm,
-          status: statusFilter,
-          tab: tabParam
-        }),
-        getTags()
-      ])
+      const { customers: custRes, tags: tagsRes } = await getCustomersPageData({
+        page: currentPage,
+        pageSize: 50,
+        search: searchTerm,
+        status: statusFilter,
+        tab: tabParam
+      })
 
       if (custRes.success && custRes.data && custRes.metadata) {
         // Map postgres model to compatible frontend structure
@@ -472,7 +468,10 @@ export default function ClientesPage() {
       }
 
       // 2. Client history logs
-      const historyRes = await getCustomerHistory(customer.id)
+      const [historyRes, returnsRes] = await Promise.all([
+        getCustomerHistory(customer.id),
+        getCustomerExchangeReturns(customer.id)
+      ])
       if (historyRes.success && historyRes.data) {
         setHistoryLogs(historyRes.data.map((h: any) => ({
           id: h.id,
@@ -485,7 +484,6 @@ export default function ClientesPage() {
       // 3. Wallet details (Handled by useEffect on opening)
 
       // 5. Returns & Exchanges â€” using new SaleExchange + SaleReturn tables (Fase 1 migration)
-      const returnsRes = await getCustomerExchangeReturns(customer.id)
       if (returnsRes.success && returnsRes.data) {
         setReturnsHistory(returnsRes.data.map((r: any) => ({
           id: r.id,
