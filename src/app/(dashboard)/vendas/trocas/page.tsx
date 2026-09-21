@@ -222,7 +222,7 @@ export default function TrocasPage() {
                             value={item.condition}
                             onChange={e => handleUpdateItemCondition(item.variantId, e.target.value as any)}
                           >
-                            <option value="RESALE">Nãovo (Revenda)</option>
+                            <option value="RESALE">Novo (Revenda)</option>
                             <option value="DAMAGED">Avariado</option>
                             <option value="DISCARD">Descarte</option>
                           </select>

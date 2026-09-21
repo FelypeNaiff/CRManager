@@ -933,17 +933,17 @@ export default function ClientesPage() {
         <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto bg-white rounded-xl">
           <DialogHeader>
             <DialogTitle className="text-lg font-bold text-slate-800">
-              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Nãovo Cliente Responsável"}
+              {editingCustomer ? "Editar Ficha de Cliente" : "Cadastrar Novo Cliente Responsável"}
             </DialogTitle>
             <DialogDescription>
-              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentaâ”œºâ”œúo."}
+              {isCadastroRapido ? "Preencha os campos essenciais para liberar a venda rapidamente." : "Registre os dados completos do comprador e vincule dependentes para segmentação."}
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4 py-3 text-xs">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-1">
-                <Label htmlFor="cnome">Nãome Completo *</Label>
+                <Label htmlFor="cnome">Nome Completo *</Label>
                 <Input id="cnome" placeholder="Ex: Felipe Naiff" value={form.nome} onChange={e => setForm({ ...form, nome: e.target.value })} />
               </div>
               <div className="space-y-1">
@@ -958,7 +958,7 @@ export default function ClientesPage() {
                 <Input id="cwhats" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_principal} onChange={e => setForm({ ...form, whatsapp_principal: e.target.value })} />
               </div>
               <div className="space-y-1">
-                <Label htmlFor="cwhats2">WhatsApp Secundâ”œírio</Label>
+                <Label htmlFor="cwhats2">WhatsApp Secundário</Label>
                 <Input id="cwhats2" placeholder="Ex: (11) 99999-9999" value={form.whatsapp_secundario} onChange={e => setForm({ ...form, whatsapp_secundario: e.target.value })} />
               </div>
             </div>
@@ -990,7 +990,7 @@ export default function ClientesPage() {
                         </Button>
                         <div className="grid grid-cols-2 gap-3">
                           <div className="space-y-1">
-                            <Label>Nãome do Filho *</Label>
+                            <Label>Nome do Filho *</Label>
                             <Input placeholder="Ex: Arthur Naiff" value={filho.nome} onChange={e => handleFilhoChange(idx, "nome", e.target.value)} />
                           </div>
                           <div className="space-y-1">
@@ -1034,7 +1034,7 @@ export default function ClientesPage() {
                 <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-1">
-                    <Label>Nãome do Filho</Label>
+                    <Label>Nome do Filho</Label>
                     <Input placeholder="Ex: Lucas" value={rapidoFilhoNãome} onChange={e => setRapidoFilhoNãome(e.target.value)} />
                   </div>
                   <div className="space-y-1">
@@ -1080,7 +1080,7 @@ export default function ClientesPage() {
           <AlertDialogHeader>
             <AlertDialogTitle className="font-bold text-slate-800">Inativar Ficha do Cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja arquivar este cliente? O saldo atual da carteira permanecerâ”œí congelado, mas o cadastro nâ”œúo constarâ”œí nas listagens de vendas ativas.
+              Deseja arquivar este cliente? O saldo atual da carteira permanecerá congelado, mas o cadastro não constará nas listagens de vendas ativas.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1112,7 +1112,7 @@ export default function ClientesPage() {
 
           <Tabs defaultValue="ficha" className="w-full mt-4">
             <TabsList className="bg-white border w-full justify-start gap-1 p-1">
-              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Bâ”œísica</TabsTrigger>
+              <TabsTrigger value="ficha" className="flex items-center gap-1.5">Ficha Básica</TabsTrigger>
               <TabsTrigger value="filhos" className="flex items-center gap-1.5"><Baby className="h-4 w-4 text-emerald-600" /> Dependentes ({filhos.length})</TabsTrigger>
               <TabsTrigger value="carteira" className="flex items-center gap-1.5"><Wallet className="h-4 w-4 text-indigo-600" /> Créditos/Carteira</TabsTrigger>
               <TabsTrigger value="trocas" className="flex items-center gap-1.5">Trocas ({returnsHistory.length})</TabsTrigger>
@@ -1125,12 +1125,12 @@ export default function ClientesPage() {
                 <div className="space-y-3">
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">CPF</span>
-                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Nâ”œúo informado"}</span>
+                    <span className="text-slate-800 font-medium block mt-1">{selectedCustomer?.cpf || "Não informado"}</span>
                   </div>
                   <div className="bg-slate-50 p-3 rounded-lg border">
                     <span className="text-slate-400 font-semibold block uppercase text-[10px]">Data de Nascimento</span>
                     <span className="text-slate-800 font-medium block mt-1">
-                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Nâ”œúo informada"}
+                      {selectedCustomer?.data_nascimento ? new Date(selectedCustomer.data_nascimento + "T12:00:00").toLocaleDateString("pt-BR") : "Não informada"}
                     </span>
                   </div>
                 </div>
@@ -1138,13 +1138,13 @@ export default function ClientesPage() {
                 <div className="space-y-3">
                   {selectedCustomer?.observacoes && (
                     <div className="bg-slate-50 p-3 rounded-lg border">
-                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Nãotas de Atendimento</span>
+                      <span className="text-slate-400 font-semibold block uppercase text-[10px]">Notas de Atendimento</span>
                       <p className="text-slate-700 mt-1 whitespace-pre-line leading-relaxed">{selectedCustomer?.observacoes}</p>
                     </div>
                   )}
 
                   <div className="bg-slate-50 p-3 rounded-lg border space-y-2">
-                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentaâ”œºâ”œúo</span>
+                    <span className="text-slate-400 font-semibold block uppercase text-[10px]">Etiquetas de Segmentação</span>
                     
                     <div className="flex flex-wrap gap-1.5 pt-1">
                       {availableTags.map((tag) => {
@@ -1173,9 +1173,9 @@ export default function ClientesPage() {
             {/* TAB: Dependentes */}
             <TabsContent value="filhos" className="space-y-4 pt-4 text-xs">
               <div className="flex justify-between items-center">
-                <h3 className="font-bold text-slate-800 text-sm">Crianâ”œºas Associadas</h3>
+                <h3 className="font-bold text-slate-800 text-sm">Crianças Associadas</h3>
                 <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1 h-8 text-[11px]" onClick={() => setIsQuickAddFilhoOpen(true)}>
-                  <Plus className="h-3.5 w-3.5" /> Adicionar Crianâ”œºa
+                  <Plus className="h-3.5 w-3.5" /> Adicionar Criança
                 </Button>
               </div>
 
@@ -1409,11 +1409,11 @@ export default function ClientesPage() {
       <Dialog open={isQuickAddFilhoOpen} onOpenChange={setIsQuickAddFilhoOpen}>
         <DialogContent className="max-w-md bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800">Vincular Nãovo Filho</DialogTitle>
+            <DialogTitle className="text-base font-bold text-slate-800">Vincular Novo Filho</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 py-2 text-xs">
             <div className="space-y-1">
-              <Label>Nãome Completo</Label>
+              <Label>Nome Completo</Label>
               <Input placeholder="Ex: Arthur" value={quickFilhoForm.nome} onChange={e => setQuickFilhoForm({ ...quickFilhoForm, nome: e.target.value })} />
             </div>
             <div className="grid grid-cols-2 gap-3">
@@ -1479,7 +1479,7 @@ export default function ClientesPage() {
               <Input type="number" step="0.01" placeholder="0.00" value={adjustAmount} onChange={e => setAdjustAmount(e.target.value)} />
             </div>
             <div className="space-y-1">
-              <Label>Justificativa Obrigatâ”œâ”‚ria</Label>
+              <Label>Justificativa Obrigatória</Label>
               <Input placeholder="Ex: Ajuste manual" value={adjustReason} onChange={e => setAdjustReason(e.target.value)} />
             </div>
             <div className="flex justify-end gap-2 pt-2">

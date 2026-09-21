@@ -53,7 +53,7 @@ export default function VendasPage() {
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Vendas</h1>
         <Link href="/comercial/vendas/nova">
-          <Button><Plus className="w-4 h-4 mr-2" /> Nãova Venda</Button>
+          <Button><Plus className="w-4 h-4 mr-2" /> Nova Venda</Button>
         </Link>
       </div>
 

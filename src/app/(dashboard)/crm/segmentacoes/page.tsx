@@ -42,7 +42,7 @@ const MESES = [
   { val: "8", label: "Agosto" },
   { val: "9", label: "Setembro" },
   { val: "10", label: "Outubro" },
-  { val: "11", label: "Nãovembro" },
+  { val: "11", label: "Novembro" },
   { val: "12", label: "Dezembro" },
 ]
 
@@ -207,7 +207,7 @@ export default function SegmentacoesPage() {
       return
     }
 
-    const headers = ["Nãome", "WhatsApp", "VIP", "Saldo Carteira", "Filhos", "Ticket Médio"]
+    const headers = ["Nome", "WhatsApp", "VIP", "Saldo Carteira", "Filhos", "Ticket Médio"]
     const rows = filteredClients.map((c: any) => {
       const statsObj = clientStats[c.id]
       const kidsList = statsObj?.filhos.map((k: any) => `${k.nome} (${k.tamanho_roupa || 'N/A'})`).join(" | ") || ""

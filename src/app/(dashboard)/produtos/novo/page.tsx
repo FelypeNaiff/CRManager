@@ -244,7 +244,7 @@ export default function NãovoProdutoPage() {
             <Package className="h-6 w-6 text-primary" />
           </div>
           <div>
-            <h1 className="text-2xl font-headline font-bold">Nãovo Produto</h1>
+            <h1 className="text-2xl font-headline font-bold">Novo Produto</h1>
             <p className="text-muted-foreground text-sm">Preencha as informações para cadastrar um novo produto no estoque.</p>
           </div>
         </div>
@@ -289,7 +289,7 @@ export default function NãovoProdutoPage() {
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="nome">Nãome do Produto *</Label>
+                <Label htmlFor="nome">Nome do Produto *</Label>
                 <Input 
                   id="nome" 
                   placeholder="Ex: Camiseta Algodão Básica" 
@@ -540,7 +540,7 @@ export default function NãovoProdutoPage() {
             <Alert className="bg-blue-50/50 text-blue-800 border-blue-200 dark:bg-blue-950/30 dark:text-blue-300 dark:border-blue-900">
               <Info className="h-4 w-4" />
               <AlertDescription>
-                Dados fiscais obrigatórios para emissão de Nãota Fiscal. Consulte seu contador em caso de dúvidas.
+                Dados fiscais obrigatórios para emissão de Nota Fiscal. Consulte seu contador em caso de dúvidas.
               </AlertDescription>
             </Alert>
             
@@ -578,7 +578,7 @@ export default function NãovoProdutoPage() {
                 <Select defaultValue="padrao">
                   <SelectTrigger><SelectValue placeholder="Selecione o perfil tributário" /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="padrao">Tributação Nãormal Padrão</SelectItem>
+                    <SelectItem value="padrao">Tributação Normal Padrão</SelectItem>
                     <SelectItem value="simples">Simples Nacional</SelectItem>
                     <SelectItem value="isento">Isento / Não Tributado</SelectItem>
                   </SelectContent>
@@ -593,12 +593,12 @@ export default function NãovoProdutoPage() {
       <Dialog open={isNewGrupoDialogOpen} onOpenChange={setIsNewGrupoDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nãovo Grupo de Produtos</DialogTitle>
+            <DialogTitle>Novo Grupo de Produtos</DialogTitle>
             <DialogDescription>Crie um novo grupo para categorizar seus produtos</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newGrupoName">Nãome do Grupo *</Label>
+              <Label htmlFor="newGrupoName">Nome do Grupo *</Label>
               <Input 
                 id="newGrupoName"
                 value={newGrupoName}
@@ -620,12 +620,12 @@ export default function NãovoProdutoPage() {
       <Dialog open={isNewFornecedorDialogOpen} onOpenChange={setIsNewFornecedorDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Nãovo Fornecedor Rápido</DialogTitle>
+            <DialogTitle>Novo Fornecedor Rápido</DialogTitle>
             <DialogDescription>Cadastre um fornecedor rapidamente. Detalhes completos poderão ser inseridos depois no menu Fornecedores.</DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
             <div>
-              <Label htmlFor="newFornecedorName">Nãome do Fornecedor *</Label>
+              <Label htmlFor="newFornecedorName">Nome do Fornecedor *</Label>
               <Input 
                 id="newFornecedorName"
                 value={newFornecedorName}

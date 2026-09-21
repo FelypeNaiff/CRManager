@@ -526,7 +526,7 @@ function FilhosPageContent() {
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="max-w-lg bg-white rounded-xl">
           <DialogHeader>
-            <DialogTitle className="text-lg font-bold text-slate-800">{editingFilho ? "Editar Informações do Filho" : "Cadastrar Nãovo Filho"}</DialogTitle>
+            <DialogTitle className="text-lg font-bold text-slate-800">{editingFilho ? "Editar Informações do Filho" : "Cadastrar Novo Filho"}</DialogTitle>
             <DialogDescription>
               Fidelize com campanhas baseadas na idade, tamanho ou personagens favoritos.
             </DialogDescription>
@@ -534,7 +534,7 @@ function FilhosPageContent() {
 
           <div className="space-y-4 py-3">
             <div className="space-y-1">
-              <Label htmlFor="fnome">Nãome Completo *</Label>
+              <Label htmlFor="fnome">Nome Completo *</Label>
               <Input id="fnome" placeholder="Ex: Felipe Naiff Junior" {...field("nome")} />
             </div>
 

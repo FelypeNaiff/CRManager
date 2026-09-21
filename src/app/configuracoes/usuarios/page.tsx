@@ -84,7 +84,7 @@ export default function UsuariosPage() {
           breadcrumb={[{ label: 'Configurações', href: '/configuracoes' }, { label: 'Usuários' }]}
         />
         {can('USUARIOS', 'CREATE') && <Button onClick={handleOpenCreate} className="self-start sm:self-auto">
-          <Plus className="mr-2 h-4 w-4" /> Nãovo Usuário
+          <Plus className="mr-2 h-4 w-4" /> Novo Usuário
         </Button>}
       </div>
 
@@ -103,7 +103,7 @@ export default function UsuariosPage() {
           <ConfigDataTable>
             <ConfigDataTableHeader className="bg-slate-50">
               <ConfigDataTableRow>
-                <ConfigDataTableHead>Nãome & E-mail</ConfigDataTableHead>
+                <ConfigDataTableHead>Nome & E-mail</ConfigDataTableHead>
                 <ConfigDataTableHead>Cargo / Grupo</ConfigDataTableHead>
                 <ConfigDataTableHead>Limite Desc.</ConfigDataTableHead>
                 <ConfigDataTableHead>Status</ConfigDataTableHead>

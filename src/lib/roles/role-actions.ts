@@ -9,7 +9,7 @@ import { z } from 'zod';
 import { canSetAdministrativeRole, tenantEntityWhere } from '@/lib/auth/admin-tenant-security';
 
 const RoleFormSchema = z.object({
-  name: z.string().min(2, 'Nãome é obrigatório (mínimo 2 caracteres)'),
+  name: z.string().min(2, 'Nome é obrigatório (mínimo 2 caracteres)'),
   description: z.string().optional().nullable(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
   isAdmin: z.boolean().default(false),

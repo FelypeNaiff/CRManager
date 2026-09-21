@@ -134,7 +134,7 @@ export default function CampanhasPage() {
   const handleExportSegment = () => {
     if (segmentClients.length === 0) return
 
-    const headers = ["Nãome", "WhatsApp", "Mensagem Personalizada"]
+    const headers = ["Nome", "WhatsApp", "Mensagem Personalizada"]
     const rows = segmentClients.map(c => {
       const personalMsg = mensagemTemplate.replace("{{nome}}", c.name || "Cliente")
       return [
@@ -178,7 +178,7 @@ export default function CampanhasPage() {
                 : "border-transparent text-slate-400 hover:text-slate-600"
             }`}
           >
-            <Plus className="h-4 w-4" /> Nãova Campanha
+            <Plus className="h-4 w-4" /> Nova Campanha
           </button>
         )}
         <button
@@ -205,7 +205,7 @@ export default function CampanhasPage() {
               <CardContent className="space-y-4 pt-4">
                 
                 <div className="space-y-2">
-                  <Label className="font-semibold text-slate-600 text-xs">Nãome Interno da Campanha</Label>
+                  <Label className="font-semibold text-slate-600 text-xs">Nome Interno da Campanha</Label>
                   <Input 
                     placeholder="Ex: Oferta de Inverno VIP" 
                     value={campanhaNãome}
@@ -284,7 +284,7 @@ export default function CampanhasPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="EVOLUTION_API">Evolution API (Nãode)</SelectItem>
+                      <SelectItem value="EVOLUTION_API">Evolution API (Node)</SelectItem>
                       <SelectItem value="Z_API">Z-API (Oficial)</SelectItem>
                       <SelectItem value="WHATSAPP_CLOUD">WhatsApp Cloud API (Meta)</SelectItem>
                       <SelectItem value="N8N">Webhook N8N Automations</SelectItem>

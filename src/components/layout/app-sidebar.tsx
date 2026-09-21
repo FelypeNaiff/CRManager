@@ -111,7 +111,7 @@ const navItems = [
         title: "Trocas e Devoluções", 
         icon: Repeat,
         items: [
-          { title: "Nãova Troca/Devolução", url: "/crm/trocas?tab=nova" },
+          { title: "Nova Troca/Devolução", url: "/crm/trocas?tab=nova" },
           { title: "Em Aberto", url: "/crm/trocas?tab=aberto" },
           { title: "Finalizadas", url: "/crm/trocas?tab=finalizadas" },
           { title: "Créditos Gerados", url: "/crm/trocas?tab=creditos" },

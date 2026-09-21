@@ -255,7 +255,7 @@ export default function TrocasDevolucoesPage() {
           <p className="text-muted-foreground text-sm">Registre devoluções vinculando vendas originais, estoques de produtos e atualizações de crédito automáticas.</p>
         </div>
         <Button className="bg-indigo-600 hover:bg-indigo-500 text-white gap-2 font-medium" onClick={handleOpenCreate}>
-          <Plus className="h-4 w-4" /> Nãova Troca/Devolução
+          <Plus className="h-4 w-4" /> Nova Troca/Devolução
         </Button>
       </div>
 

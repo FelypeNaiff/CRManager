@@ -11,7 +11,7 @@ export default function ConfiguracoesFiliaisPage() {
       <section className="rounded-2xl border bg-white p-6 shadow-sm">
         <h2 className="text-xl font-semibold">Campos</h2>
         <ul className="mt-4 grid gap-2 md:grid-cols-2 text-sm text-slate-600">
-          <li>Nãome filial</li>
+          <li>Nome da filial</li>
           <li>CNPJ</li>
           <li>Código interno</li>
           <li>Responsável</li>

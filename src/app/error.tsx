@@ -43,7 +43,7 @@ export default function GlobalError({
           </Button>
           {!isPermissionError && (
             <Button variant="outline" onClick={() => reset()} className="w-full">
-              Tentar Nãovamente
+              Tentar Novamente
             </Button>
           )}
           {process.env.NODE_ENV === "development" && (

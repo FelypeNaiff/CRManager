@@ -263,7 +263,7 @@ export default function EditarProdutoPage() {
             </Alert>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
               <div className="space-y-2 lg:col-span-2">
-                <Label htmlFor="nome">Nãome do Produto *</Label>
+                <Label htmlFor="nome">Nome do Produto *</Label>
                 <Input id="nome" placeholder="Ex: Camiseta Algodão Básica" value={form.nome} onChange={(e) => handleFieldChange("nome", e.target.value)} />
               </div>
               <div className="space-y-2">
