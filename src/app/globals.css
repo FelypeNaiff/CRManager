@@ -4,48 +4,48 @@
 
 @layer base {
   :root {
-    --background: 0 0% 97%; /* #F7F7F7 */
-    --foreground: 210 10% 23%; /* #343a40 */
+    --background: 220 33% 98%; /* #F7F9FC */
+    --foreground: 218 52% 15%; /* #12213A */
     --card: 0 0% 100%;
-    --card-foreground: 210 10% 23%;
+    --card-foreground: 218 52% 15%;
     --popover: 0 0% 100%;
-    --popover-foreground: 210 10% 23%;
-    --primary: 210 32% 25%; /* #2C4156 */
+    --popover-foreground: 218 52% 15%;
+    --primary: 221 83% 53%; /* #2563EB */
     --primary-foreground: 0 0% 100%;
-    --secondary: 204 31% 33%; /* #39586D */
-    --secondary-foreground: 0 0% 100%;
-    --muted: 210 20% 96%;
-    --muted-foreground: 189 9% 63%; /* #98A7AA */
-    --accent: 210 20% 96%;
-    --accent-foreground: 210 10% 23%;
+    --secondary: 216 100% 97%;
+    --secondary-foreground: 221 83% 53%;
+    --muted: 216 33% 97%;
+    --muted-foreground: 216 20% 45%;
+    --accent: 216 100% 96%;
+    --accent-foreground: 221 83% 53%;
     --destructive: 354 70% 54%; /* #dc3545 */
     --destructive-foreground: 0 0% 100%;
-    --border: 207 10% 84%; /* #D2D7DB */
-    --input: 207 10% 84%; /* #D2D7DB */
-    --ring: 204 31% 33%; /* #39586D */
+    --border: 216 28% 90%;
+    --input: 216 28% 88%;
+    --ring: 221 83% 53%;
     
     /* Chart Colors */
-    --chart-1: 210 32% 25%; /* #2C4156 */
-    --chart-2: 204 31% 33%; /* #39586D */
-    --chart-3: 189 9% 63%;  /* #98A7AA */
+    --chart-1: 221 83% 53%;
+    --chart-2: 199 89% 48%;
+    --chart-3: 160 84% 39%;
     --chart-4: 354 70% 54%;
     --chart-5: 207 10% 84%; /* #D2D7DB */
     
-    --radius: 0.25rem; /* Menos arredondado para visual ERP clássico */
+    --radius: 0.75rem;
     
     /* Sidebar GestãoClick Style */
     --sidebar-background: 0 0% 100%; /* Branco */
-    --sidebar-foreground: 210 10% 23%; /* #343a40 */
-    --sidebar-primary: 210 32% 25%; /* #2C4156 */
+    --sidebar-foreground: 217 28% 38%;
+    --sidebar-primary: 221 83% 53%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 0 0% 97%; /* #F7F7F7 */
-    --sidebar-accent-foreground: 204 31% 33%; /* #39586D */
-    --sidebar-border: 207 10% 84%; /* #D2D7DB */
-    --sidebar-ring: 204 31% 33%; /* #39586D */
+    --sidebar-accent: 216 100% 96%;
+    --sidebar-accent-foreground: 221 83% 53%;
+    --sidebar-border: 216 28% 92%;
+    --sidebar-ring: 221 83% 53%;
 
     /* Header GestãoClick Style */
-    --header-background: 210 32% 25%; /* #2C4156 escuro */
-    --header-foreground: 0 0% 100%;
+    --header-background: 0 0% 100%;
+    --header-foreground: 218 52% 15%;
   }
 
   .dark {
@@ -76,10 +76,11 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-foreground font-body text-[13px]; /* Fonte menor padrão ERP */
+    @apply bg-background text-foreground font-body text-[13px];
+    letter-spacing: -0.01em;
   }
   h1, h2, h3, h4, h5, h6 {
-    @apply font-headline text-foreground;
+    @apply font-headline font-semibold text-foreground tracking-tight;
   }
 }
 

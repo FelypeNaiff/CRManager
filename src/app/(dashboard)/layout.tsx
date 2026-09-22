@@ -93,23 +93,23 @@ export default function DashboardLayout({
   if (isSessionLoading) {
     return (
       <div className="flex min-h-screen w-full bg-background">
-        <div className="w-[var(--sidebar-width,16rem)] border-r bg-slate-900 hidden md:flex flex-col shrink-0">
-          <div className="h-14 border-b border-slate-800 flex items-center px-4 shrink-0">
-            <div className="h-6 w-32 bg-slate-800 animate-pulse rounded"></div>
+        <div className="w-[var(--sidebar-width,16rem)] border-r bg-sidebar hidden md:flex flex-col shrink-0">
+          <div className="h-16 border-b flex items-center px-4 shrink-0">
+            <div className="h-7 w-32 bg-slate-100 animate-pulse rounded-lg"></div>
           </div>
           <div className="p-4 space-y-4 flex-1">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="flex items-center gap-3">
-                <div className="h-8 w-8 bg-slate-800 animate-pulse rounded-md"></div>
-                <div className="h-4 w-24 bg-slate-800 animate-pulse rounded"></div>
+                <div className="h-8 w-8 bg-accent animate-pulse rounded-lg"></div>
+                <div className="h-4 w-24 bg-slate-100 animate-pulse rounded"></div>
               </div>
             ))}
           </div>
         </div>
         <div className="flex flex-1 flex-col h-screen overflow-hidden bg-background">
-          <header className="h-14 border-b bg-[#1e2229] flex items-center justify-between px-4 shrink-0">
-            <div className="h-6 w-48 bg-slate-800 animate-pulse rounded"></div>
-            <div className="h-8 w-8 rounded-full bg-slate-800 animate-pulse"></div>
+          <header className="h-16 border-b bg-card flex items-center justify-between px-5 shrink-0">
+            <div className="h-6 w-48 bg-slate-100 animate-pulse rounded"></div>
+            <div className="h-9 w-9 rounded-full bg-accent animate-pulse"></div>
           </header>
           <main className="flex-1 flex flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
             <div className="space-y-6 max-w-7xl w-full">
@@ -119,10 +119,10 @@ export default function DashboardLayout({
               </div>
               <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
                 {Array.from({ length: 4 }).map((_, i) => (
-                  <div key={i} className="h-32 bg-white border shadow-sm animate-pulse rounded-xl"></div>
+                  <div key={i} className="h-32 bg-card border shadow-sm animate-pulse rounded-xl"></div>
                 ))}
               </div>
-              <div className="h-96 bg-white border shadow-sm animate-pulse rounded-xl mt-6"></div>
+              <div className="h-96 bg-card border shadow-sm animate-pulse rounded-xl mt-6"></div>
             </div>
           </main>
         </div>
@@ -140,32 +140,34 @@ export default function DashboardLayout({
       <div className="flex min-h-screen w-full bg-background">
         <AppSidebar />
         <SidebarInset>
-          <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center justify-between bg-[#1e2229] text-white px-4 transition-[width,height] ease-linear shadow-sm">
+          <header className="sticky top-0 z-30 flex h-16 shrink-0 items-center justify-between border-b border-border/80 bg-card/95 px-4 text-foreground shadow-[0_1px_12px_rgba(15,23,42,0.035)] backdrop-blur-md transition-[width,height] ease-linear md:px-6">
             <div className="flex items-center gap-2">
-              <div className="flex items-center gap-2 font-headline font-bold text-lg mr-6">
-                <Store className="h-5 w-5 text-primary" />
-                <span className="tracking-tight uppercase">NEEX <span className="text-primary font-normal text-sm">SISTEMA DE GESTÃO DE VENDAS</span></span>
+              <div className="mr-5 flex items-center gap-2.5 font-headline font-bold text-base">
+                <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white shadow-sm shadow-primary/20">
+                  <Store className="h-4 w-4" />
+                </div>
+                <span className="hidden tracking-tight sm:inline">NEEX <span className="font-semibold text-primary">FLOW</span></span>
               </div>
-              <SidebarTrigger className="text-white hover:bg-white/10" />
+              <SidebarTrigger className="rounded-lg text-muted-foreground hover:bg-accent hover:text-primary" />
             </div>
             <div className="flex items-center gap-2">
-              <Button variant="ghost" size="icon" className="relative hover:bg-white/10 text-white rounded-none h-14 w-12">
-                <Bell className="h-5 w-5" />
-                <span className="absolute top-2.5 right-2.5 h-2 w-2 rounded-full bg-destructive border-2 border-background"></span>
+              <Button variant="ghost" size="icon" className="relative h-10 w-10 rounded-xl text-muted-foreground hover:bg-accent hover:text-primary">
+                <Bell className="h-[18px] w-[18px]" />
+                <span className="absolute right-2.5 top-2 h-2 w-2 rounded-full border-2 border-card bg-destructive"></span>
               </Button>
-              <div className="h-8 w-px bg-white/10 mx-1"></div>
+              <div className="mx-1 h-7 w-px bg-border"></div>
               
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="gap-2 px-2 hover:bg-white/10 text-white">
-                    <div className="h-8 w-8 rounded-full bg-white/10 flex items-center justify-center">
+                  <Button variant="ghost" className="h-11 gap-2 rounded-xl px-2 text-foreground hover:bg-accent">
+                    <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-accent ring-1 ring-primary/10">
                       <User className="h-4 w-4 text-primary" />
                     </div>
                     <div className="hidden sm:flex flex-col items-start text-left">
-                      <span className="text-sm font-medium leading-none">
+                      <span className="max-w-40 truncate text-sm font-medium leading-none">
                         {displayName} {displayEmail ? `(${displayEmail})` : ''}
                       </span>
-                      <span className="text-xs text-white/70 capitalize mt-1">
+                      <span className="mt-1 text-[11px] capitalize text-muted-foreground">
                         {displayRole}
                       </span>
                     </div>
@@ -182,7 +184,7 @@ export default function DashboardLayout({
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex flex-1 flex-col overflow-y-auto p-4 md:p-6 lg:p-8">
+          <main className="flex flex-1 flex-col overflow-y-auto bg-background p-4 md:p-6 lg:p-7">
             {children}
           </main>
         </SidebarInset>

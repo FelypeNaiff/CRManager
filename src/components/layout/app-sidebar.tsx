@@ -236,32 +236,32 @@ export function AppSidebar() {
   }, [canAccessRoute, isLoading])
 
   return (
-    <Sidebar variant="sidebar" collapsible="icon">
-      <SidebarHeader className="border-b border-sidebar-border py-6 bg-white flex flex-col items-center justify-center">
+    <Sidebar variant="sidebar" collapsible="icon" className="border-r border-sidebar-border/80">
+      <SidebarHeader className="flex min-h-20 flex-col items-center justify-center border-b border-sidebar-border/80 bg-sidebar px-3 py-4">
         <div className="flex flex-col items-center gap-1 group-data-[collapsible=icon]:hidden">
           {logoUrl ? (
             <img src={logoUrl} alt="Logo da empresa" className="h-12 w-auto max-w-full object-contain" />
           ) : (
-            <div className="h-12 w-12 text-primary font-bold text-2xl flex items-center justify-center">
-              NX
+            <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-primary text-lg font-bold text-white shadow-md shadow-primary/20">
+              N
             </div>
           )}
-          <span className="font-headline font-bold text-lg text-primary">{companyName}</span>
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider">NEEX</span>
+          <span className="max-w-full truncate px-2 text-center font-headline text-base font-bold tracking-tight text-foreground">{companyName}</span>
+          <span className="text-[9px] font-semibold uppercase tracking-[0.22em] text-primary">Gestão inteligente</span>
         </div>
         <div className="hidden group-data-[collapsible=icon]:flex h-10 w-10 items-center justify-center">
           {smallLogoUrl ? (
             <img src={smallLogoUrl} alt="Logo reduzida" className="h-8 w-auto object-contain" />
           ) : (
-            <div className="h-8 w-8 text-primary font-bold text-xl flex items-center justify-center">
-              NX
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-sm font-bold text-white shadow-sm shadow-primary/20">
+              N
             </div>
           )}
         </div>
       </SidebarHeader>
-      <SidebarContent>
-        <SidebarGroup>
-          <SidebarMenu>
+      <SidebarContent className="bg-sidebar px-2 py-3">
+        <SidebarGroup className="p-0">
+          <SidebarMenu className="gap-1">
             {filteredNavItems.map((item) => (
               item.items ? (
                 <Collapsible
@@ -272,9 +272,9 @@ export function AppSidebar() {
                 >
                   <SidebarMenuItem>
                     <CollapsibleTrigger asChild>
-                      <SidebarMenuButton tooltip={item.title} className="hover:bg-sidebar-accent/50 text-sidebar-foreground">
-                        {item.icon && <item.icon className="text-sidebar-foreground/70 group-data-[state=open]/collapsible:text-primary" />}
-                        <span className="group-data-[state=open]/collapsible:font-medium">{item.title}</span>
+                      <SidebarMenuButton tooltip={item.title} className="h-10 rounded-xl px-3 text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary">
+                        {item.icon && <item.icon className="text-sidebar-foreground/65 group-data-[state=open]/collapsible:text-primary" />}
+                        <span className="text-[13px] font-medium group-data-[state=open]/collapsible:text-primary">{item.title}</span>
                         <ChevronRight className="ml-auto transition-transform duration-200 group-data-[state=open]/collapsible:rotate-90 text-sidebar-foreground/50" />
                       </SidebarMenuButton>
                     </CollapsibleTrigger>
@@ -307,7 +307,7 @@ export function AppSidebar() {
                             </Collapsible>
                           ) : (
                             <SidebarMenuSubItem key={subItem.title}>
-                              <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-medium text-sidebar-foreground/80 hover:text-primary transition-colors whitespace-nowrap">
+                              <SidebarMenuSubButton asChild isActive={pathname === subItem.url} className="rounded-lg data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary data-[active=true]:font-semibold text-sidebar-foreground/80 hover:text-primary transition-colors whitespace-nowrap">
                                 <Link href={subItem.url || "#"}>
                                   <span className="whitespace-nowrap truncate">{subItem.title}</span>
                                 </Link>
@@ -325,7 +325,7 @@ export function AppSidebar() {
                     asChild
                     isActive={pathname === item.url}
                     tooltip={item.title}
-                    className="data-[active=true]:bg-sidebar-accent data-[active=true]:text-primary text-sidebar-foreground hover:bg-sidebar-accent/50 hover:text-primary transition-colors"
+                    className="h-10 rounded-xl px-3 data-[active=true]:bg-sidebar-accent data-[active=true]:font-semibold data-[active=true]:text-primary text-sidebar-foreground hover:bg-sidebar-accent hover:text-primary transition-colors"
                   >
                     <Link href={item.url || "#"}>
                       {item.icon && <item.icon className={pathname === item.url ? "text-primary" : "text-sidebar-foreground/70"} />}
@@ -338,13 +338,13 @@ export function AppSidebar() {
           </SidebarMenu>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border/50 p-4">
+      <SidebarFooter className="border-t border-sidebar-border/80 bg-sidebar p-4">
         <div className="flex items-center gap-3 group-data-[collapsible=icon]:hidden">
-          <div className="h-8 w-8 rounded-full bg-sidebar-accent flex items-center justify-center font-bold text-sidebar-primary-foreground text-sm">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary font-bold text-white shadow-sm shadow-primary/20 text-sm">
             {activeProfile?.nome?.charAt(0) || "?"}
           </div>
           <div className="flex flex-col overflow-hidden flex-1">
-            <span className="truncate text-sm font-medium text-sidebar-primary-foreground capitalize">{activeProfile?.nome || "Usuário"}</span>
+            <span className="truncate text-sm font-semibold text-foreground capitalize">{activeProfile?.nome || "Usuário"}</span>
             <span className="truncate text-xs text-sidebar-foreground capitalize">{activeProfile?.role || ""}</span>
           </div>
         </div>
