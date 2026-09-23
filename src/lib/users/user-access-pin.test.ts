@@ -17,17 +17,19 @@ test('access PIN helper creates a valid bcrypt hash and validates only the corre
 
 test('administrative creation stores the access PIN hash and never uses N/A', async () => {
   const source = await readFile(actionsUrl, 'utf8');
-  const createSection = source.slice(source.indexOf('export async function createUserAction'), source.indexOf('/**\n * Update an existing user'));
+  const normalizedSource = source.replace(/\r\n/g, '\n');
+  const createSection = normalizedSource.slice(normalizedSource.indexOf('export async function createUserAction'), normalizedSource.indexOf('/**\n * Update an existing user'));
   assert.match(createSection, /hashAccessPin\(validatedData\.pin\)/);
   assert.match(createSection, /pinAccessHash,/);
   assert.doesNotMatch(createSection, /authorizationPinHash/);
   assert.doesNotMatch(createSection, /['"]N\/A['"]/);
-  assert.match(source, /pin: z\.string\(\)\.regex\(\/\^\\d\{4\}\$\//);
+  assert.match(normalizedSource, /pin: z\.string\(\)\.regex\(\/\^\\d\{4\}\$\//);
 });
 
 test('access PIN reset is tenant scoped, permission protected, and updates only pinAccessHash', async () => {
   const source = await readFile(actionsUrl, 'utf8');
-  const resetSection = source.slice(source.indexOf('export async function resetUserAccessPinAction'), source.indexOf('/**\n * Update an existing user'));
+  const normalizedSource = source.replace(/\r\n/g, '\n');
+  const resetSection = normalizedSource.slice(normalizedSource.indexOf('export async function resetUserAccessPinAction'), normalizedSource.indexOf('/**\n * Update an existing user'));
   assert.match(resetSection, /requirePermission\('USUARIOS', 'RESET_PIN'\)/);
   assert.match(resetSection, /tenantEntityWhere\(userId, session\.companyId\)/);
   assert.match(resetSection, /if \(!\/\^\\d\{4\}\$\/\.test\(newPin\)\)/);
