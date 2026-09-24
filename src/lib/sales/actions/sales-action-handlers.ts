@@ -49,7 +49,7 @@ export type ListSalesFilters = { sellerId?: string; customerId?: string; status?
 export function createListSalesAction(deps: any) {
   return async (_companyId: string, filters?: ListSalesFilters) => {
     try {
-      const auth = await deps.authorize('VENDAS', 'VIEW');
+      const auth = await deps.authorize([{ module: 'VENDAS', action: 'VIEW' }, { module: 'PDV', action: 'VIEW' }]);
       return { success: true, ...await deps.service.listSales(auth.companyId, filters) };
     } catch { return { success: false, error: 'Não foi possível listar as vendas.' }; }
   };

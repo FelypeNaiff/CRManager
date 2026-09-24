@@ -41,6 +41,7 @@ function harness(options: {
     stocks: { 'variant-a': 10, 'variant-b': 10, ...options.stocks },
     sales: [] as any[], movements: [] as any[], logs: [] as any[], calls: [] as any[],
     authorizations: [] as any[], cashRegisterQueries: [] as any[],
+    drafts: [{ id: 'draft-a', companyId: 'company-a', status: 'DRAFT' }],
   };
   const depsCalls = { generate: [] as any[], cancel: [] as any[], process: [] as any[], rollback: [] as any[], authorization: [] as any[], policies: [] as any[] };
 
@@ -106,10 +107,18 @@ function harness(options: {
         state.sales.push(created); state.calls.push({ operation: 'sale.create', data }); return created;
       },
       findFirst: async ({ where }: any) => {
+        if (where.id === 'draft-a') {
+          return state.drafts.find(draft => draft.id === where.id && draft.companyId === where.companyId && draft.status === where.status) ?? null;
+        }
         if (where.id !== 'sale-a' || where.companyId !== 'company-a') return null;
         return { id: 'sale-a', companyId: 'company-a', sellerId: 'seller-a', cashRegisterId: null, totalAmount: 50, status: options.saleStatus ?? 'PAID', createdAt: new Date(), items: saleInput().items };
       },
       update: async ({ data }: any) => ({ id: 'sale-a', ...data }),
+      deleteMany: async ({ where }: any) => {
+        const before = state.drafts.length;
+        state.drafts = state.drafts.filter(draft => !(draft.id === where.id && draft.companyId === where.companyId && draft.status === where.status));
+        return { count: before - state.drafts.length };
+      },
     },
     inventoryMovement: { createMany: async ({ data }: any) => { state.movements.push(...data); } },
     activityLog: { create: async ({ data }: any) => { state.logs.push(data); return data; } },
@@ -119,7 +128,17 @@ function harness(options: {
 
   const db: any = {
     $transaction: async (callback: any) => {
-      const snapshot = structuredClone(state);
+      const snapshot = {
+        ...state,
+        stocks: { ...state.stocks },
+        sales: [...state.sales],
+        movements: [...state.movements],
+        logs: [...state.logs],
+        calls: [...state.calls],
+        authorizations: [...state.authorizations],
+        cashRegisterQueries: [...state.cashRegisterQueries],
+        drafts: state.drafts.map(draft => ({ ...draft })),
+      };
       try { return await callback(makeTx()); }
       catch (error) { Object.assign(state, snapshot); throw error; }
     },
@@ -297,6 +316,40 @@ test('server persists canonical prices, snapshots, subtotal and total instead of
     assert.equal(sale.subtotal.toNumber(), 50);
     assert.equal(sale.totalAmount.toNumber(), 50);
   }
+});
+
+test('draft finalization revalidates canonical price and consumes the draft atomically', async () => {
+  const { service, state } = harness();
+  const input = saleInput({ draftId: 'draft-a' });
+  input.items[0] = { ...input.items[0], unitPrice: 1, salePriceAtSale: 1, totalPrice: 2 };
+
+  const sale: any = await service.createSale(input, 'operator-a', authContext);
+
+  assert.equal(sale.items[0].unitPrice.toNumber(), 10);
+  assert.equal(sale.totalAmount.toNumber(), 50);
+  assert.equal(state.drafts.length, 0);
+  assert.equal(state.sales.length, 1);
+});
+
+test('draft finalization revalidates stock and preserves the draft on failure', async () => {
+  const { service, state } = harness({ stocks: { 'variant-b': 0 } });
+
+  await assert.rejects(service.createSale(saleInput({ draftId: 'draft-a' }), 'operator-a', authContext), /Estoque insuficiente/);
+
+  assert.equal(state.drafts.length, 1);
+  assert.equal(state.sales.length, 0);
+  assert.equal(state.movements.length, 0);
+});
+
+test('retry after a finalized draft cannot create a duplicate sale', async () => {
+  const { service, state } = harness();
+  const input = saleInput({ draftId: 'draft-a' });
+
+  await service.createSale(input, 'operator-a', authContext);
+  await assert.rejects(service.createSale(input, 'operator-a', authContext), /já finalizada|não encontrada/);
+
+  assert.equal(state.sales.length, 1);
+  assert.equal(state.drafts.length, 0);
 });
 
 test('server recalculates valid item and global discounts over canonical prices', async () => {

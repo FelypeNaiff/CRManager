@@ -106,7 +106,7 @@ const navItems = [
       { title: "Vendas", url: "/comercial/vendas", icon: ShoppingCart },
       { title: "Metas", url: "/comercial/metas", icon: PieChart },
       { title: "Comissões", url: "/comercial/comissoes", icon: DollarSign },
-      { title: "PDV", url: "/pdv", icon: Store },
+      { title: "PDV", url: "/pdv/vendas", icon: Store },
       { 
         title: "Trocas e Devoluções", 
         icon: Repeat,

@@ -35,7 +35,7 @@ export class CommercialReportService {
     const aggregatedPromise = prisma.sale.aggregate({
       where: {
         companyId: filters.companyId,
-        status: { not: "CANCELLED" },
+        status: { in: ['PAID', 'PENDING'] },
         ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
         ...dateFilter,
       },
@@ -58,7 +58,7 @@ export class CommercialReportService {
       FROM sale_items si
       JOIN sales s ON si.sale_id = s.id
       WHERE s.company_id = ${filters.companyId}
-        AND s.status <> 'CANCELLED'
+        AND s.status IN ('PAID', 'PENDING')
         ${sellerCondition}
         ${startCondition}
         ${endCondition}
@@ -68,7 +68,7 @@ export class CommercialReportService {
       where: {
         sale: {
           companyId: filters.companyId,
-          status: { not: 'CANCELLED' },
+          status: { in: ['PAID', 'PENDING'] },
           ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
           ...dateFilter
         },
@@ -148,7 +148,9 @@ export class CommercialReportService {
         companyId: filters.companyId,
         ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
         ...(filters.customerId ? { customerId: filters.customerId } : {}),
-        ...(filters.status ? { status: filters.status as SaleStatus } : {}),
+        status: filters.status
+          ? filters.status as SaleStatus
+          : { in: ['PAID', 'PENDING'] },
         ...dateFilter,
       },
       include: {
@@ -192,7 +194,7 @@ export class CommercialReportService {
       JOIN product_variants pv ON si.variant_id = pv.id
       WHERE s.company_id = ${filters.companyId}
         AND pv.company_id = ${filters.companyId}
-        AND s.status <> 'CANCELLED'
+        AND s.status IN ('PAID', 'PENDING')
         ${sellerCondition}
         ${startCondition}
         ${endCondition}
@@ -229,7 +231,7 @@ export class CommercialReportService {
       where: {
         sale: {
           companyId: filters.companyId,
-          status: { not: "CANCELLED" },
+          status: { in: ['PAID', 'PENDING'] },
           ...(filters.sellerId ? { sellerId: filters.sellerId } : {}),
           ...dateFilter,
         }
@@ -320,7 +322,7 @@ export class CommercialReportService {
     const dateFilter = this.getDateFilter(filters);
     
     const sales = await prisma.sale.findMany({
-      where: { companyId: filters.companyId, ...dateFilter },
+      where: { companyId: filters.companyId, status: { in: ['PAID', 'PENDING'] }, ...dateFilter },
       select: { id: true }
     });
     const saleIds = sales.map(s => s.id);

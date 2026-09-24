@@ -3,6 +3,7 @@ import { z } from "zod";
 export const SaleStatusSchema = z.enum(["PENDING", "PAID", "CANCELLED"]);
 
 export const createSaleSchema = z.object({
+  draftId: z.string().uuid().optional(),
   companyId: z.string(),
   sellerId: z.string(),
   customerId: z.string().optional(),

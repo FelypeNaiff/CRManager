@@ -44,6 +44,18 @@ export class SalesService {
       if (auditContext.companyId !== data.companyId || auditContext.userId !== operatorUserId) {
         throw new Error('Contexto de identidade inválido para a venda.');
       }
+      if (data.draftId) {
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM sales WHERE id = $1 AND company_id = $2 AND status = 'DRAFT' FOR UPDATE`,
+          data.draftId,
+          data.companyId,
+        );
+        const draft = await tx.sale.findFirst({
+          where: { id: data.draftId, companyId: data.companyId, status: 'DRAFT' },
+          select: { id: true },
+        });
+        if (!draft) throw new Error('Venda guardada não encontrada ou já finalizada.');
+      }
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
@@ -437,6 +449,13 @@ export class SalesService {
 
       // Etapa 8: Integrar comissões e metas
       await this.dependencies.sellerCommission.processSaleCommission(tx, sale);
+
+      if (data.draftId) {
+        const consumed = await tx.sale.deleteMany({
+          where: { id: data.draftId, companyId: data.companyId, status: 'DRAFT' },
+        });
+        if (consumed.count !== 1) throw new Error('Não foi possível consumir a venda guardada.');
+      }
 
       return sale;
     });

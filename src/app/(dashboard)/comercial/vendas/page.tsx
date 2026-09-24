@@ -7,7 +7,16 @@ import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Link from "next/link";
-import { Eye, Plus } from "lucide-react";
+import { Eye, Play, Plus } from "lucide-react";
+
+const statusLabels: Record<string, string> = {
+  DRAFT: 'Guardada',
+  PENDING: 'Pendente',
+  PAID: 'Paga',
+  CANCELLED: 'Cancelada',
+  PARTIALLY_RETURNED: 'Parcialmente devolvida',
+  RETURNED: 'Devolvida',
+};
 
 export default function VendasPage() {
   const { activeProfile } = useProfile();
@@ -52,8 +61,8 @@ export default function VendasPage() {
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
         <h1 className="text-3xl font-bold">Vendas</h1>
-        <Link href="/comercial/vendas/nova">
-          <Button><Plus className="w-4 h-4 mr-2" /> Nova Venda</Button>
+        <Link href="/pdv">
+          <Button><Plus className="w-4 h-4 mr-2" /> Nova venda (PDV)</Button>
         </Link>
       </div>
 
@@ -107,14 +116,20 @@ export default function VendasPage() {
                       <td className="p-4">{new Date(sale.createdAt).toLocaleDateString("pt-BR")}</td>
                       <td className="p-4">{sale.customerNameSnapshot || "Cliente Avulso"}</td>
                       <td className="p-4">{sale.seller?.name || "Sistema"}</td>
-                      <td className="p-4">{sale.status}</td>
+                      <td className="p-4">{statusLabels[sale.status] || sale.status}</td>
                       <td className="p-4">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(sale.totalAmount))}
                       </td>
                       <td className="p-4">
-                        <Link href={`/comercial/vendas/${sale.id}`}>
-                          <Button variant="ghost" size="sm"><Eye className="w-4 h-4" /></Button>
-                        </Link>
+                        {sale.status === 'DRAFT' ? (
+                          <Link href={`/pdv?draft=${sale.id}`}>
+                            <Button variant="outline" size="sm"><Play className="mr-2 h-4 w-4" /> Continuar</Button>
+                          </Link>
+                        ) : (
+                          <Link href={`/comercial/vendas/${sale.id}`}>
+                            <Button variant="ghost" size="sm" aria-label="Visualizar venda"><Eye className="w-4 h-4" /></Button>
+                          </Link>
+                        )}
                       </td>
                     </tr>
                   ))

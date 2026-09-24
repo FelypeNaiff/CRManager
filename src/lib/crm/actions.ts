@@ -921,7 +921,7 @@ const getCachedSegmentationData = unstable_cache(
       by: ['customerId'],
       where: {
         companyId: companyId,
-        status: { not: 'CANCELLED' },
+        status: { in: ['PAID', 'PENDING'] },
         customerId: { not: null }
       },
       _sum: {
