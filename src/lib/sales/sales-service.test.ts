@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { Prisma } from '@prisma/client';
 import { SalesService } from './sales-service';
 
-const decimal = (value: number) => ({ toNumber: () => value });
+const decimal = (value: number) => new Prisma.Decimal(value);
 const authContext: any = {
   authUserId: 'auth-base', authenticatedUserId: 'base-user', userId: 'operator-a',
   companyId: 'company-a', name: 'Operador', email: 'operator@example.invalid',
@@ -29,11 +30,13 @@ function saleInput(overrides: Record<string, any> = {}) {
 
 function harness(options: {
   sellerCompany?: string; stocks?: Record<string, number>; saleStatus?: string;
-  discountPolicy?: any; approvedAuthorization?: any;
+  discountPolicy?: any; approvedAuthorization?: any; invalidPaymentMethod?: string;
+  failReceivables?: boolean;
 } = {}) {
   const state = {
     stocks: { 'variant-a': 10, 'variant-b': 10, ...options.stocks },
     sales: [] as any[], movements: [] as any[], logs: [] as any[], calls: [] as any[],
+    authorizations: [] as any[],
   };
   const depsCalls = { generate: [] as any[], cancel: [] as any[], process: [] as any[], rollback: [] as any[], authorization: [] as any[], policies: [] as any[] };
 
@@ -41,7 +44,7 @@ function harness(options: {
     company: { findUnique: async ({ where }: any) => where.id === 'company-a' ? { id: 'company-a' } : null },
     seller: { findFirst: async ({ where }: any) => where.id === 'seller-a' && where.companyId === (options.sellerCompany ?? 'company-a') ? { id: 'seller-a', companyId: options.sellerCompany ?? 'company-a', status: 'ACTIVE' } : null },
     customer: { findFirst: async () => ({ id: 'customer-a' }) },
-    paymentMethod: { count: async ({ where }: any) => where.id.in.length },
+    paymentMethod: { count: async ({ where }: any) => where.id.in.filter((id: string) => id !== options.invalidPaymentMethod).length },
     cashRegister: { findFirst: async () => null },
     actionAuthorization: {
       findFirst: async ({ where }: any) => {
@@ -49,9 +52,19 @@ function harness(options: {
         return authorization && Object.entries(where).every(([key, value]) => authorization[key] === value) ? authorization : null;
       },
     },
-    saleAuthorization: { create: async ({ data }: any) => data },
+    saleAuthorization: { create: async ({ data }: any) => { state.authorizations.push(data); return data; } },
     productVariant: {
-      findMany: async ({ where }: any) => where.id.in.map((id: string) => ({ id, name: id, availableStock: decimal(state.stocks[id as keyof typeof state.stocks] ?? 0) })),
+      findMany: async ({ where }: any) => where.id.in.map((id: string) => {
+        const canonical = id === 'variant-a'
+          ? { salePrice: 10, costPrice: 5, productName: 'Produto A', sku: 'A-1' }
+          : { salePrice: 30, costPrice: 15, productName: 'Produto B', sku: 'B-1' };
+        return {
+          id, name: `${id}-canonical`, sku: canonical.sku, barcode: `${id}-barcode`,
+          salePrice: decimal(canonical.salePrice), costPrice: decimal(canonical.costPrice),
+          availableStock: decimal(state.stocks[id as keyof typeof state.stocks] ?? 0),
+          product: { name: canonical.productName },
+        };
+      }),
       update: async ({ where, data }: any) => {
         const delta = data.availableStock.decrement ?? -data.availableStock.increment;
         state.stocks[where.id as keyof typeof state.stocks] -= delta;
@@ -97,7 +110,10 @@ function harness(options: {
     },
     authorization: { createAuthorizationRequest: async (data: any) => { depsCalls.authorization.push(data); return { id: 'auth-a' }; } },
     receivables: {
-      generateReceivablesFromSale: async (...args: any[]) => { depsCalls.generate.push(args); },
+      generateReceivablesFromSale: async (...args: any[]) => {
+        depsCalls.generate.push(args);
+        if (options.failReceivables) throw new Error('late financial failure');
+      },
       cancelReceivablesFromSale: async (...args: any[]) => { depsCalls.cancel.push(args); },
     },
     sellerCommission: {
@@ -114,6 +130,8 @@ test('creates a tenant-scoped sale with multiple items and payment types', async
   assert.equal(sale.companyId, 'company-a');
   assert.equal(sale.sellerId, 'seller-a');
   assert.equal(sale.items.length, 2);
+  assert.equal(sale.subtotal.toNumber(), 50);
+  assert.equal(sale.totalAmount.toNumber(), 50);
   assert.deepEqual(sale.payments.map((p: any) => p.paymentMethodId), ['cash', 'pix', 'debit', 'credit', 'store-credit']);
   assert.equal(state.stocks['variant-a'], 8);
   assert.equal(state.stocks['variant-b'], 9);
@@ -169,7 +187,11 @@ test('get and list always include the trusted tenant predicate', async () => {
 test('discount within or exactly at the policy limit continues without authorization', async () => {
   for (const discountAmount of [5, 10]) {
     const { service, state, depsCalls } = harness({ discountPolicy: { allowed: true, requiresAuthorization: false, limitApplied: 10 } });
-    const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount, totalAmount: 100 - discountAmount }), 'operator-a', authContext);
+    const result: any = await service.createSale(saleInput({
+      subtotal: 100, discountAmount, totalAmount: 50 - discountAmount,
+      globalDiscountType: 'AMOUNT', globalDiscountValue: discountAmount,
+      payments: [{ paymentMethodId: 'cash', amount: 50 - discountAmount, installments: 1 }],
+    }), 'operator-a', authContext);
     assert.equal(result.id, 'sale-a');
     assert.equal(state.sales.length, 1);
     assert.equal(depsCalls.authorization.length, 0);
@@ -180,12 +202,16 @@ test('discount within or exactly at the policy limit continues without authoriza
 
 test('discount above limit creates a modern pending authorization and stops the sale', async () => {
   const { service, state, depsCalls } = harness({ discountPolicy: { allowed: false, requiresAuthorization: true, limitApplied: 10 } });
-  const result: any = await service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85 }), 'operator-a');
+  const result: any = await service.createSale(saleInput({
+    subtotal: 100, discountAmount: 15, totalAmount: 35,
+    globalDiscountType: 'AMOUNT', globalDiscountValue: 15,
+    payments: [{ paymentMethodId: 'cash', amount: 35, installments: 1 }],
+  }), 'operator-a');
   assert.deepEqual(result, { requireAuthorization: true, authorizationId: 'auth-a' });
   assert.equal(state.sales.length, 0);
   assert.deepEqual(depsCalls.authorization[0], {
     companyId: 'company-a', type: 'DISCOUNT', module: 'PDV', requestedByUserId: 'operator-a',
-    percentage: 15, amount: 15, reason: 'Desconto excede o limite', metadata: { requesterLimit: 10 }, financialImpact: true,
+    percentage: 30, amount: 15, reason: 'Desconto excede o limite', metadata: { requesterLimit: 10 }, financialImpact: true,
   });
 });
 
@@ -193,8 +219,16 @@ test('approved discount authorization must match tenant, status, type and module
   const policy = { allowed: false, requiresAuthorization: true, limitApplied: 10 };
   const valid = { id: 'auth-approved', companyId: 'company-a', status: 'APPROVED', type: 'DISCOUNT', module: 'PDV', authorizedByUserId: 'manager-a' };
   const accepted = harness({ discountPolicy: policy, approvedAuthorization: valid });
-  const sale: any = await accepted.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a', authContext);
+  const authorizedInput = saleInput({
+    subtotal: 100, discountAmount: 15, totalAmount: 35,
+    globalDiscountType: 'AMOUNT', globalDiscountValue: 15,
+    payments: [{ paymentMethodId: 'cash', amount: 35, installments: 1 }],
+    authorizationId: 'auth-approved',
+  });
+  const sale: any = await accepted.service.createSale(authorizedInput, 'operator-a', authContext);
   assert.equal(sale.id, 'sale-a');
+  assert.equal(accepted.state.authorizations[0].requestedByUserId, 'operator-a');
+  assert.notEqual(accepted.state.authorizations[0].requestedByUserId, 'seller-a');
   assert.equal(accepted.state.logs.some(log => log.action === 'SALE_CREATE' && log.actorUserId === 'operator-a'), true);
 
   for (const incompatible of [
@@ -204,13 +238,82 @@ test('approved discount authorization must match tenant, status, type and module
     { ...valid, module: 'CAIXA' },
   ]) {
     const denied = harness({ discountPolicy: policy, approvedAuthorization: incompatible });
-    await assert.rejects(denied.service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'auth-approved' }), 'operator-a'), /Autorização de desconto inválida/);
+    await assert.rejects(denied.service.createSale(authorizedInput, 'operator-a'), /Autorização de desconto inválida/);
     assert.equal(denied.state.sales.length, 0);
   }
 });
 
 test('missing or arbitrary discount authorization is refused', async () => {
   const { service, state } = harness({ discountPolicy: { allowed: false, requiresAuthorization: true, limitApplied: 10 } });
-  await assert.rejects(service.createSale(saleInput({ subtotal: 100, discountAmount: 15, totalAmount: 85, authorizationId: 'arbitrary' }), 'operator-a'), /Autorização de desconto inválida/);
+  await assert.rejects(service.createSale(saleInput({
+    globalDiscountType: 'AMOUNT', globalDiscountValue: 15,
+    payments: [{ paymentMethodId: 'cash', amount: 35, installments: 1 }],
+    authorizationId: 'arbitrary',
+  }), 'operator-a'), /Autorização de desconto inválida/);
   assert.equal(state.sales.length, 0);
+});
+
+test('server persists canonical prices, snapshots, subtotal and total instead of client monetary fields', async () => {
+  for (const forgedTotal of [1, 999]) {
+    const { service } = harness();
+    const input = saleInput({ subtotal: 1, totalAmount: forgedTotal });
+    input.items[0] = { ...input.items[0], unitPrice: 1, costPriceAtSale: 0, salePriceAtSale: 1, totalPrice: 2, productNameSnapshot: 'forged' };
+    const sale: any = await service.createSale(input, 'operator-a', authContext);
+    assert.equal(sale.items[0].unitPrice.toNumber(), 10);
+    assert.equal(sale.items[0].costPriceAtSale.toNumber(), 5);
+    assert.equal(sale.items[0].productNameSnapshot, 'Produto A');
+    assert.equal(sale.subtotal.toNumber(), 50);
+    assert.equal(sale.totalAmount.toNumber(), 50);
+  }
+});
+
+test('server recalculates valid item and global discounts over canonical prices', async () => {
+  const { service } = harness();
+  const input = saleInput({
+    subtotal: 999, discountAmount: 999, totalAmount: 1,
+    globalDiscountType: 'PERCENTAGE', globalDiscountValue: 10,
+    payments: [{ paymentMethodId: 'cash', amount: 43.2, installments: 1 }],
+  });
+  input.items[0] = { ...input.items[0], discountType: 'PERCENTAGE', discountValue: 10, discount: 999, totalPrice: 0 };
+  const sale: any = await service.createSale(input, 'operator-a', authContext);
+  assert.equal(sale.items[0].discount.toNumber(), 1);
+  assert.equal(sale.items[0].totalPrice.toNumber(), 18);
+  assert.equal(sale.discountAmount.toNumber(), 6.8);
+  assert.equal(sale.totalAmount.toNumber(), 43.2);
+});
+
+test('invalid item or global discount intent is rejected before sale effects', async () => {
+  for (const input of [
+    saleInput({ items: [{ ...saleInput().items[0], discountType: 'PERCENTAGE', discountValue: 101 }] }),
+    saleInput({ globalDiscountType: 'AMOUNT', globalDiscountValue: 51 }),
+  ]) {
+    const { service, state, depsCalls } = harness();
+    await assert.rejects(service.createSale(input, 'operator-a', authContext), /desconto/i);
+    assert.equal(state.sales.length, 0);
+    assert.equal(depsCalls.generate.length, 0);
+  }
+});
+
+test('payment total below or above canonical sale total is rejected', async () => {
+  for (const amount of [49.99, 50.01]) {
+    const { service, state } = harness();
+    await assert.rejects(service.createSale(saleInput({ payments: [{ paymentMethodId: 'cash', amount, installments: 1 }] }), 'operator-a', authContext), /soma dos pagamentos/i);
+    assert.equal(state.sales.length, 0);
+  }
+});
+
+test('payment method from another tenant is rejected', async () => {
+  const { service, state } = harness({ invalidPaymentMethod: 'external-payment' });
+  await assert.rejects(service.createSale(saleInput({ payments: [{ paymentMethodId: 'external-payment', amount: 50, installments: 1 }] }), 'operator-a', authContext), /Forma de pagamento inválida/);
+  assert.equal(state.sales.length, 0);
+});
+
+test('late financial failure rolls back sale, stock, movements, commission and success audit', async () => {
+  const { service, state, depsCalls } = harness({ failReceivables: true });
+  await assert.rejects(service.createSale(saleInput(), 'operator-a', authContext), /late financial failure/);
+  assert.equal(state.sales.length, 0);
+  assert.deepEqual(state.stocks, { 'variant-a': 10, 'variant-b': 10 });
+  assert.equal(state.movements.length, 0);
+  assert.equal(state.logs.length, 0);
+  assert.equal(depsCalls.process.length, 0);
 });

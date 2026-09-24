@@ -1,4 +1,4 @@
-import { AuthorizationType } from "@prisma/client";
+import { AuthorizationType, Prisma } from "@prisma/client";
 import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
@@ -13,6 +13,20 @@ import { approvedAuthorizationWhere } from "../auth/authorization-security";
 import { writeActivityLog } from "../auth/activity-log";
 import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
+
+const money = (value: Prisma.Decimal.Value) =>
+  new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+
+function finiteDecimal(value: Prisma.Decimal.Value, field: string) {
+  let parsed: Prisma.Decimal;
+  try {
+    parsed = new Prisma.Decimal(value);
+  } catch {
+    throw new Error(`${field} inválido.`);
+  }
+  if (!parsed.isFinite()) throw new Error(`${field} inválido.`);
+  return parsed;
+}
 
 export class SalesService {
   constructor(
@@ -85,58 +99,6 @@ export class SalesService {
         throw new Error("Cliente é obrigatório para finalizar a venda.");
       }
 
-      // Etapa 1.5: Validar Desconto
-      let authorizedByUserId: string | null = null;
-      let maxAllowed = 0;
-      const discountPercentage = data.subtotal > 0 ? (data.discountAmount / data.subtotal) * 100 : 0;
-      
-      if (data.discountAmount > 0 && data.subtotal > 0) {
-        const policy = await this.dependencies.operationalSettings.validateDiscountPolicy({
-          companyId: data.companyId,
-          userId: operatorUserId,
-          discountPercent: discountPercentage,
-          saleTotal: data.totalAmount
-        }, tx);
-
-        maxAllowed = policy.limitApplied;
-
-        if (!policy.allowed) {
-          if (policy.requiresAuthorization) {
-            if (data.authorizationId) {
-              const auth = await tx.actionAuthorization.findFirst({
-                where: approvedAuthorizationWhere({
-                  id: data.authorizationId,
-                  companyId: data.companyId,
-                  type: AuthorizationType.DISCOUNT,
-                  module: 'PDV',
-                })
-              });
-              if (!auth) {
-                throw new Error('Autorização de desconto inválida ou não aprovada.');
-              }
-              authorizedByUserId = auth.authorizedByUserId;
-            } else {
-              const authReq = await this.dependencies.authorization.createAuthorizationRequest({
-                companyId: data.companyId,
-                type: AuthorizationType.DISCOUNT,
-                module: 'PDV',
-                requestedByUserId: operatorUserId,
-                percentage: discountPercentage,
-                amount: data.discountAmount,
-                reason: data.authReason || 'Desconto excede o limite',
-                metadata: { requesterLimit: maxAllowed },
-                financialImpact: true,
-              });
-              
-              // Interrompe o fluxo retornando a necessidade de autorização
-              return { requireAuthorization: true, authorizationId: authReq.id };
-            }
-          } else {
-            throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
-          }
-        }
-      }
-
       // Etapa 2: Validar estoque disponível em lote com trava pessimista
       const variantIds = [...new Set(data.items.map(item => item.variantId))].sort();
       if (variantIds.length > 0) {
@@ -149,9 +111,68 @@ export class SalesService {
       }
 
       const variants = await tx.productVariant.findMany({
-        where: { id: { in: variantIds }, companyId: data.companyId, isActive: true }
+        where: {
+          id: { in: variantIds },
+          companyId: data.companyId,
+          isActive: true,
+          archivedAt: null,
+          product: { is: { companyId: data.companyId, isActive: true, archivedAt: null } },
+        },
+        include: { product: { select: { name: true } } },
       });
       const variantMap = new Map<string, any>(variants.map((v: any) => [v.id, v]));
+
+      let canonicalSubtotal = money(0);
+      let canonicalItemDiscount = money(0);
+      const canonicalItems = data.items.map(item => {
+        const variant = variantMap.get(item.variantId);
+        if (!variant) throw new Error(`Variante ${item.variantId} não encontrada.`);
+
+        const quantity = finiteDecimal(item.quantity, 'Quantidade');
+        if (quantity.lte(0)) throw new Error('Quantidade inválida.');
+
+        const unitPrice = money(variant.salePrice);
+        const costPrice = money(variant.costPrice);
+        const discountIntent = finiteDecimal(item.discountValue ?? item.discount ?? 0, 'Desconto do item');
+        if (discountIntent.lt(0)) throw new Error('Desconto do item não pode ser negativo.');
+
+        let unitDiscount: Prisma.Decimal;
+        if (item.discountType === 'PERCENTAGE') {
+          if (discountIntent.gt(100)) throw new Error('Percentual de desconto do item inválido.');
+          unitDiscount = money(unitPrice.mul(discountIntent).div(100));
+        } else {
+          unitDiscount = money(discountIntent);
+        }
+        if (unitDiscount.gt(unitPrice)) throw new Error('Desconto do item não pode superar o preço unitário.');
+
+        const lineSubtotal = money(unitPrice.mul(quantity));
+        const lineDiscount = money(unitDiscount.mul(quantity));
+        const lineTotal = money(lineSubtotal.minus(lineDiscount));
+        if (lineTotal.lt(0)) throw new Error('Total líquido do item inválido.');
+
+        canonicalSubtotal = money(canonicalSubtotal.plus(lineSubtotal));
+        canonicalItemDiscount = money(canonicalItemDiscount.plus(lineDiscount));
+        const margin = unitPrice.eq(0)
+          ? money(0)
+          : unitPrice.minus(costPrice).div(unitPrice).mul(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+
+        return {
+          variantId: variant.id,
+          productNameSnapshot: variant.product.name,
+          variantNameSnapshot: variant.name,
+          skuSnapshot: variant.sku,
+          barcodeSnapshot: variant.barcode || null,
+          quantity,
+          unitPrice,
+          discountType: item.discountType ?? 'AMOUNT',
+          discountValue: discountIntent,
+          discount: unitDiscount,
+          totalPrice: lineTotal,
+          costPriceAtSale: costPrice,
+          salePriceAtSale: unitPrice,
+          marginAtSale: margin,
+        };
+      });
 
       for (const item of data.items) {
         const variant = variantMap.get(item.variantId);
@@ -165,6 +186,84 @@ export class SalesService {
         }
       }
 
+      const subtotalAfterItems = money(canonicalSubtotal.minus(canonicalItemDiscount));
+      const globalDiscountIntent = finiteDecimal(data.globalDiscountValue ?? 0, 'Desconto global');
+      if (globalDiscountIntent.lt(0)) throw new Error('Desconto global não pode ser negativo.');
+      let canonicalGlobalDiscount: Prisma.Decimal;
+      if (data.globalDiscountType === 'PERCENTAGE') {
+        if (globalDiscountIntent.gt(100)) throw new Error('Percentual de desconto global inválido.');
+        canonicalGlobalDiscount = money(subtotalAfterItems.mul(globalDiscountIntent).div(100));
+      } else {
+        canonicalGlobalDiscount = money(globalDiscountIntent);
+      }
+      if (canonicalGlobalDiscount.gt(subtotalAfterItems)) {
+        throw new Error('Desconto global não pode superar o subtotal após descontos dos itens.');
+      }
+
+      const canonicalDiscountAmount = money(canonicalItemDiscount.plus(canonicalGlobalDiscount));
+      const canonicalTotal = money(canonicalSubtotal.minus(canonicalDiscountAmount));
+      if (canonicalTotal.lt(0)) throw new Error('Total da venda inválido.');
+
+      const canonicalPayments = data.payments.map(payment => {
+        const amount = finiteDecimal(payment.amount, 'Valor do pagamento');
+        if (amount.lte(0) || amount.decimalPlaces() > 2) throw new Error('Valor do pagamento inválido.');
+        return { ...payment, amount: money(amount) };
+      });
+      const paymentTotal = money(canonicalPayments.reduce(
+        (sum, payment) => sum.plus(payment.amount),
+        new Prisma.Decimal(0),
+      ));
+      if (!paymentTotal.eq(canonicalTotal)) {
+        throw new Error('A soma dos pagamentos deve ser igual ao total da venda.');
+      }
+
+      // Etapa 2.5: validar a política sobre os valores recalculados pelo servidor.
+      let authorizedByUserId: string | null = null;
+      let maxAllowed = 0;
+      const discountPercentage = canonicalSubtotal.gt(0)
+        ? canonicalDiscountAmount.div(canonicalSubtotal).mul(100).toNumber()
+        : 0;
+
+      if (canonicalDiscountAmount.gt(0) && canonicalSubtotal.gt(0)) {
+        const policy = await this.dependencies.operationalSettings.validateDiscountPolicy({
+          companyId: data.companyId,
+          userId: operatorUserId,
+          discountPercent: discountPercentage,
+          saleTotal: canonicalTotal.toNumber(),
+        }, tx);
+        maxAllowed = policy.limitApplied;
+        if (!policy.allowed) {
+          if (!policy.requiresAuthorization) {
+            throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
+          }
+          if (data.authorizationId) {
+            const auth = await tx.actionAuthorization.findFirst({
+              where: approvedAuthorizationWhere({
+                id: data.authorizationId,
+                companyId: data.companyId,
+                type: AuthorizationType.DISCOUNT,
+                module: 'PDV',
+              }),
+            });
+            if (!auth) throw new Error('Autorização de desconto inválida ou não aprovada.');
+            authorizedByUserId = auth.authorizedByUserId;
+          } else {
+            const authReq = await this.dependencies.authorization.createAuthorizationRequest({
+              companyId: data.companyId,
+              type: AuthorizationType.DISCOUNT,
+              module: 'PDV',
+              requestedByUserId: operatorUserId,
+              percentage: discountPercentage,
+              amount: canonicalDiscountAmount.toNumber(),
+              reason: data.authReason || 'Desconto excede o limite',
+              metadata: { requesterLimit: maxAllowed },
+              financialImpact: true,
+            });
+            return { requireAuthorization: true, authorizationId: authReq.id };
+          }
+        }
+      }
+
       // Etapa 3: Criar Sale e SaleItems e SalePayments
       const sale = await tx.sale.create({
         data: {
@@ -173,34 +272,19 @@ export class SalesService {
           customerId: data.customerId,
           cashRegisterId: data.cashRegisterId,
           status: "PAID",
-          subtotal: data.subtotal,
-          discountAmount: data.discountAmount,
+          subtotal: canonicalSubtotal,
+          discountAmount: canonicalDiscountAmount,
           globalDiscountType: data.globalDiscountType,
           globalDiscountValue: data.globalDiscountValue,
-          totalAmount: data.totalAmount,
+          totalAmount: canonicalTotal,
           notes: data.notes,
           customerNameSnapshot: data.customerNameSnapshot,
           customerPhoneSnapshot: data.customerPhoneSnapshot,
           items: {
-            create: data.items.map(item => ({
-              variantId: item.variantId,
-              productNameSnapshot: item.productNameSnapshot,
-              variantNameSnapshot: item.variantNameSnapshot,
-              skuSnapshot: item.skuSnapshot,
-              barcodeSnapshot: item.barcodeSnapshot || null,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountType: item.discountType,
-              discountValue: item.discountValue,
-              discount: item.discount,
-              totalPrice: item.totalPrice,
-              costPriceAtSale: item.costPriceAtSale,
-              salePriceAtSale: item.salePriceAtSale,
-              marginAtSale: item.marginAtSale
-            }))
+            create: canonicalItems,
           },
           payments: {
-            create: data.payments.map(payment => ({
+            create: canonicalPayments.map(payment => ({
               paymentMethodId: payment.paymentMethodId,
               amount: payment.amount,
               installments: payment.installments,
@@ -216,12 +300,12 @@ export class SalesService {
         await tx.saleAuthorization.create({
           data: {
             saleId: sale.id,
-            requestedByUserId: data.sellerId,
+            requestedByUserId: operatorUserId,
             authorizedByUserId: authorizedByUserId,
             type: "DISCOUNT_OVER_LIMIT",
             status: "APPROVED",
             reason: data.authReason || "Sem motivo informado",
-            requestedDiscount: data.discountAmount,
+            requestedDiscount: canonicalDiscountAmount,
             allowedDiscount: maxAllowed
           }
         });
@@ -254,7 +338,7 @@ export class SalesService {
       }
 
       if (auditContext) {
-        for (const [index, item] of data.items.entries()) {
+        for (const [index, item] of canonicalItems.entries()) {
           if (Number(item.discount) <= 0) continue;
           await writeActivityLog({
             context: auditContext,
@@ -271,7 +355,7 @@ export class SalesService {
             },
           }, { policy: 'CRITICAL', tx });
         }
-        if (Number(data.discountAmount) > 0) {
+        if (canonicalDiscountAmount.gt(0)) {
           await writeActivityLog({
             context: auditContext,
             action: 'SALE_GLOBAL_DISCOUNT_APPLY',
@@ -281,7 +365,7 @@ export class SalesService {
             metadata: {
               type: data.globalDiscountType ?? 'AMOUNT',
               requested: Number(data.globalDiscountValue ?? data.discountAmount),
-              discountAmount: Number(data.discountAmount),
+              discountAmount: canonicalDiscountAmount.toNumber(),
             },
           }, { policy: 'CRITICAL', tx });
         }
@@ -298,7 +382,7 @@ export class SalesService {
             subtotal: Number(sale.subtotal),
             discountAmount: Number(sale.discountAmount),
             total: Number(sale.totalAmount),
-            paymentMethodIds: [...new Set(data.payments.map(payment => payment.paymentMethodId))],
+            paymentMethodIds: [...new Set(canonicalPayments.map(payment => payment.paymentMethodId))],
             status: sale.status,
           },
         }, { policy: 'CRITICAL', tx });
@@ -309,7 +393,7 @@ export class SalesService {
           data: {
             customerId: data.customerId,
             actionType: "VENDA_CONCLUIDA",
-            description: `Venda #${sale.id} concluída. Valor Total: R$ ${data.totalAmount}`
+            description: `Venda #${sale.id} concluída. Valor Total: R$ ${canonicalTotal.toFixed(2)}`
           }
         });
       }
