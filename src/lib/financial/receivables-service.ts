@@ -95,7 +95,7 @@ export class ReceivablesService {
 
         // Atualiza saldo do Caixa Físico
         await tx.cashRegister.update({
-          where: { id: sale.cashRegisterId },
+          where: { id: sale.cashRegisterId, companyId: sale.companyId },
           data: {
             expectedBalance: { increment: amount },
           }
@@ -179,7 +179,8 @@ export class ReceivablesService {
 
         // Taxa do PIX/Débito (Se houver)
         if (pm.feePercentage.greaterThan(0)) {
-          const feeAmount = new Prisma.Decimal(amount.toNumber() * (pm.feePercentage.toNumber() / 100));
+          const feeAmount = amount.mul(pm.feePercentage).div(100)
+            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
           await tx.financialTransaction.create({
             data: {
               companyId: sale.companyId,
@@ -204,9 +205,14 @@ export class ReceivablesService {
       // 4. Cartão de Crédito e Crediário (A Prazo / Parcelado)
       // Dividimos o amount pelo número de parcelas
       const installments = payment.installments > 0 ? payment.installments : 1;
-      const installmentAmount = new Prisma.Decimal(amount.toNumber() / installments);
+      const totalCents = amount.mul(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      const regularInstallmentCents = totalCents.dividedToIntegerBy(installments);
 
       for (let i = 1; i <= installments; i++) {
+        const installmentCents = i === installments
+          ? totalCents.minus(regularInstallmentCents.mul(installments - 1))
+          : regularInstallmentCents;
+        const installmentAmount = installmentCents.div(100).toDecimalPlaces(2);
         // Calcular vencimento (D + (settlementDays * i) ou mensal para crediário)
         // Simplificação: 30 dias por parcela
         const dueDate = new Date(now);
@@ -303,7 +309,8 @@ export class ReceivablesService {
     // Calcula e Gera Despesa da Taxa (Valor Líquido = Bruto - Taxa)
     const pm = finTx.paymentMethod;
     if (pm && pm.feePercentage && pm.feePercentage.greaterThan(0)) {
-      const feeAmount = new Prisma.Decimal(amount.toNumber() * (pm.feePercentage.toNumber() / 100));
+      const feeAmount = amount.mul(pm.feePercentage).div(100)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       await tx.financialTransaction.create({
         data: {
           companyId: receivable.companyId,
@@ -331,9 +338,14 @@ export class ReceivablesService {
    * - CASH -> Devolve ao CashRegister e estorna CashMovement
    * - WALLET -> Devolve saldo para a CustomerWallet
    */
-  async cancelReceivablesFromSale(saleId: string, cancelledByUserId: string, tx: Prisma.TransactionClient) {
-    const sale = await tx.sale.findUnique({
-      where: { id: saleId },
+  async cancelReceivablesFromSale(
+    saleId: string,
+    cancelledByUserId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+  ) {
+    const sale = await tx.sale.findFirst({
+      where: { id: saleId, companyId },
       include: {
         payments: {
           include: { paymentMethod: true }
@@ -343,29 +355,58 @@ export class ReceivablesService {
 
     if (!sale) throw new Error("Venda não encontrada para cancelamento de recebíveis.");
 
-    const now = new Date();
-
     // 1. Cancelar todas as FinancialTransactions ligadas à Sale
     await tx.financialTransaction.updateMany({
-      where: { referenceType: "SALE", referenceId: saleId, status: { not: "CANCELLED" } },
+      where: {
+        companyId,
+        referenceType: "SALE",
+        referenceId: saleId,
+        status: { not: "CANCELLED" },
+      },
       data: { status: "CANCELLED" }
     });
 
     // 2. Cancelar as FinancialTransactions das taxas, se houver, baseadas nos recebíveis.
     // Primeiro pegar os finTxs cancelados:
     const finTxs = await tx.financialTransaction.findMany({
-      where: { referenceType: "SALE", referenceId: saleId }
+      where: { companyId, referenceType: "SALE", referenceId: saleId },
+      select: { id: true },
     });
     const finTxIds = finTxs.map(f => f.id);
 
     await tx.financialTransaction.updateMany({
-      where: { referenceType: "SALE_FEE", referenceId: { in: finTxIds } },
+      where: {
+        companyId,
+        referenceType: "SALE_FEE",
+        referenceId: { in: finTxIds },
+        status: { not: "CANCELLED" },
+      },
       data: { status: "CANCELLED" }
     });
 
-    // 3. Cancelar todos os AccountsReceivable atrelados a esses finTxs que estão PENDING
+    const receivables = await tx.accountsReceivable.findMany({
+      where: { companyId, financialTransactionId: { in: finTxIds } },
+      select: { id: true },
+    });
+    const receivableIds = receivables.map(receivable => receivable.id);
+
+    await tx.financialTransaction.updateMany({
+      where: {
+        companyId,
+        referenceType: "RECEIVABLE_FEE",
+        referenceId: { in: receivableIds },
+        status: { not: "CANCELLED" },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    // 3. Cancelar todos os AccountsReceivable ainda não liquidados integralmente.
     await tx.accountsReceivable.updateMany({
-      where: { financialTransactionId: { in: finTxIds }, status: "PENDING" },
+      where: {
+        companyId,
+        financialTransactionId: { in: finTxIds },
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+      },
       data: { status: "CANCELLED" }
     });
 
@@ -373,7 +414,7 @@ export class ReceivablesService {
     // O sistema registra o cancelamento, mas não exclui fisicamente para histórico.
     // Recebíveis PAID ficarão como CANCELLED, marcando que o valor foi "estornado".
     await tx.accountsReceivable.updateMany({
-      where: { financialTransactionId: { in: finTxIds }, status: "PAID" },
+      where: { companyId, financialTransactionId: { in: finTxIds }, status: "PAID" },
       data: { status: "CANCELLED", notes: "Estornado por cancelamento da Venda" }
     });
 
@@ -386,7 +427,7 @@ export class ReceivablesService {
 
         // Deduz saldo esperado do Caixa
         await tx.cashRegister.update({
-          where: { id: sale.cashRegisterId },
+          where: { id: sale.cashRegisterId, companyId: sale.companyId },
           data: { expectedBalance: { decrement: payment.amount } }
         });
 

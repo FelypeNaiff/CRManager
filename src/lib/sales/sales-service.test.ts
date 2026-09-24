@@ -33,6 +33,9 @@ function harness(options: {
   discountPolicy?: any; approvedAuthorization?: any; invalidPaymentMethod?: string;
   failReceivables?: boolean; requireOpenCashRegister?: boolean;
   openCashRegister?: { id: string; companyId: string; status: string } | null;
+  paymentMethods?: Record<string, Partial<{
+    type: string; allowsInstallments: boolean; settlementDays: number;
+  }>>;
 } = {}) {
   const state = {
     stocks: { 'variant-a': 10, 'variant-b': 10, ...options.stocks },
@@ -48,7 +51,16 @@ function harness(options: {
     paymentMethod: {
       findMany: async ({ where }: any) => where.id.in
         .filter((id: string) => id !== options.invalidPaymentMethod)
-        .map((id: string) => ({ id, type: id === 'cash' ? 'CASH' : id === 'pix' ? 'PIX' : 'OTHER' })),
+        .map((id: string) => {
+          const defaults: Record<string, any> = {
+            cash: { type: 'CASH', allowsInstallments: false, settlementDays: 0 },
+            pix: { type: 'PIX', allowsInstallments: false, settlementDays: 0 },
+            debit: { type: 'DEBIT_CARD', allowsInstallments: false, settlementDays: 1 },
+            credit: { type: 'CREDIT_CARD', allowsInstallments: true, settlementDays: 30 },
+            'store-credit': { type: 'STORE_CREDIT', allowsInstallments: true, settlementDays: 30 },
+          };
+          return { id, ...(defaults[id] ?? { type: 'OTHER', allowsInstallments: false, settlementDays: 0 }), ...options.paymentMethods?.[id] };
+        }),
     },
     cashRegister: {
       findFirst: async ({ where }: any) => {
@@ -364,5 +376,62 @@ test('cash register from another tenant is never selected or accepted', async ()
     const { service, state } = harness({ openCashRegister: external });
     await assert.rejects(service.createSale(input, 'operator-a', authContext), /caixa/i);
     assert.equal(state.sales.length, 0);
+  }
+});
+
+test('server rejects installments when the persisted payment method does not allow them', async () => {
+  const { service, state } = harness();
+  await assert.rejects(service.createSale(saleInput({
+    payments: [{ paymentMethodId: 'debit', amount: 50, installments: 2 }],
+  }), 'operator-a', authContext), /não permite parcelamento/i);
+  assert.equal(state.sales.length, 0);
+});
+
+test('SalePayment status follows canonical immediate and future settlement rules', async () => {
+  const immediate = harness();
+  const immediateSale: any = await immediate.service.createSale(saleInput({
+    payments: [{ paymentMethodId: 'pix', amount: 50, installments: 1 }],
+  }), 'operator-a', authContext);
+  assert.equal(immediateSale.payments[0].status, 'PAID');
+
+  const future = harness();
+  const futureSale: any = await future.service.createSale(saleInput({
+    payments: [{ paymentMethodId: 'credit', amount: 50, installments: 2 }],
+  }), 'operator-a', authContext);
+  assert.equal(futureSale.payments[0].status, 'PENDING');
+});
+
+test('single credit installment with persisted settlementDays zero is immediately settled', async () => {
+  const { service } = harness({ paymentMethods: { credit: { settlementDays: 0 } } });
+  const sale: any = await service.createSale(saleInput({
+    payments: [{ paymentMethodId: 'credit', amount: 50, installments: 1 }],
+  }), 'operator-a', authContext);
+  assert.equal(sale.payments[0].status, 'PAID');
+});
+
+test('item-only discount does not emit a global discount audit event', async () => {
+  const { service, state } = harness();
+  const input = saleInput({
+    payments: [{ paymentMethodId: 'cash', amount: 48, installments: 1 }],
+  });
+  input.items[0] = { ...input.items[0], discountType: 'AMOUNT', discountValue: 1 };
+  await service.createSale(input, 'operator-a', authContext);
+  assert.equal(state.logs.filter(log => log.action === 'SALE_ITEM_DISCOUNT_APPLY').length, 1);
+  assert.equal(state.logs.filter(log => log.action === 'SALE_GLOBAL_DISCOUNT_APPLY').length, 0);
+});
+
+test('global and combined discounts emit each audit concept exactly once', async () => {
+  for (const withItemDiscount of [false, true]) {
+    const { service, state } = harness();
+    const input = saleInput({
+      globalDiscountType: 'AMOUNT', globalDiscountValue: 2,
+      payments: [{ paymentMethodId: 'cash', amount: withItemDiscount ? 46 : 48, installments: 1 }],
+    });
+    if (withItemDiscount) {
+      input.items[0] = { ...input.items[0], discountType: 'AMOUNT', discountValue: 1 };
+    }
+    await service.createSale(input, 'operator-a', authContext);
+    assert.equal(state.logs.filter(log => log.action === 'SALE_GLOBAL_DISCOUNT_APPLY').length, 1);
+    assert.equal(state.logs.filter(log => log.action === 'SALE_ITEM_DISCOUNT_APPLY').length, withItemDiscount ? 1 : 0);
   }
 });

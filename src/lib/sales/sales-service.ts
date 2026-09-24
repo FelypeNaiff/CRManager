@@ -63,7 +63,12 @@ export class SalesService {
       const paymentMethodIds = [...new Set(data.payments.map(payment => payment.paymentMethodId))];
       const paymentMethods = await tx.paymentMethod.findMany({
         where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true },
-        select: { id: true, type: true },
+        select: {
+          id: true,
+          type: true,
+          allowsInstallments: true,
+          settlementDays: true,
+        },
       });
       if (paymentMethods.length !== paymentMethodIds.length) {
         throw new Error("Forma de pagamento inválida.");
@@ -215,10 +220,29 @@ export class SalesService {
       const canonicalTotal = money(canonicalSubtotal.minus(canonicalDiscountAmount));
       if (canonicalTotal.lt(0)) throw new Error('Total da venda inválido.');
 
+      const paymentMethodMap = new Map<string, any>(
+        paymentMethods.map((method: any) => [method.id, method]),
+      );
       const canonicalPayments = data.payments.map(payment => {
+        const paymentMethod = paymentMethodMap.get(payment.paymentMethodId);
+        if (!paymentMethod) throw new Error('Forma de pagamento inválida.');
+        if (!Number.isInteger(payment.installments) || payment.installments < 1) {
+          throw new Error('Quantidade de parcelas inválida.');
+        }
+        if (payment.installments > 1 && !paymentMethod.allowsInstallments) {
+          throw new Error('Forma de pagamento não permite parcelamento.');
+        }
         const amount = finiteDecimal(payment.amount, 'Valor do pagamento');
         if (amount.lte(0) || amount.decimalPlaces() > 2) throw new Error('Valor do pagamento inválido.');
-        return { ...payment, amount: money(amount) };
+        const immediateSettlement = paymentMethod.type === 'CASH'
+          || paymentMethod.type === 'CUSTOMER_WALLET'
+          || paymentMethod.type === 'PIX'
+          || (paymentMethod.settlementDays === 0 && payment.installments === 1);
+        return {
+          ...payment,
+          amount: money(amount),
+          status: immediateSettlement ? 'PAID' : 'PENDING',
+        };
       });
       const paymentTotal = money(canonicalPayments.reduce(
         (sum, payment) => sum.plus(payment.amount),
@@ -299,7 +323,7 @@ export class SalesService {
               paymentMethodId: payment.paymentMethodId,
               amount: payment.amount,
               installments: payment.installments,
-              status: "PAID"
+              status: payment.status,
             }))
           }
         },
@@ -368,7 +392,7 @@ export class SalesService {
             },
           }, { policy: 'CRITICAL', tx });
         }
-        if (canonicalDiscountAmount.gt(0)) {
+        if (canonicalGlobalDiscount.gt(0)) {
           await writeActivityLog({
             context: auditContext,
             action: 'SALE_GLOBAL_DISCOUNT_APPLY',
@@ -377,8 +401,8 @@ export class SalesService {
             details: 'Desconto global aplicado à venda.',
             metadata: {
               type: data.globalDiscountType ?? 'AMOUNT',
-              requested: Number(data.globalDiscountValue ?? data.discountAmount),
-              discountAmount: canonicalDiscountAmount.toNumber(),
+              requested: Number(data.globalDiscountValue ?? 0),
+              discountAmount: canonicalGlobalDiscount.toNumber(),
             },
           }, { policy: 'CRITICAL', tx });
         }
@@ -502,7 +526,7 @@ export class SalesService {
 
       // Marcar Sale como CANCELLED e preencher motivos
       const cancelledSale = await tx.sale.update({
-        where: { id: data.saleId },
+        where: { id: data.saleId, companyId },
         data: {
           status: "CANCELLED",
           cancelReason: data.cancelReason,
@@ -512,7 +536,12 @@ export class SalesService {
       });
 
       // Estornar Contas a Receber e Saldo de Carteira / Dinheiro
-      await this.dependencies.receivables.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
+      await this.dependencies.receivables.cancelReceivablesFromSale(
+        sale.id,
+        data.cancelledByUserId,
+        companyId,
+        tx,
+      );
 
       // Criar InventoryMovement tipo CANCELLATION e devolver estoque em lote
       await tx.inventoryMovement.createMany({
