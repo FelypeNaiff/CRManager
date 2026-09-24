@@ -10,11 +10,20 @@ import {
   PaymentMethod
 } from "@prisma/client";
 
+export type SaleExecutionIdentity = {
+  actorUserId: string;
+  authenticatedUserId: string;
+};
+
 export class ReceivablesService {
   /**
    * Processa os pagamentos de uma venda e gera os títulos a receber, transações de caixa ou débitos de carteira.
    */
-  async generateReceivablesFromSale(saleId: string, tx: Prisma.TransactionClient) {
+  async generateReceivablesFromSale(
+    saleId: string,
+    identity: SaleExecutionIdentity,
+    tx: Prisma.TransactionClient,
+  ) {
     const sale = await tx.sale.findUnique({
       where: { id: saleId },
       include: {
@@ -26,20 +35,6 @@ export class ReceivablesService {
     });
 
     if (!sale) throw new Error("Venda não encontrada para gerar recebíveis.");
-
-    // Resolve creatorUserId: verify if sellerId is a valid User.id. If not, fallback to first active user in the company
-    let creatorUserId = sale.sellerId;
-    const userExists = await tx.user.findFirst({
-      where: { id: sale.sellerId }
-    });
-    if (!userExists) {
-      const fallbackUser = await tx.user.findFirst({
-        where: { companyId: sale.companyId, status: "ACTIVE" }
-      });
-      if (fallbackUser) {
-        creatorUserId = fallbackUser.id;
-      }
-    }
 
     const now = new Date();
 
@@ -84,7 +79,7 @@ export class ReceivablesService {
             balanceBefore: wallet.balance,
             balanceAfter: wallet.balance.minus(amount),
             description: `Uso de saldo na venda ${sale.id}`,
-            createdById: creatorUserId
+            createdById: identity.actorUserId
           }
         });
 
@@ -114,7 +109,7 @@ export class ReceivablesService {
             type: "IN",
             amount: amount,
             description: `Recebimento em dinheiro - Venda ${sale.id}`,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -134,7 +129,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - Dinheiro`,
             amount: amount,
             paidAt: now,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -160,7 +155,7 @@ export class ReceivablesService {
             amount: amount,
             dueDate: now,
             paidAt: now,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -198,7 +193,7 @@ export class ReceivablesService {
               description: `Taxa de Cartão/PIX - Venda ${sale.id}`,
               amount: feeAmount,
               paidAt: now,
-              createdByUserId: creatorUserId
+              createdByUserId: identity.actorUserId
             }
           });
         }
@@ -231,7 +226,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - ${pm.name} - Parcela ${i}/${installments}`,
             amount: installmentAmount,
             dueDate: dueDate,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 

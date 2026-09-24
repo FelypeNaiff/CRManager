@@ -31,12 +31,13 @@ function saleInput(overrides: Record<string, any> = {}) {
 function harness(options: {
   sellerCompany?: string; stocks?: Record<string, number>; saleStatus?: string;
   discountPolicy?: any; approvedAuthorization?: any; invalidPaymentMethod?: string;
-  failReceivables?: boolean;
+  failReceivables?: boolean; requireOpenCashRegister?: boolean;
+  openCashRegister?: { id: string; companyId: string; status: string } | null;
 } = {}) {
   const state = {
     stocks: { 'variant-a': 10, 'variant-b': 10, ...options.stocks },
     sales: [] as any[], movements: [] as any[], logs: [] as any[], calls: [] as any[],
-    authorizations: [] as any[],
+    authorizations: [] as any[], cashRegisterQueries: [] as any[],
   };
   const depsCalls = { generate: [] as any[], cancel: [] as any[], process: [] as any[], rollback: [] as any[], authorization: [] as any[], policies: [] as any[] };
 
@@ -44,8 +45,24 @@ function harness(options: {
     company: { findUnique: async ({ where }: any) => where.id === 'company-a' ? { id: 'company-a' } : null },
     seller: { findFirst: async ({ where }: any) => where.id === 'seller-a' && where.companyId === (options.sellerCompany ?? 'company-a') ? { id: 'seller-a', companyId: options.sellerCompany ?? 'company-a', status: 'ACTIVE' } : null },
     customer: { findFirst: async () => ({ id: 'customer-a' }) },
-    paymentMethod: { count: async ({ where }: any) => where.id.in.filter((id: string) => id !== options.invalidPaymentMethod).length },
-    cashRegister: { findFirst: async () => null },
+    paymentMethod: {
+      findMany: async ({ where }: any) => where.id.in
+        .filter((id: string) => id !== options.invalidPaymentMethod)
+        .map((id: string) => ({ id, type: id === 'cash' ? 'CASH' : id === 'pix' ? 'PIX' : 'OTHER' })),
+    },
+    cashRegister: {
+      findFirst: async ({ where }: any) => {
+        state.cashRegisterQueries.push(where);
+        const register = options.openCashRegister === undefined
+          ? { id: 'cash-a', companyId: 'company-a', status: 'OPEN' }
+          : options.openCashRegister;
+        if (!register) return null;
+        if (where.id && where.id !== register.id) return null;
+        if (where.companyId && where.companyId !== register.companyId) return null;
+        if (where.status && where.status !== register.status) return null;
+        return { id: register.id };
+      },
+    },
     actionAuthorization: {
       findFirst: async ({ where }: any) => {
         const authorization = options.approvedAuthorization;
@@ -102,7 +119,7 @@ function harness(options: {
   };
   const dependencies: any = {
     operationalSettings: {
-      getOrCreateOperationalSettings: async () => ({ requireOpenCashRegister: false, allowSaleWithoutCustomer: true, requireCustomerOnSale: false, allowNegativeStock: false, allowSaleCancellation: true, cancellationTimeLimit: 60, requireAuthorizationToCancelSale: false }),
+      getOrCreateOperationalSettings: async () => ({ requireOpenCashRegister: options.requireOpenCashRegister ?? false, allowSaleWithoutCustomer: true, requireCustomerOnSale: false, allowNegativeStock: false, allowSaleCancellation: true, cancellationTimeLimit: 60, requireAuthorizationToCancelSale: false }),
       validateDiscountPolicy: async (params: any) => {
         depsCalls.policies.push(params);
         return options.discountPolicy ?? { allowed: true, requiresAuthorization: false, limitApplied: 10 };
@@ -136,17 +153,20 @@ test('creates a tenant-scoped sale with multiple items and payment types', async
   assert.equal(state.stocks['variant-a'], 8);
   assert.equal(state.stocks['variant-b'], 9);
   assert.equal(state.movements.length, 2);
+  assert.equal(state.movements.every(item => item.userId === 'operator-a'), true);
+  assert.equal(state.movements.every(item => !('authenticatedUserId' in item)), true);
   assert.equal(state.logs[0].action, 'SALE_CREATE');
   assert.equal(state.logs[0].actorUserId, 'operator-a');
   assert.equal(state.logs[0].authenticatedUserId, 'base-user');
   assert.equal(depsCalls.generate[0][0], 'sale-a');
+  assert.deepEqual(depsCalls.generate[0][1], { actorUserId: 'operator-a', authenticatedUserId: 'base-user' });
   assert.equal(depsCalls.process[0][1].sellerId, 'seller-a');
   assert.equal(depsCalls.process[0][1].companyId, 'company-a');
 });
 
 test('insufficient stock aborts without partial stock, sale or financial effects', async () => {
   const { service, state, depsCalls } = harness({ stocks: { 'variant-b': 0 } });
-  await assert.rejects(service.createSale(saleInput(), 'operator-a'), /Estoque insuficiente/);
+  await assert.rejects(service.createSale(saleInput(), 'operator-a', authContext), /Estoque insuficiente/);
   assert.deepEqual(state.stocks, { 'variant-a': 10, 'variant-b': 0 });
   assert.equal(state.sales.length, 0);
   assert.equal(state.movements.length, 0);
@@ -155,7 +175,7 @@ test('insufficient stock aborts without partial stock, sale or financial effects
 
 test('Seller from another tenant cannot be used', async () => {
   const { service } = harness({ sellerCompany: 'company-b' });
-  await assert.rejects(service.createSale(saleInput(), 'operator-a'), /Vendedor inválido/);
+  await assert.rejects(service.createSale(saleInput(), 'operator-a', authContext), /Vendedor inválido/);
 });
 
 test('cancels once, restores stock and delegates financial and commission rollback', async () => {
@@ -206,7 +226,7 @@ test('discount above limit creates a modern pending authorization and stops the 
     subtotal: 100, discountAmount: 15, totalAmount: 35,
     globalDiscountType: 'AMOUNT', globalDiscountValue: 15,
     payments: [{ paymentMethodId: 'cash', amount: 35, installments: 1 }],
-  }), 'operator-a');
+  }), 'operator-a', authContext);
   assert.deepEqual(result, { requireAuthorization: true, authorizationId: 'auth-a' });
   assert.equal(state.sales.length, 0);
   assert.deepEqual(depsCalls.authorization[0], {
@@ -238,7 +258,7 @@ test('approved discount authorization must match tenant, status, type and module
     { ...valid, module: 'CAIXA' },
   ]) {
     const denied = harness({ discountPolicy: policy, approvedAuthorization: incompatible });
-    await assert.rejects(denied.service.createSale(authorizedInput, 'operator-a'), /Autorização de desconto inválida/);
+    await assert.rejects(denied.service.createSale(authorizedInput, 'operator-a', authContext), /Autorização de desconto inválida/);
     assert.equal(denied.state.sales.length, 0);
   }
 });
@@ -249,7 +269,7 @@ test('missing or arbitrary discount authorization is refused', async () => {
     globalDiscountType: 'AMOUNT', globalDiscountValue: 15,
     payments: [{ paymentMethodId: 'cash', amount: 35, installments: 1 }],
     authorizationId: 'arbitrary',
-  }), 'operator-a'), /Autorização de desconto inválida/);
+  }), 'operator-a', authContext), /Autorização de desconto inválida/);
   assert.equal(state.sales.length, 0);
 });
 
@@ -316,4 +336,33 @@ test('late financial failure rolls back sale, stock, movements, commission and s
   assert.equal(state.movements.length, 0);
   assert.equal(state.logs.length, 0);
   assert.equal(depsCalls.process.length, 0);
+});
+
+test('direct admin propagates the same actor and authenticated User identities', async () => {
+  const adminContext = { ...authContext, userId: 'admin-a', authenticatedUserId: 'admin-a', isAdmin: true };
+  const { service, depsCalls } = harness();
+  await service.createSale(saleInput(), 'admin-a', adminContext);
+  assert.deepEqual(depsCalls.generate[0][1], { actorUserId: 'admin-a', authenticatedUserId: 'admin-a' });
+});
+
+test('cash sale discovers an open register even when it is not globally required', async () => {
+  const { service, state } = harness({ requireOpenCashRegister: false });
+  const sale: any = await service.createSale(saleInput(), 'operator-a', authContext);
+  assert.equal(sale.cashRegisterId, 'cash-a');
+  assert.deepEqual(state.cashRegisterQueries[0], { companyId: 'company-a', status: 'OPEN' });
+});
+
+test('required cash register without an open register rejects before sale creation', async () => {
+  const { service, state } = harness({ requireOpenCashRegister: true, openCashRegister: null });
+  await assert.rejects(service.createSale(saleInput(), 'operator-a', authContext), /caixa aberto/i);
+  assert.equal(state.sales.length, 0);
+});
+
+test('cash register from another tenant is never selected or accepted', async () => {
+  const external = { id: 'cash-external', companyId: 'company-b', status: 'OPEN' };
+  for (const input of [saleInput(), saleInput({ cashRegisterId: 'cash-external' })]) {
+    const { service, state } = harness({ openCashRegister: external });
+    await assert.rejects(service.createSale(input, 'operator-a', authContext), /caixa/i);
+    assert.equal(state.sales.length, 0);
+  }
 });

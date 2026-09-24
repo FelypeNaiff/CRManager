@@ -39,8 +39,11 @@ export class SalesService {
     },
   ) {}
 
-  async createSale(data: CreateSaleInput, operatorUserId: string, auditContext?: ServerAuthContext) {
+  async createSale(data: CreateSaleInput, operatorUserId: string, auditContext: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
+      if (auditContext.companyId !== data.companyId || auditContext.userId !== operatorUserId) {
+        throw new Error('Contexto de identidade inválido para a venda.');
+      }
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
@@ -58,37 +61,45 @@ export class SalesService {
       }
 
       const paymentMethodIds = [...new Set(data.payments.map(payment => payment.paymentMethodId))];
-      const validPaymentMethods = await tx.paymentMethod.count({
-        where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true }
+      const paymentMethods = await tx.paymentMethod.findMany({
+        where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true },
+        select: { id: true, type: true },
       });
-      if (validPaymentMethods !== paymentMethodIds.length) {
+      if (paymentMethods.length !== paymentMethodIds.length) {
         throw new Error("Forma de pagamento inválida.");
       }
 
       // Carregar configurações operacionais da empresa
       const settings = await this.dependencies.operationalSettings.getOrCreateOperationalSettings(data.companyId, tx);
 
-      // Validar Caixa Aberto se exigido pelas configurações operacionais
-      if (settings.requireOpenCashRegister) {
-        if (!data.cashRegisterId) {
-          const activeRegister = await tx.cashRegister.findFirst({
-            where: { companyId: data.companyId, status: "OPEN" }
-          });
-          if (!activeRegister) throw new Error("Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.");
-          data.cashRegisterId = activeRegister.id;
-        } else {
-          const register = await tx.cashRegister.findFirst({
-            where: tenantResourceWhere(data.cashRegisterId, data.companyId)
-          });
-          if (!register || register.status !== "OPEN") throw new Error("Caixa informado não está aberto.");
+      const hasCashPayment = paymentMethods.some((method: any) => method.type === 'CASH');
+      let cashRegisterId = data.cashRegisterId;
+      if (cashRegisterId) {
+        const register = await tx.cashRegister.findFirst({
+          where: { ...tenantResourceWhere(cashRegisterId, data.companyId), status: 'OPEN' },
+          select: { id: true },
+        });
+        if (!register) throw new Error("Caixa informado não está aberto.");
+      } else if (hasCashPayment || settings.requireOpenCashRegister) {
+        const activeRegister = await tx.cashRegister.findFirst({
+          where: { companyId: data.companyId, status: "OPEN" },
+          select: { id: true },
+          orderBy: { openedAt: 'desc' },
+        });
+        cashRegisterId = activeRegister?.id;
+        if (!cashRegisterId) {
+          const reason = hasCashPayment
+            ? "Venda em dinheiro requer um caixa aberto."
+            : "Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.";
+          throw new Error(reason);
         }
       }
 
       // Travar Caixa se informado (ordem de trava: CashRegister -> ProductVariant)
-      if (data.cashRegisterId) {
+      if (cashRegisterId) {
         await tx.$queryRawUnsafe(
           `SELECT id FROM cash_registers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
-          data.cashRegisterId,
+          cashRegisterId,
           data.companyId
         );
       }
@@ -270,7 +281,7 @@ export class SalesService {
           companyId: data.companyId,
           sellerId: data.sellerId,
           customerId: data.customerId,
-          cashRegisterId: data.cashRegisterId,
+          cashRegisterId,
           status: "PAID",
           subtotal: canonicalSubtotal,
           discountAmount: canonicalDiscountAmount,
@@ -313,7 +324,10 @@ export class SalesService {
       }
 
       // Etapa 4: Processar Pagamentos e Financeiro
-      await this.dependencies.receivables.generateReceivablesFromSale(sale.id, tx);
+      await this.dependencies.receivables.generateReceivablesFromSale(sale.id, {
+        actorUserId: auditContext.userId,
+        authenticatedUserId: auditContext.authenticatedUserId,
+      }, tx);
 
       // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant em lote
       await tx.inventoryMovement.createMany({
@@ -321,8 +335,7 @@ export class SalesService {
           variantId: item.variantId,
           quantity: item.quantity,
           type: "SALE",
-          actorUserId: operatorUserId,
-          authenticatedUserId: operatorUserId,
+          userId: auditContext.userId,
           reason: `Venda #${sale.id}`
         }))
       });
@@ -507,8 +520,7 @@ export class SalesService {
           variantId: item.variantId,
           quantity: item.quantity,
           type: "CANCELLATION",
-          actorUserId: data.cancelledByUserId,
-          authenticatedUserId: data.cancelledByUserId,
+          userId: data.cancelledByUserId,
           reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
         }))
       });
