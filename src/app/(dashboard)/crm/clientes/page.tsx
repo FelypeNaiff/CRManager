@@ -177,7 +177,7 @@ export default function ClientesPage() {
     try {
       const res = await deleteCustomer(deletingId)
       if (res.success) {
-        toast({ title: "Cliente arquivado" })
+        toast({ title: "Cliente excluído permanentemente" })
         await loadData()
       } else {
         toast({ variant: "destructive", title: "Erro ao excluir", description: res.error })
@@ -291,15 +291,15 @@ export default function ClientesPage() {
       <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
         <AlertDialogContent className="bg-white">
           <AlertDialogHeader>
-            <AlertDialogTitle className="font-bold text-slate-800">Inativar Ficha do Cliente</AlertDialogTitle>
+            <AlertDialogTitle className="font-bold text-rose-700 flex items-center gap-2">Excluir Cliente</AlertDialogTitle>
             <AlertDialogDescription>
-              Deseja arquivar este cliente? O saldo atual da carteira permanecerá congelado.
+              Tem certeza que deseja excluir permanentemente este cliente e seu histórico de dependentes? Vendas anteriores serão mantidas na loja sem identificação. Esta ação não pode ser desfeita.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-500" onClick={handleDelete}>
-              Confirmar Arquivamento
+            <AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-600" onClick={handleDelete}>
+              Sim, Excluir Definitivamente
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -5,10 +5,11 @@ import { useToast } from '@/hooks/use-toast';
 import { getUsersAction } from '@/lib/users/user-actions';
 import { ConfigPageHeader, ConfigStatusBadge, ConfigDataTable, ConfigDataTableHeader, ConfigDataTableBody, ConfigDataTableRow, ConfigDataTableHead, ConfigDataTableCell } from '@/components/configuracoes/config-ui';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Edit2, KeyRound } from 'lucide-react';
+import { Plus, Search, Edit2, KeyRound, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import UserFormModal from '@/components/users/user-form-modal';
 import ResetPinDialog from '@/components/users/reset-pin-dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/use-permissions';
@@ -26,6 +27,9 @@ export default function UsuariosPage() {
   
   const [isResetPinOpen, setIsResetPinOpen] = useState(false);
   const [resetUserId, setResetUserId] = useState<string | null>(null);
+
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null);
 
   const loadUsers = async () => {
     setLoading(true);
@@ -68,6 +72,31 @@ export default function UsuariosPage() {
   const handleOpenResetPin = (id: string) => {
     setResetUserId(id);
     setIsResetPinOpen(true);
+  };
+
+  const handleOpenDelete = (id: string) => {
+    setDeleteUserId(id);
+    setIsDeleteOpen(true);
+  };
+
+  const handleDelete = async () => {
+    if (!deleteUserId) return;
+    try {
+      // We will need to import deleteUserAction
+      const { deleteUserAction } = await import('@/lib/users/user-actions');
+      const res = await deleteUserAction(deleteUserId);
+      if (res.success) {
+        toast({ title: 'Usuário excluído com sucesso.' });
+        loadUsers();
+      } else {
+        toast({ title: 'Erro ao excluir', description: res.error, variant: 'destructive' });
+      }
+    } catch (err) {
+      toast({ title: 'Erro', description: 'Erro inesperado.', variant: 'destructive' });
+    } finally {
+      setIsDeleteOpen(false);
+      setDeleteUserId(null);
+    }
   };
 
   const filteredUsers = users.filter(user => 
@@ -152,6 +181,9 @@ export default function UsuariosPage() {
                         {can('USUARIOS', 'UPDATE') && <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">
                           <Edit2 className="h-4 w-4" />
                         </Button>}
+                        {can('USUARIOS', 'DELETE') && <Button variant="outline" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleOpenDelete(user.id)} title="Excluir Usuário">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>}
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>
@@ -174,6 +206,24 @@ export default function UsuariosPage() {
         onClose={() => setIsResetPinOpen(false)}
         userId={resetUserId}
       />
+      <AlertDialog open={isDeleteOpen} onOpenChange={setIsDeleteOpen}>
+        <AlertDialogContent className="bg-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="font-bold text-rose-700 flex items-center gap-2">
+              <Trash2 className="h-5 w-5" /> Excluir Usuário
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir este usuário? O histórico de ações dele será mantido, mas o acesso ao sistema será revogado imediatamente. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-rose-600 text-white hover:bg-rose-700 focus:ring-rose-600" onClick={handleDelete}>
+              Sim, Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

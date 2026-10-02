@@ -374,26 +374,35 @@ export async function updateCustomer(id: string, rawData: z.infer<typeof Custome
 export async function deleteCustomer(id: string) {
   const session = await requirePermission('CLIENTES', 'DELETE');
   try {
-    const customer = await prisma.$transaction(async tx => {
-      const before = await tx.customer.findFirst({ where: tenantWhere(id, session.companyId), select: { id: true, status: true } });
+    await prisma.$transaction(async tx => {
+      const before = await tx.customer.findFirst({ where: tenantWhere(id, session.companyId), select: { id: true, name: true, phone: true } });
       if (!before) throw new Error('CUSTOMER_NOT_FOUND');
-      const updated = await tx.customer.update({ where: tenantWhere(id, session.companyId), data: { status: 'arquivado' } });
-      await tx.customerHistory.create({
-        data: {
-          customerId: updated.id,
-          actionType: 'EXCLUSAO',
-          description: `Cliente marcado como arquivado (soft delete) por ${session.name}`,
-        },
+
+      await tx.sale.updateMany({
+        where: { customerId: id, companyId: session.companyId, customerNameSnapshot: null },
+        data: { customerNameSnapshot: before.name, customerPhoneSnapshot: before.phone }
       });
+
+      await tx.sale.updateMany({
+        where: { customerId: id, companyId: session.companyId },
+        data: { customerId: null }
+      });
+
+      await tx.accountsReceivable.updateMany({
+        where: { customerId: id, companyId: session.companyId },
+        data: { customerId: null }
+      });
+
+      const deleted = await tx.customer.delete({ where: tenantWhere(id, session.companyId) });
+
       await writeActivityLog({
         context: session,
-        action: 'CUSTOMER_STATUS_CHANGE',
+        action: 'CUSTOMER_DELETE',
         module: 'CUSTOMERS',
-        recordId: updated.id,
-        details: 'Cliente arquivado',
-        metadata: { changes: { status: { before: before.status, after: updated.status } } },
+        recordId: deleted.id,
+        details: 'Cliente excluído permanentemente',
+        metadata: { name: deleted.name, phone: deleted.phone },
       }, { policy: 'CRITICAL', tx });
-      return updated;
     });
 
     return { success: true };

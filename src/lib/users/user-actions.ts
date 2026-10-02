@@ -38,7 +38,10 @@ export async function getUsersAction() {
   const session = await requirePermission('USUARIOS', 'VIEW');
   try {
     const users = await prisma.user.findMany({
-      where: { companyId: session.companyId },
+      where: { 
+        companyId: session.companyId,
+        status: { not: 'DELETED' }
+      },
       select: {
         id: true,
         name: true,
@@ -58,6 +61,67 @@ export async function getUsersAction() {
     return { success: true, data: serializePrisma(users) };
   } catch (error: any) {
     return { success: false, error: 'Erro ao buscar usuários.' };
+  }
+}
+
+/**
+ * Delete a user (soft delete)
+ */
+export async function deleteUserAction(id: string) {
+  const session = await requirePermission('USUARIOS', 'DELETE');
+  try {
+    if (session.userId === id) {
+      return { success: false, error: 'Você não pode excluir seu próprio usuário.' };
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: tenantEntityWhere(id, session.companyId),
+      include: { role: { select: { isAdmin: true } } },
+    });
+
+    if (!existingUser) {
+      return { success: false, error: 'Usuário não encontrado.' };
+    }
+
+    if (existingUser.role?.isAdmin) {
+      const otherAdminsCount = await prisma.user.count({
+        where: {
+          companyId: session.companyId,
+          id: { not: id },
+          status: 'ACTIVE',
+          permitirAcesso: true,
+          role: { is: { isAdmin: true, status: 'ACTIVE' } },
+        },
+      });
+      if (otherAdminsCount === 0) {
+        return { success: false, error: 'Não é possível excluir o único administrador ativo do sistema.' };
+      }
+    }
+
+    const deletedUser = await prisma.$transaction(async (tx) => {
+      const updated = await tx.user.update({
+        where: tenantEntityWhere(id, session.companyId),
+        data: {
+          status: 'DELETED',
+          permitirAcesso: false,
+        },
+      });
+
+      await writeActivityLog({
+        context: session,
+        action: 'USER_DELETE',
+        module: 'USERS',
+        recordId: id,
+        details: 'Usuário excluído logicamente',
+        metadata: { name: updated.name, email: updated.email },
+      }, { policy: 'CRITICAL', tx });
+
+      return updated;
+    });
+
+    return { success: true, data: { id: deletedUser.id } };
+  } catch (error: any) {
+    return { success: false, error: 'Erro ao excluir usuário.' };
   }
 }
 
