@@ -75,24 +75,18 @@ const navItems = [
     title: "CRM",
     icon: Users,
     items: [
-      { title: "Dashboard", url: "/crm/dashboard", icon: LayoutDashboard },
       { title: "Clientes", url: "/crm/clientes", icon: Users },
       { title: "Filhos", url: "/crm/filhos", icon: Baby },
-      { title: "Aniversariantes", url: "/crm/clientes?tab=aniversariantes", icon: Gift },
-      { title: "Campanhas WhatsApp", url: "/crm/campanhas", icon: MessageSquare },
-      { title: "Carteira / Saldos", url: "/crm/carteira", icon: Wallet },
-      { title: "Trocas e Devoluções", url: "/crm/trocas", icon: Repeat },
-      { title: "Clientes com Saldo", url: "/crm/carteira?filter=com-saldo", icon: Wallet },
-      { title: "Configurações", url: "/crm/configuracoes", icon: Settings },
+      { title: "Aniversariantes", url: "/crm/aniversariantes", icon: Gift },
+      { title: "Campanhas WhatsApp", url: "/crm/campanhas-whatsapp", icon: MessageSquare },
+      { title: "Carteira / Saldo", url: "/crm/carteira", icon: Wallet },
       {
-        title: "Info Auxiliar",
-        icon: FileText,
+        title: "Opções Auxiliares",
+        icon: Settings,
         items: [
-          { title: "Histórico", url: "/crm/historico" },
-          { title: "Carteira / Saldos", url: "/crm/carteira" },
-          { title: "Clientes Inativos", url: "/crm/clientes?status=inativo" },
-          { title: "Tags", url: "/crm/tags" },
-          { title: "Segmentações", url: "/crm/segmentacoes" }
+          { title: "Segmentações", url: "/crm/opcoes/segmentacoes" },
+          { title: "Tags", url: "/crm/opcoes/tags" },
+          { title: "Histórico", url: "/crm/opcoes/historico" }
         ]
       }
     ],

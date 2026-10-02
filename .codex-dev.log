@@ -14571,3 +14571,304 @@ prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FRO
 prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
 prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
  GET /selecionar-perfil 200 in 165ms
+ ✓ Compiled in 261ms
+ ✓ Compiled in 266ms
+ ✓ Compiled in 156ms
+ ✓ Compiled middleware in 1ms
+ ✓ Compiled in 177ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 601ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 203ms
+ ✓ Compiled middleware in 1ms
+ ✓ Compiled in 163ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 390ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 221ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled in 140ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 328ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 264ms
+ ✓ Compiled middleware in 1ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 337ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 189ms
+ ✓ Compiled middleware in 1ms
+ ✓ Compiled in 152ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 352ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 180ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled in 168ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 480ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 230ms
+ ✓ Compiled middleware in 2ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 305ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 189ms
+ ✓ Compiled middleware in 1ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 291ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 155ms
+ ✓ Compiled middleware in 2ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 500ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 205ms
+ ✓ Compiled middleware in 2ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 367ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 285ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled in 189ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 1313ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 213ms
+ ✓ Compiled middleware in 2ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 322ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 177ms
+ ✓ Compiled in 210ms
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/auth-utils'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/auth-utils"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/auth-utils' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/auth-utils'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/auth-utils"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/auth-utils' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ✓ Compiled in 3s
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/auth-utils'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/auth-utils"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/auth-utils' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/auth-utils'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/auth-utils"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/auth-utils' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ✓ Compiled middleware in 11ms
+ ✓ Compiled in 298ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 1568ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 382ms
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/ServerAuthContext'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/ServerAuthContext"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/ServerAuthContext' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/ServerAuthContext'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/ServerAuthContext"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/ServerAuthContext' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/ServerAuthContext'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/ServerAuthContext"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/ServerAuthContext' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/crm-actions.ts:3:1
+Module not found: Can't resolve '@/lib/auth/ServerAuthContext'
+[0m [90m 1 |[39m [32m"use server"[39m
+ [90m 2 |[39m
+[31m[1m>[22m[39m[90m 3 |[39m [36mimport[39m { requireAuth } [36mfrom[39m [32m"@/lib/auth/ServerAuthContext"[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m"@/lib/prisma"[39m
+ [90m 5 |[39m
+ [90m 6 |[39m [36mexport[39m [36masync[39m [36mfunction[39m getBirthdaysAction(month[33m:[39m number) {[0m
+
+Import map: aliased to relative './src/lib/auth/ServerAuthContext' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ✓ Compiled in 87ms
+prisma:query SELECT 1
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 244ms
+prisma:query SELECT "public"."users"."id", "public"."users"."company_id", "public"."users"."name", "public"."users"."email", "public"."users"."status", "public"."users"."permitir_acesso", "public"."users"."role_id" FROM "public"."users" WHERE ("public"."users"."email" = $1 AND 1=1) LIMIT $2 OFFSET $3
+prisma:query SELECT "public"."companies"."id", "public"."companies"."status" FROM "public"."companies" WHERE "public"."companies"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."roles"."id", "public"."roles"."name", "public"."roles"."status", "public"."roles"."is_admin" FROM "public"."roles" WHERE "public"."roles"."id" IN ($1) OFFSET $2
+prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module", "public"."permissions"."action", "public"."permissions"."allowed", "public"."permissions"."role_id" FROM "public"."permissions" WHERE "public"."permissions"."role_id" IN ($1) OFFSET $2
+ GET /selecionar-perfil 200 in 214ms
