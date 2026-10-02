@@ -2,8 +2,6 @@
 
 import * as React from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useDoc, useMemoFirebase } from "@/lib/legacy-stubs"
-import { doc } from "@/lib/legacy-firestore-stubs"
 import {
   LayoutDashboard,
   Users,
@@ -219,15 +217,13 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { activeProfile, logoutProfile } = useProfile()
-  const db = useFirestore()
-  const configRef = useMemoFirebase(() => {
-    return db && activeProfile?.empresaId ? doc(db, "configuracoes_empresa", activeProfile.empresaId) : null
-  }, [db, activeProfile?.empresaId])
-  const { data: empresaConfig } = useDoc(configRef)
+  
+  
+  
 
-  const logoUrl = empresaConfig?.logo_url || empresaConfig?.logo_reduzida
-  const smallLogoUrl = empresaConfig?.logo_reduzida || empresaConfig?.logo_url
-  const companyName = empresaConfig?.nome_fantasia || "NEEX"
+  const logoUrl = null
+  const smallLogoUrl = null
+  const companyName = "NEEX"
 
   const { canAccessRoute, isLoading } = usePermissions()
 

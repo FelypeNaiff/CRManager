@@ -19,7 +19,7 @@ export default function GlobalError({
     console.error("Global Error Caught:", error)
   }, [error])
 
-  const isPermissionError = error.message?.includes("Acesso negado") || error.name === "FirestorePermissionError"
+  const isPermissionError = error.message?.includes("Acesso negado")
 
   return (
     <div className="min-h-[80vh] flex items-center justify-center p-4">

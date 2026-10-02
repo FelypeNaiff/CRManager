@@ -603,6 +603,7 @@ export class SalesService {
         data.cancelledByUserId,
         companyId,
         tx,
+        { refundMethod: (data as any).refundMethod }
       );
 
       // Devolver estoque pelo mesmo núcleo transacional usado pela venda.

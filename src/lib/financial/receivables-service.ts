@@ -343,6 +343,7 @@ export class ReceivablesService {
     cancelledByUserId: string,
     companyId: string,
     tx: Prisma.TransactionClient,
+    options?: { refundMethod?: 'ORIGINAL' | 'WALLET_CREDIT' }
   ) {
     const sale = await tx.sale.findFirst({
       where: { id: saleId, companyId },
@@ -426,22 +427,46 @@ export class ReceivablesService {
         if (!sale.cashRegisterId) continue;
 
         // Deduz saldo esperado do Caixa
-        await tx.cashRegister.update({
-          where: { id: sale.cashRegisterId, companyId: sale.companyId },
-          data: { expectedBalance: { decrement: payment.amount } }
-        });
+        if (options?.refundMethod !== 'WALLET_CREDIT') {
+          await tx.cashRegister.update({
+            where: { id: sale.cashRegisterId, companyId: sale.companyId },
+            data: { expectedBalance: { decrement: payment.amount } }
+          });
+        } else if (sale.customerId) {
+          await tx.$queryRawUnsafe(`SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`, sale.customerId);
+          let wallet = await tx.customerWallet.findUnique({ where: { customerId: sale.customerId } });
+          if (!wallet) {
+            wallet = await tx.customerWallet.create({ data: { customerId: sale.customerId, balance: 0 } });
+          }
+          await tx.customerWallet.update({ where: { id: wallet.id }, data: { balance: { increment: payment.amount } } });
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              customerId: sale.customerId,
+              saleId: sale.id,
+              type: "REFUND",
+              amount: payment.amount,
+              balanceBefore: wallet.balance,
+              balanceAfter: Number(wallet.balance) + Number(payment.amount),
+              description: `Crédito (Dinheiro retido) - Venda ${sale.id.slice(0,8)}`,
+              createdById: cancelledByUserId
+            }
+          });
+        }
 
         // Cria CashMovement de saída/estorno
-        await tx.cashMovement.create({
-          data: {
-            companyId: sale.companyId,
-            cashRegisterId: sale.cashRegisterId,
-            type: "OUT",
-            amount: payment.amount,
-            description: `Estorno - Cancelamento Venda ${sale.id}`,
-            createdByUserId: cancelledByUserId
-          }
-        });
+        if (options?.refundMethod !== 'WALLET_CREDIT') {
+          await tx.cashMovement.create({
+            data: {
+              companyId: sale.companyId,
+              cashRegisterId: sale.cashRegisterId,
+              type: "OUT",
+              amount: payment.amount,
+              description: `Estorno - Cancelamento Venda ${sale.id}`,
+              createdByUserId: cancelledByUserId
+            }
+          });
+        }
       }
 
       // 6. Reverter débitos na Carteira (Creditar de volta)

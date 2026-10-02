@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+set -e
+
+# ==========================================================
+# Script de Configuração e Vinculação: Supabase & Vercel
+# Projeto: CRManager (Trupe Kids)
+# ==========================================================
+
+echo "🚀 Iniciando configuração do ambiente de deploy e banco..."
+
+# 1. Solicitação de Credenciais
+read -r -p "Informe seu Vercel Personal Token: " VERCEL_TOKEN_INPUT
+read -r -p "Informe seu Supabase Access Token: " SUPABASE_TOKEN_INPUT
+read -r -p "Informe seu Supabase Project Reference ID: " SUPABASE_REF_INPUT
+
+if [[ -z "$VERCEL_TOKEN_INPUT" || -z "$SUPABASE_TOKEN_INPUT" || -z "$SUPABASE_REF_INPUT" ]]; then
+  echo "❌ Erro: Todos os campos são obrigatórios para concluir o vínculo."
+  exit 1
+fi
+
+export VERCEL_TOKEN="$VERCEL_TOKEN_INPUT"
+export SUPABASE_ACCESS_TOKEN="$SUPABASE_TOKEN_INPUT"
+
+# 2. Configuração e Vínculo com a Vercel
+echo ""
+echo "📦 Configurando CLI da Vercel..."
+if ! command -v vercel &> /dev/null; then
+  echo "Instalando Vercel CLI globalmente..."
+  npm install -g vercel
+fi
+
+echo "🔗 Vinculando projeto na Vercel..."
+vercel link --yes --token "$VERCEL_TOKEN"
+
+echo "📥 Baixando variáveis de ambiente da Vercel (.env.local)..."
+vercel env pull .env.local --yes --token "$VERCEL_TOKEN"
+
+# 3. Configuração e Vínculo com o Supabase
+echo ""
+echo "⚡ Configurando Supabase CLI..."
+if ! command -v npx &> /dev/null; then
+  echo "❌ Erro: Node.js e npx são necessários para rodar o Supabase CLI."
+  exit 1
+fi
+
+echo "🔗 Vinculando projeto no Supabase ($SUPABASE_REF_INPUT)..."
+npx supabase link --project-ref "$SUPABASE_REF_INPUT"
+
+echo "🔄 Gerando tipos TypeScript do Supabase..."
+mkdir -p src/types
+npx supabase gen types typescript --project-id "$SUPABASE_REF_INPUT" > src/types/database.types.ts
+
+# 4. Finalização
+echo ""
+echo "✅ Conexões configuradas com sucesso!"
+echo "- Vercel vinculada (.vercel/project.json atualizado e .env.local sincronizado)"
+echo "- Supabase vinculado (projeto $SUPABASE_REF_INPUT e tipos gerados em src/types/database.types.ts)"

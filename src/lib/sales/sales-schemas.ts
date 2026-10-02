@@ -50,7 +50,8 @@ export const cancelSaleSchema = z.object({
   saleId: z.string(),
   cancelReason: z.string().min(3),
   cancelledByUserId: z.string(),
-  authorizationId: z.string().optional()
+  authorizationId: z.string().optional(),
+  refundMethod: z.enum(["ORIGINAL", "WALLET_CREDIT"]).optional()
 });
 
 export const exchangeReturnSchema = z.object({
