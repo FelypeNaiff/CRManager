@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Package, UploadCloud, X, Check, AlertCircle, Loader2 } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
-import { importProductsAction } from "@/lib/sales/actions/import-products-action"
+import { confirmProductImportBatchAction, createProductImportPreviewAction, getProductImportBatchAction, processProductImportBatchAction } from "@/lib/imports/product-import-actions"
 import * as XLSX from "xlsx"
 
 export default function ImportarPlanilhaPage() {
@@ -14,7 +14,13 @@ export default function ImportarPlanilhaPage() {
   
   const [file, setFile] = useState<File | null>(null)
   const [isImporting, setIsImporting] = useState(false)
-  const [importStatus, setImportStatus] = useState<{ total: number, success: number, errors: string[] } | null>(null)
+  const [batch, setBatch] = useState<any>(null)
+  const [sheetNames, setSheetNames] = useState<string[]>([])
+  const [sheetName, setSheetName] = useState("")
+  const [headers, setHeaders] = useState<string[]>([])
+  const [decimalFormat, setDecimalFormat] = useState<'BR' | 'DOT'>('BR')
+  const [existingPolicy, setExistingPolicy] = useState<'UPDATE' | 'IGNORE' | 'CREATE'>('UPDATE')
+  const [mapping, setMapping] = useState<Record<string, number>>({})
 
   const colunasPadrao = [
     "Código",
@@ -40,8 +46,6 @@ export default function ImportarPlanilhaPage() {
     "E-mail",
     "Site",
     "Instagram",
-    "Login do site",
-    "Senha do site",
     "CEP",
     "Cidade",
     "Estado",
@@ -60,7 +64,20 @@ export default function ImportarPlanilhaPage() {
     XLSX.writeFile(wb, "planilha_padrao_produtos.xlsx")
   }
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const loadSheet = (selectedFile: File, selectedSheet?: string) => selectedFile.arrayBuffer().then(data => {
+    const workbook = XLSX.read(data, { cellFormula: true })
+    const name = selectedSheet && workbook.Sheets[selectedSheet] ? selectedSheet : workbook.SheetNames[0]
+    const rows = XLSX.utils.sheet_to_json<unknown[]>(workbook.Sheets[name], { header: 1, raw: true, defval: undefined })
+    const nextHeaders = (rows[0] ?? []).map(value => String(value ?? '').trim())
+    const normalized = nextHeaders.map(value => value.toLocaleLowerCase('pt-BR').normalize('NFD').replace(/[\u0300-\u036f]/g, ''))
+    const find = (...names: string[]) => normalized.findIndex(value => names.includes(value))
+    setSheetNames(workbook.SheetNames); setSheetName(name); setHeaders(nextHeaders)
+    setMapping({ internalCode: find('codigo', 'codigo interno'), sku: find('sku'), barcode: find('codigo de barras (gtin/ean)', 'codigo de barras', 'gtin', 'ean'),
+      name: find('nome do produto *', 'nome do produto'), cost: find('preco de compra', 'custo'), price: find('preco de venda'),
+      quantity: find('qtd. estoque', 'quantidade em estoque'), unit: find('unidade'), ncm: find('ncm'), category: find('grupo do produto'), supplier: find('fornecedor') })
+  })
+
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files.length > 0) {
       const selectedFile = e.target.files[0]
       if (selectedFile.size > 2 * 1024 * 1024) {
@@ -68,18 +85,9 @@ export default function ImportarPlanilhaPage() {
         return
       }
       setFile(selectedFile)
-      setImportStatus(null)
+      setBatch(null)
+      await loadSheet(selectedFile)
     }
-  }
-
-  const parseNumber = (val: any) => {
-    if (!val) return 0
-    if (typeof val === 'number') return val
-    if (typeof val === 'string') {
-      const parsed = parseFloat(val.replace(',', '.'))
-      return isNaN(parsed) ? 0 : parsed
-    }
-    return 0
   }
 
   const handleImportar = async () => {
@@ -89,108 +97,40 @@ export default function ImportarPlanilhaPage() {
     }
 
     setIsImporting(true)
-    setImportStatus(null)
+    setBatch(null)
 
     try {
-      const data = await file.arrayBuffer()
-      const workbook = XLSX.read(data)
-      const sheetNameProdutos = workbook.SheetNames.find(name => name?.toLowerCase().includes("produto")) || workbook.SheetNames[0]
-      const worksheet = workbook.Sheets[sheetNameProdutos]
-      const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { header: 1 })
-
-      if (rows.length <= 1) {
-        toast({ variant: "destructive", title: "Erro", description: "Planilha vazia ou sem cabeçalhos." })
-        setIsImporting(false)
-        return
-      }
-
-      const headers: string[] = rows[0].map((h: any) => h?.toString().trim() || "")
-      const dataRows = rows.slice(1).filter(r => r.length > 0 && r.some((c: any) => c !== undefined && c !== ""))
-
-      if (dataRows.length > 1000) {
-        toast({ variant: "destructive", title: "Erro", description: "O limite de importação é de 1000 linhas por vez." })
-        setIsImporting(false)
-        return
-      }
-
-      const idx = {
-        codigo: headers.findIndex(h => h.toLowerCase().includes("código") && !h.toLowerCase().includes("barras")),
-        estoque: headers.findIndex(h => h.toLowerCase().includes("estoque") || h.toLowerCase().includes("qtd")),
-        nome: headers.findIndex(h => h.toLowerCase().includes("nome")),
-        compra: headers.findIndex(h => h.toLowerCase().includes("compra") || h.toLowerCase().includes("custo")),
-        venda: headers.findIndex(h => h.toLowerCase().includes("venda") || h.toLowerCase().includes("preço")),
-        barras: headers.findIndex(h => h.toLowerCase().includes("barras") || h.toLowerCase().includes("gtin") || h.toLowerCase().includes("ean")),
-        unidade: headers.findIndex(h => h.toLowerCase().includes("unidade")),
-        ncm: headers.findIndex(h => h.toLowerCase().includes("ncm")),
-        grupo: headers.findIndex(h => h.toLowerCase().includes("grupo")),
-        tamanho: headers.findIndex(h => h.toLowerCase().includes("tamanho")),
-        cor: headers.findIndex(h => h.toLowerCase().includes("cor")),
-        fornecedor: headers.findIndex(h => h.toLowerCase().includes("fornecedor")),
-        sku: headers.findIndex(h => h.toLowerCase().includes("sku")),
-      }
-
-      const itemsToImport: any[] = []
-      const errorsList: string[] = []
-
-      for (let i = 0; i < dataRows.length; i++) {
-        const row = dataRows[i]
-        const nome = idx.nome !== -1 ? row[idx.nome]?.toString().trim() : ""
-
-        if (!nome) {
-          errorsList.push(`Linha ${i + 2}: Nome do produto é obrigatório.`)
-          continue
-        }
-
-        const compra = idx.compra !== -1 ? parseNumber(row[idx.compra]) : 0
-        const venda = idx.venda !== -1 ? parseNumber(row[idx.venda]) : 0
-
-        if (venda <= 0) {
-          errorsList.push(`Linha ${i + 2} (${nome}): Preço de venda deve ser maior que zero.`)
-          continue
-        }
-
-        itemsToImport.push({
-          codigo: idx.codigo !== -1 ? row[idx.codigo]?.toString().trim() || "" : "",
-          sku: idx.sku !== -1 ? row[idx.sku]?.toString().trim() || "" : "",
-          nome,
-          compra,
-          venda,
-          barras: idx.barras !== -1 ? row[idx.barras]?.toString().trim() || "" : "",
-          estoque: idx.estoque !== -1 ? parseNumber(row[idx.estoque]) : 0,
-          grupo: idx.grupo !== -1 ? row[idx.grupo]?.toString().trim() || "" : "",
-          tamanho: idx.tamanho !== -1 ? row[idx.tamanho]?.toString().trim() || "" : "",
-          cor: idx.cor !== -1 ? row[idx.cor]?.toString().trim() || "" : "",
-          fornecedor: idx.fornecedor !== -1 ? row[idx.fornecedor]?.toString().trim() || "" : ""
-        })
-      }
-
-      if (errorsList.length > 0) {
-        setImportStatus({ total: dataRows.length, success: 0, errors: errorsList })
-        toast({ variant: "destructive", title: "Erro na validação", description: "Corrija os erros na planilha antes de importar." })
-        setIsImporting(false)
-        return
-      }
-
-      if (itemsToImport.length > 0) {
-        const res = await importProductsAction(itemsToImport)
-        if (res.success) {
-          const successCount = (res.created || 0) + (res.updated || 0)
-          setImportStatus({ total: dataRows.length, success: successCount, errors: [] })
-          toast({ title: "Importação concluída", description: `${res.created} produtos criados, ${res.updated} atualizados.` })
-          setFile(null)
-          if (fileInputRef.current) fileInputRef.current.value = ''
-        } else {
-          setImportStatus({ total: dataRows.length, success: 0, errors: [res.error || "Erro desconhecido."] })
-          toast({ variant: "destructive", title: "Erro ao importar", description: res.error })
-        }
-      }
-
+      const authoritativeRequest = new FormData()
+      authoritativeRequest.set('file', file)
+      authoritativeRequest.set('sheetName', sheetName)
+      authoritativeRequest.set('mapping', JSON.stringify(mapping))
+      authoritativeRequest.set('existingPolicy', existingPolicy)
+      authoritativeRequest.set('stockPolicy', 'NONE')
+      authoritativeRequest.set('decimalFormat', decimalFormat)
+      const authoritativeResult = await createProductImportPreviewAction(authoritativeRequest)
+      setBatch(await getProductImportBatchAction(authoritativeResult.batchId))
+      toast({
+        title: authoritativeResult.errorRows ? 'Prévia criada com bloqueios' : 'Prévia criada',
+        description: `Lote ${authoritativeResult.batchId}: ${authoritativeResult.errorRows ?? 0} linha(s) bloqueada(s).`,
+        variant: authoritativeResult.errorRows ? 'destructive' : 'default',
+      })
     } catch (error: any) {
       console.error(error)
       toast({ variant: "destructive", title: "Erro", description: error.message || "Erro no processamento do arquivo." })
     } finally {
       setIsImporting(false)
     }
+  }
+
+  const refreshBatch = async () => { if (batch?.id) setBatch(await getProductImportBatchAction(batch.id)) }
+  const confirmAndProcess = async () => {
+    if (!batch?.id) return
+    setIsImporting(true)
+    try {
+      await confirmProductImportBatchAction(batch.id)
+      setBatch(await processProductImportBatchAction(batch.id, 100))
+    } catch (error: any) { toast({ variant: 'destructive', title: 'Falha no processamento', description: error.message }) }
+    finally { setIsImporting(false) }
   }
 
   return (
@@ -249,26 +189,25 @@ export default function ImportarPlanilhaPage() {
               )}
             </div>
 
-            {importStatus && (
-              <div className={`p-4 rounded-sm border ${importStatus.errors.length > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+            {file && <div className="grid grid-cols-2 gap-3 text-xs">
+              <label>Aba<select className="mt-1 w-full border p-2" value={sheetName} onChange={async e => { setSheetName(e.target.value); await loadSheet(file, e.target.value) }}>{sheetNames.map(name => <option key={name}>{name}</option>)}</select></label>
+              <label>Formato decimal<select className="mt-1 w-full border p-2" value={decimalFormat} onChange={e => setDecimalFormat(e.target.value as 'BR'|'DOT')}><option value="BR">1.234,56</option><option value="DOT">1234.56</option></select></label>
+              <label>Registros existentes<select className="mt-1 w-full border p-2" value={existingPolicy} onChange={e => setExistingPolicy(e.target.value as any)}><option value="UPDATE">Atualizar</option><option value="IGNORE">Ignorar</option><option value="CREATE">Somente criar</option></select></label>
+              {(['internalCode','sku','barcode','name','cost','price','quantity','unit','ncm','supplier'] as const).map(field => <label key={field}>{field}<select className="mt-1 w-full border p-2" value={mapping[field] ?? -1} onChange={e => setMapping(current => ({...current,[field]:Number(e.target.value)}))}><option value={-1}>Não mapear</option>{headers.map((header,index)=><option key={index} value={index}>{header || `Coluna ${index+1}`}</option>)}</select></label>)}
+            </div>}
+
+            {batch && (() => { const rows=batch.rows ?? []; const apt=rows.filter((r:any)=>r.status==='READY').length; const blocked=rows.filter((r:any)=>['BLOCKED','FAILED','CONFLICT'].includes(r.status)).length; const ignored=rows.filter((r:any)=>r.status==='IGNORED').length; return (
+              <div className={`p-4 rounded-sm border ${blocked ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                 <h3 className="font-bold mb-2 flex items-center gap-2">
-                  {importStatus.errors.length > 0 ? <AlertCircle className="h-4 w-4 text-red-600" /> : <Check className="h-4 w-4 text-green-600" />}
-                  Resultado da Importação
+                  {blocked ? <AlertCircle className="h-4 w-4 text-red-600" /> : <Check className="h-4 w-4 text-green-600" />}
+                  Resultado da prévia
                 </h3>
-                <p className="text-sm">Total lido: {importStatus.total}</p>
-                <p className="text-sm text-green-700 font-medium">Sucesso: {importStatus.success}</p>
-                {importStatus.errors.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-sm text-red-700 font-medium mb-1">Erros ({importStatus.errors.length}):</p>
-                    <ul className="text-xs text-red-600 list-disc pl-5 max-h-32 overflow-y-auto space-y-1">
-                      {importStatus.errors.map((err, i) => (
-                        <li key={i}>{err}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+                <p className="text-xs break-all">Lote: {batch.id} · Estado: {batch.status}</p>
+                <p className="text-sm">Total: {rows.length} · Aptas: {apt} · Bloqueadas: {blocked} · Ignoradas: {ignored} · Concluídas: {batch.completedRows ?? 0}</p>
+                <div className="mt-3 max-h-64 overflow-auto"><table className="w-full text-xs"><thead><tr><th>Linha</th><th>Ação</th><th>Alvo</th><th>Estado</th><th>Erros</th></tr></thead><tbody>{rows.map((row:any)=><tr key={row.id} className="border-t"><td>{row.rowNumber}</td><td>{row.proposedAction}</td><td>{row.previewData?.target?.sku ?? row.previewData?.target?.internalCode ?? 'Novo'}</td><td>{row.status}</td><td>{Array.isArray(row.errors)?row.errors.join(' '):''}</td></tr>)}</tbody></table></div>
+                <div className="mt-3 flex gap-2"><Button size="sm" onClick={confirmAndProcess} disabled={isImporting || !['READY','FAILED_RECOVERABLE','PROCESSING'].includes(batch.status)}>Confirmar e processar</Button><Button size="sm" variant="outline" onClick={refreshBatch}>Atualizar resultado</Button></div>
               </div>
-            )}
+            )})()}
           </div>
 
           {/* Lado Direito - Instruções */}
@@ -280,7 +219,7 @@ export default function ImportarPlanilhaPage() {
               
               <p>Se preferir <button onClick={baixarPlanilhaPadrao} className="text-primary font-medium hover:underline">baixe nossa planilha padrão</button>, preencha com seus dados e envie para o sistema.</p>
               
-              <p>Você também pode <button onClick={() => router.push('/produtos')} className="text-primary font-medium hover:underline">importar seus produtos</button> utilizando suas notas fiscais de vendas.</p>
+              <p>A prévia não altera produtos nem estoque. Revise as linhas e confirme o lote para iniciar o processamento.</p>
             </div>
           </div>
         </div>
@@ -293,14 +232,14 @@ export default function ImportarPlanilhaPage() {
             disabled={!file || isImporting}
           >
             {isImporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Check className="h-4 w-4 mr-2" />}
-            {isImporting ? "Importando..." : "Importar"}
+            {isImporting ? "Validando..." : "Gerar prévia"}
           </Button>
           <Button 
             variant="destructive" 
             className="rounded-sm px-6 font-medium bg-red-500 hover:bg-red-600"
             onClick={() => {
               setFile(null)
-              setImportStatus(null)
+              setBatch(null)
               if (fileInputRef.current) fileInputRef.current.value = ''
             }}
             disabled={isImporting}

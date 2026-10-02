@@ -15,15 +15,28 @@ type SellerData = {
   name: string;
   nickname: string | null;
   phone: string | null;
+  mobile: string | null;
   cpf: string | null;
+  rg: string | null;
+  birthDate: Date | string | null;
   email: string | null;
+  userId: string | null;
+  cep: string | null;
+  street: string | null;
+  addressNumber: string | null;
+  complement: string | null;
+  district: string | null;
+  city: string | null;
+  state: string | null;
   status: string;
   commissionRate: number;
   goal?: number;
   notes: string | null;
 }
 
-export function VendedoresClient({ initialData }: { initialData: SellerData[] }) {
+type LinkableUser = { id: string; name: string; email: string; linkedSellerId: string | null };
+
+export function VendedoresClient({ initialData, users }: { initialData: SellerData[]; users: LinkableUser[] }) {
   const [sellers, setSellers] = useState(initialData)
   const [isDialogOpen, setIsDialogOpen] = useState(false)
   const [editingSeller, setEditingSeller] = useState<SellerData | null>(null)
@@ -35,7 +48,18 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
     nickname: "",
     email: "",
     phone: "",
+    mobile: "",
     cpf: "",
+    rg: "",
+    birthDate: "",
+    userId: "",
+    cep: "",
+    street: "",
+    addressNumber: "",
+    complement: "",
+    district: "",
+    city: "",
+    state: "",
     commissionRate: 0,
     status: "ACTIVE",
     goal: undefined as number | undefined,
@@ -48,7 +72,18 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
       nickname: "",
       email: "",
       phone: "",
+      mobile: "",
       cpf: "",
+      rg: "",
+      birthDate: "",
+      userId: "",
+      cep: "",
+      street: "",
+      addressNumber: "",
+      complement: "",
+      district: "",
+      city: "",
+      state: "",
       commissionRate: 0,
       status: "ACTIVE",
       goal: undefined,
@@ -65,7 +100,18 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
         nickname: seller.nickname || "",
         email: seller.email || "",
         phone: seller.phone || "",
+        mobile: seller.mobile || "",
         cpf: seller.cpf || "",
+        rg: seller.rg || "",
+        birthDate: seller.birthDate ? new Date(seller.birthDate).toISOString().slice(0, 10) : "",
+        userId: seller.userId || "",
+        cep: seller.cep || "",
+        street: seller.street || "",
+        addressNumber: seller.addressNumber || "",
+        complement: seller.complement || "",
+        district: seller.district || "",
+        city: seller.city || "",
+        state: seller.state || "",
         commissionRate: seller.commissionRate || 0,
         status: seller.status,
         goal: seller.goal || undefined,
@@ -85,7 +131,9 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
       if (editingSeller) {
         const res = await updateSellerAction({
           id: editingSeller.id,
-          ...formData
+          ...formData,
+          userId: formData.userId || null,
+          birthDate: formData.birthDate ? new Date(`${formData.birthDate}T12:00:00`) : undefined,
         })
         if (res.error) throw new Error(res.error)
         
@@ -95,7 +143,11 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
           setSellers(sellers.map(s => s.id === res.seller.id ? { ...res.seller, commissionRate: Number(res.seller.commissionRate), goal: res.seller.goal ? Number(res.seller.goal) : undefined } : s))
         }
       } else {
-        const res = await createSellerAction(formData)
+        const res = await createSellerAction({
+          ...formData,
+          userId: formData.userId || null,
+          birthDate: formData.birthDate ? new Date(`${formData.birthDate}T12:00:00`) : undefined,
+        })
         if (res.error) throw new Error(res.error)
         
         toast({ title: "Sucesso", description: "Vendedor criado" })
@@ -181,7 +233,7 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
       </div>
 
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-[425px]">
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[720px]">
           <DialogHeader>
             <DialogTitle>{editingSeller ? "Editar Vendedor" : "Novo Vendedor"}</DialogTitle>
           </DialogHeader>
@@ -207,6 +259,44 @@ export function VendedoresClient({ initialData }: { initialData: SellerData[] })
                 <Label>Telefone</Label>
                 <Input value={formData.phone} onChange={e => setFormData({...formData, phone: e.target.value})} />
               </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>RG</Label>
+                <Input value={formData.rg} onChange={e => setFormData({...formData, rg: e.target.value})} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Nascimento</Label>
+                <Input type="date" value={formData.birthDate} onChange={e => setFormData({...formData, birthDate: e.target.value})} />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="grid gap-2">
+                <Label>Celular</Label>
+                <Input value={formData.mobile} onChange={e => setFormData({...formData, mobile: e.target.value})} />
+              </div>
+              <div className="grid gap-2">
+                <Label>Usuário de acesso (opcional)</Label>
+                <select className="flex h-9 rounded-md border bg-transparent px-3 text-sm" value={formData.userId} onChange={e => setFormData({...formData, userId: e.target.value})}>
+                  <option value="">Sem login vinculado</option>
+                  {users.filter(user => !user.linkedSellerId || user.linkedSellerId === editingSeller?.id).map(user => (
+                    <option key={user.id} value={user.id}>{user.name} — {user.email}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-2"><Label>CEP</Label><Input value={formData.cep} onChange={e => setFormData({...formData, cep: e.target.value})} /></div>
+              <div className="col-span-2 grid gap-2"><Label>Logradouro</Label><Input value={formData.street} onChange={e => setFormData({...formData, street: e.target.value})} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-2"><Label>Número</Label><Input value={formData.addressNumber} onChange={e => setFormData({...formData, addressNumber: e.target.value})} /></div>
+              <div className="col-span-2 grid gap-2"><Label>Complemento</Label><Input value={formData.complement} onChange={e => setFormData({...formData, complement: e.target.value})} /></div>
+            </div>
+            <div className="grid grid-cols-3 gap-4">
+              <div className="grid gap-2"><Label>Bairro</Label><Input value={formData.district} onChange={e => setFormData({...formData, district: e.target.value})} /></div>
+              <div className="grid gap-2"><Label>Cidade</Label><Input value={formData.city} onChange={e => setFormData({...formData, city: e.target.value})} /></div>
+              <div className="grid gap-2"><Label>UF</Label><Input maxLength={2} value={formData.state} onChange={e => setFormData({...formData, state: e.target.value.toUpperCase()})} /></div>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="grid gap-2">

@@ -18,7 +18,19 @@ const statusLabels: Record<string, string> = {
   RETURNED: 'Devolvida',
 };
 
-export default function VendasPage() {
+type SalesListPageProps = {
+  channel?: "PRODUCT" | "COUNTER";
+  title?: string;
+  newSaleHref?: string;
+  newSaleLabel?: string;
+};
+
+export function SalesListPage({
+  channel = "PRODUCT",
+  title = "Vendas de Produto",
+  newSaleHref = "/comercial/vendas/nova",
+  newSaleLabel = "Nova venda detalhada",
+}: SalesListPageProps) {
   const { activeProfile } = useProfile();
   const [sales, setSales] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -39,7 +51,8 @@ export default function VendasPage() {
       sellerId: sellerId || undefined,
       status: status || undefined,
       page,
-      pageSize
+      pageSize,
+      channel
     });
     if (res.success && 'data' in res && res.data) {
       setSales(res.data);
@@ -60,9 +73,9 @@ export default function VendasPage() {
   return (
     <div className="p-6 space-y-6">
       <div className="flex justify-between items-center">
-        <h1 className="text-3xl font-bold">Vendas</h1>
-        <Link href="/pdv">
-          <Button><Plus className="w-4 h-4 mr-2" /> Nova venda (PDV)</Button>
+        <h1 className="text-3xl font-bold">{title}</h1>
+        <Link href={newSaleHref}>
+          <Button><Plus className="w-4 h-4 mr-2" /> {newSaleLabel}</Button>
         </Link>
       </div>
 
@@ -170,4 +183,8 @@ export default function VendasPage() {
       )}
     </div>
   );
+}
+
+export default function VendasPage() {
+  return <SalesListPage />;
 }

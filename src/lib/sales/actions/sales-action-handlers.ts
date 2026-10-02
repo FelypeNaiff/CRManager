@@ -44,7 +44,7 @@ export function createGetSaleAction(deps: any) {
   };
 }
 
-export type ListSalesFilters = { sellerId?: string; customerId?: string; status?: string; startDate?: Date; endDate?: Date; page?: number; pageSize?: number };
+export type ListSalesFilters = { sellerId?: string; customerId?: string; status?: string; channel?: string; startDate?: Date; endDate?: Date; page?: number; pageSize?: number };
 
 export function createListSalesAction(deps: any) {
   return async (_companyId: string, filters?: ListSalesFilters) => {

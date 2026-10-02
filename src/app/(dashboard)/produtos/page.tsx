@@ -715,7 +715,7 @@ export default function ProdutosPage() {
               <TabsContent value="estoque" className="mt-4">
                 <div className="p-4 border rounded-sm">
                   <p className="text-sm font-medium mb-2">Movimentações Recentes (Entradas/Saídas)</p>
-                  <p className="text-xs text-muted-foreground mb-4">Para visualizar os registros completos de entradas e saídas, acesse a opção "Movimentações de Estoque" no menu de ações da listagem principal.</p>
+                  <p className="text-xs text-muted-foreground mb-4">Para visualizar os registros completos de entradas e saídas, acesse a opção &quot;Movimentações de Estoque&quot; no menu de ações da listagem principal.</p>
                   <Button variant="outline" size="sm" onClick={() => {
                     setIsViewModalOpen(false)
                     setSelectedProdutoForMov({ id: viewingProduto.id, nome: viewingProduto.nome })

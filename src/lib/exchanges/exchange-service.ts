@@ -8,6 +8,7 @@ import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 import { itemBelongsToSale, tenantResourceWhere } from "./exchange-return-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from "../inventory/inventory-service";
 
 export interface CreateExchangeInput {
   companyId: string;
@@ -27,6 +28,7 @@ export class ExchangeService {
    * Creates a new SaleExchange, performs inventory changes, and credits the customer's wallet.
    */
   async createExchange(data: CreateExchangeInput, auditContext?: ServerAuthContext) {
+    if (!auditContext) throw new Error('Contexto autenticado é obrigatório para registrar uma troca.');
     // 1. Check if authorization is required
     const sale = await prisma.sale.findFirst({
       where: tenantResourceWhere(data.saleId, data.companyId),
@@ -156,24 +158,17 @@ export class ExchangeService {
           invType = "LOSS";
         }
 
-        if (incrementAvailable) {
-          await tx.productVariant.update({
-            where: { id: itemInput.variantId },
-            data: {
-              currentStock: { increment: itemInput.quantity },
-              availableStock: { increment: itemInput.quantity }
-            }
-          });
-        }
-
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: itemInput.variantId,
-            userId: data.userId,
-            type: invType,
-            quantity: itemInput.quantity,
-            reason: `Troca da Venda ${sale.id}`
-          }
+        const warehouse = await getOrCreateDefaultWarehouse(tx, data.companyId);
+        await applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: itemInput.variantId,
+          physicalDelta: incrementAvailable ? itemInput.quantity : 0,
+          type: invType,
+          origin: 'EXCHANGE',
+          documentType: 'SALE',
+          documentId: sale.id,
+          idempotencyKey: `exchange:${sale.id}:${itemInput.variantId}:${itemInput.condition}`,
+          reason: `Troca da Venda ${sale.id}`,
         });
       }
 
@@ -247,6 +242,7 @@ export class ExchangeService {
    * Cancels an exchange, reverting inventory and debiting the wallet.
    */
   async cancelExchange(id: string, companyId: string, userId: string, auditContext?: ServerAuthContext) {
+    if (!auditContext) throw new Error('Contexto autenticado é obrigatório para cancelar uma troca.');
     const exchange = await prisma.saleExchange.findUnique({
       where: { id }
     });
@@ -296,24 +292,17 @@ export class ExchangeService {
 
       // Revert Inventory
       for (const item of items) {
-          if (item.condition === "RESALE") {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: {
-                currentStock: { decrement: item.quantity },
-                availableStock: { decrement: item.quantity }
-              }
-            });
-          }
-
-          await tx.inventoryMovement.create({
-            data: {
-              variantId: item.variantId,
-              userId,
-              type: "CANCELLATION",
-              quantity: item.quantity,
-              reason: `Estorno de Troca Cancelada ${exchange.id}`
-            }
+          const warehouse = await getOrCreateDefaultWarehouse(tx, companyId);
+          await applyInventoryMovement(tx, auditContext, {
+            warehouseId: warehouse.id,
+            variantId: item.variantId,
+            physicalDelta: item.condition === 'RESALE' ? -item.quantity : 0,
+            type: 'CANCELLATION',
+            origin: 'EXCHANGE_CANCELLATION',
+            documentType: 'SALE_EXCHANGE',
+            documentId: exchange.id,
+            idempotencyKey: `exchange-cancellation:${exchange.id}:${item.variantId}:${item.condition}`,
+            reason: `Estorno de Troca Cancelada ${exchange.id}`,
           });
       }
 

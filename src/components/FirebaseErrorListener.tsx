@@ -1,11 +1,11 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect } from 'react';
 import { errorEmitter } from '@/lib/legacy-stubs';
 import { FirestorePermissionError } from '@/lib/legacy-stubs';
 import { toast } from '@/hooks/use-toast';
 
-export function mockErrorListener() {
+export function FirebaseErrorListener() {
   useEffect(() => {
     const handleError = (error: FirestorePermissionError) => {
       // Instead of throwing the error and crashing the React tree,

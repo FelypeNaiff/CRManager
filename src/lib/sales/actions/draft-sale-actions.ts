@@ -98,6 +98,7 @@ export async function saveDraftSaleAction(rawInput: z.input<typeof draftSchema>)
       }
 
       const data = {
+        channel: 'COUNTER' as const,
         sellerId: input.sellerId,
         customerId: input.customerId || null,
         status: 'DRAFT' as const,

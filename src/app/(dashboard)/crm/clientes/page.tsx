@@ -84,6 +84,7 @@ import {
   getCustomerHistory,
   getWalletHistory,
   getCustomerExchangeReturns
+  ,getBirthdayList
 } from "@/lib/crm/actions"
 import { getCustomerWalletAction, createManualAdjustmentAction } from "@/lib/wallet/wallet-actions"
 
@@ -235,8 +236,7 @@ export default function ClientesPage() {
   const [isSavingQuickFilho, setIsSavingQuickFilho] = useState(false)
 
   // Quick Customer child addition fields
-  const [rapidoFilhoNãome, setRapidoFilhoNãome] = useState("")
-  const [rapidoFilhoIdade, setRapidoFilhoIdade] = useState("")
+  const [rapidoFilhos, setRapidoFilhos] = useState([{ nome: "", data_nascimento: "" }])
 
   // Mapping client IDs to their wallet balances
   const [walletsMap, setWalletsMap] = useState<Record<string, number>>({})
@@ -252,6 +252,19 @@ export default function ClientesPage() {
   const [totalCount, setTotalCount] = useState(0)
 
   const tabParam = searchParams?.get("tab") || undefined
+  const isBirthdayView = tabParam === "aniversariantes"
+  const [birthdayMonth, setBirthdayMonth] = useState(new Date().getMonth() + 1)
+  const [birthdayDay, setBirthdayDay] = useState("")
+  const [birthdayChildren, setBirthdayChildren] = useState<any[]>([])
+  const [isLoadingBirthdays, setIsLoadingBirthdays] = useState(false)
+
+  useEffect(() => {
+    if (!isBirthdayView) return
+    setIsLoadingBirthdays(true)
+    getBirthdayList(birthdayMonth, birthdayDay ? Number(birthdayDay) : undefined)
+      .then(result => setBirthdayChildren(result.success ? result.children || [] : []))
+      .finally(() => setIsLoadingBirthdays(false))
+  }, [isBirthdayView, birthdayMonth, birthdayDay])
 
   const loadData = useCallback(async (currentPage: number = page) => {
     setIsLoading(true)
@@ -391,8 +404,7 @@ export default function ClientesPage() {
     setFilhos([])
     setDeletedFilhos([])
     setIsCadastroRapido(rapido)
-    setRapidoFilhoNãome("")
-    setRapidoFilhoIdade("")
+    setRapidoFilhos([{ nome: "", data_nascimento: "" }])
     setIsFormOpen(true)
   }
 
@@ -591,25 +603,16 @@ export default function ClientesPage() {
       const clientId = savedClient.id
       let batchFilhos = [...filhos]
 
-      if (isCadastroRapido && rapidoFilhoNãome.trim()) {
-        let dataNascCalculada = ""
-        if (rapidoFilhoIdade) {
-          const anos = safeNumber(rapidoFilhoIdade)
-          if (anos !== null && anos >= 0) {
-            const anoNasc = new Date().getFullYear() - anos
-            dataNascCalculada = `${anoNasc}-06-15`
-          }
-        }
-
-        batchFilhos = [{
-          nome: rapidoFilhoNãome.trim(),
-          data_nascimento: dataNascCalculada,
+      if (isCadastroRapido) {
+        batchFilhos = rapidoFilhos.filter(filho => filho.nome.trim()).map(filho => ({
+          nome: filho.nome.trim(),
+          data_nascimento: filho.data_nascimento,
           sexo: "M",
           tamanho_roupa: "2",
           tamanho_calcado: "",
           observacoes: "",
           status: "ativo"
-        }]
+        }))
       }
 
       for (const filho of batchFilhos) {
@@ -749,11 +752,11 @@ export default function ClientesPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-3xl font-headline font-bold tracking-tight text-slate-800 flex items-center gap-2">
-            <User className="h-8 w-8 text-indigo-600" /> Clientes e Responsáveis
+            {isBirthdayView ? <Baby className="h-8 w-8 text-indigo-600" /> : <User className="h-8 w-8 text-indigo-600" />} {isBirthdayView ? "Aniversariantes — Filhos" : "Clientes e Responsáveis"}
           </h1>
-          <p className="text-muted-foreground text-sm">Controle completo de clientes, responsáveis, filhos, tags e extrato de saldo.</p>
+          <p className="text-muted-foreground text-sm">{isBirthdayView ? "Relação de filhos e dependentes aniversariantes por mês e dia." : "Controle completo de clientes, responsáveis, filhos, tags e extrato de saldo."}</p>
         </div>
-        {can('CLIENTES', 'CREATE') && (
+        {!isBirthdayView && can('CLIENTES', 'CREATE') && (
           <div className="flex flex-wrap items-center gap-2">
             <Button variant="outline" className="border-indigo-100 text-indigo-600 hover:bg-indigo-50/50 gap-2 h-10 font-semibold" onClick={() => handleOpenCreate(true)}>
               <PlusCircle className="h-4 w-4" /> Cadastro Rápido
@@ -766,7 +769,12 @@ export default function ClientesPage() {
       </div>
 
       {/* Search & Tabs status */}
-      <div className="flex flex-col md:flex-row items-center gap-4 bg-white p-4 rounded-xl border shadow-sm">
+      {isBirthdayView ? (
+        <div className="flex flex-col gap-4 rounded-xl border bg-white p-4 shadow-sm md:flex-row md:items-end">
+          <label className="w-full space-y-1 md:w-64"><span className="text-sm font-medium">Mês</span><select className="h-10 w-full rounded-md border bg-background px-3" value={birthdayMonth} onChange={e => setBirthdayMonth(Number(e.target.value))}>{["Janeiro","Fevereiro","Março","Abril","Maio","Junho","Julho","Agosto","Setembro","Outubro","Novembro","Dezembro"].map((month,index) => <option key={month} value={index + 1}>{month}</option>)}</select></label>
+          <label className="w-full space-y-1 md:w-40"><span className="text-sm font-medium">Dia</span><select className="h-10 w-full rounded-md border bg-background px-3" value={birthdayDay} onChange={e => setBirthdayDay(e.target.value)}><option value="">Todos os dias</option>{Array.from({length:31},(_,index) => index + 1).map(day => <option key={day} value={day}>{day}</option>)}</select></label>
+        </div>
+      ) : <div className="flex flex-col md:flex-row items-center gap-4 bg-white p-4 rounded-xl border shadow-sm">
         <div className="relative flex-1 w-full md:max-w-md">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -789,9 +797,15 @@ export default function ClientesPage() {
             </SelectContent>
           </Select>
         </div>
-      </div>
+      </div>}
 
-      {error && (
+      {isBirthdayView && (
+        isLoadingBirthdays ? <div className="py-20 text-center text-muted-foreground">Carregando aniversariantes...</div> :
+        birthdayChildren.length === 0 ? <div className="rounded-2xl border-2 border-dashed py-20 text-center"><Baby className="mx-auto mb-3 h-12 w-12 text-muted-foreground/30"/><p className="font-semibold">Nenhum filho aniversariante no período.</p></div> :
+        <div className="overflow-hidden rounded-xl border bg-white"><table className="w-full text-sm"><thead className="bg-slate-50"><tr><th className="p-4 text-left">Dia</th><th className="p-4 text-left">Filho / Dependente</th><th className="p-4 text-left">Nascimento</th><th className="p-4 text-left">Idade</th><th className="p-4 text-left">Responsável</th><th className="p-4 text-left">Contato</th></tr></thead><tbody>{birthdayChildren.map(child => { const birthDate = new Date(child.birthDate); const today = new Date(); const age = today.getFullYear() - birthDate.getUTCFullYear(); return <tr key={child.id} className="border-t"><td className="p-4 font-bold">{child.day}</td><td className="p-4">{child.name}</td><td className="p-4">{birthDate.toLocaleDateString('pt-BR',{timeZone:'UTC'})}</td><td className="p-4">{age} anos</td><td className="p-4">{child.customerName}</td><td className="p-4">{formatPhone(child.phone)}</td></tr>})}</tbody></table></div>
+      )}
+
+      {!isBirthdayView && error && (
         <div className="bg-rose-50 text-rose-800 border border-rose-200 p-4 rounded-xl flex items-start gap-3">
           <AlertCircle className="h-5 w-5 mt-0.5 shrink-0 text-rose-600" />
           <div>
@@ -801,7 +815,7 @@ export default function ClientesPage() {
         </div>
       )}
 
-      {isLoading ? (
+      {!isBirthdayView && (isLoading ? (
         <div className="flex flex-col items-center justify-center py-20">
           <Loader2 className="h-10 w-10 animate-spin text-indigo-600 mb-2" />
           <p className="text-muted-foreground text-sm">Carregando carteira de clientes...</p>
@@ -896,10 +910,10 @@ export default function ClientesPage() {
             </Card>
           ))}
         </div>
-      )}
+      ))}
 
       {/* Paginação */}
-      {totalPages > 1 && (
+      {!isBirthdayView && totalPages > 1 && (
         <div className="flex items-center justify-between bg-white px-4 py-3 border rounded-xl shadow-sm mt-4">
           <div className="text-xs text-muted-foreground">
             Página <span className="font-semibold text-slate-700">{page}</span> de{" "}
@@ -1031,17 +1045,27 @@ export default function ClientesPage() {
               </>
             ) : (
               <div className="bg-indigo-50/30 p-3 rounded-lg border space-y-3">
-                <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider block">Cadastro Rápido do Primeiro Filho</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1">
-                    <Label>Nome do Filho</Label>
-                    <Input placeholder="Ex: Lucas" value={rapidoFilhoNãome} onChange={e => setRapidoFilhoNãome(e.target.value)} />
-                  </div>
-                  <div className="space-y-1">
-                    <Label>Idade Aproximada (Anos)</Label>
-                    <Input type="number" placeholder="Ex: 4" value={rapidoFilhoIdade} onChange={e => setRapidoFilhoIdade(e.target.value)} />
-                  </div>
+                <div className="flex items-center justify-between">
+                  <h4 className="font-bold text-indigo-950 uppercase text-[10px] tracking-wider">Filhos / Dependentes</h4>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setRapidoFilhos([...rapidoFilhos, { nome: "", data_nascimento: "" }])}>
+                    <Plus className="mr-1 h-4 w-4" /> Adicionar filho
+                  </Button>
                 </div>
+                {rapidoFilhos.map((filho, index) => (
+                  <div key={index} className="grid grid-cols-[1fr_1fr_auto] items-end gap-3 rounded-md border bg-white p-3">
+                    <div className="space-y-1">
+                      <Label>Nome do Filho</Label>
+                      <Input placeholder="Ex: Lucas" value={filho.nome} onChange={e => setRapidoFilhos(rapidoFilhos.map((item, itemIndex) => itemIndex === index ? { ...item, nome: e.target.value } : item))} />
+                    </div>
+                    <div className="space-y-1">
+                      <Label>Data de Nascimento</Label>
+                      <Input type="date" max={new Date().toISOString().slice(0, 10)} value={filho.data_nascimento} onChange={e => setRapidoFilhos(rapidoFilhos.map((item, itemIndex) => itemIndex === index ? { ...item, data_nascimento: e.target.value } : item))} />
+                    </div>
+                    <Button type="button" variant="ghost" size="icon" aria-label={`Remover filho ${index + 1}`} disabled={rapidoFilhos.length === 1} onClick={() => setRapidoFilhos(rapidoFilhos.filter((_, itemIndex) => itemIndex !== index))}>
+                      <Trash2 className="h-4 w-4 text-red-500" />
+                    </Button>
+                  </div>
+                ))}
               </div>
             )}
 

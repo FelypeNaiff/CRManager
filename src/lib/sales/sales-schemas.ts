@@ -3,6 +3,11 @@ import { z } from "zod";
 export const SaleStatusSchema = z.enum(["PENDING", "PAID", "CANCELLED"]);
 
 export const createSaleSchema = z.object({
+  channel: z.enum(["PRODUCT", "COUNTER"]).default("PRODUCT"),
+  freightAmount: z.number().min(0).default(0),
+  deliveryType: z.enum(["PICKUP", "DELIVERY"]).optional(),
+  deliveryAddress: z.record(z.string(), z.string()).optional(),
+  deliveryDate: z.string().datetime().optional(),
   draftId: z.string().uuid().optional(),
   companyId: z.string(),
   sellerId: z.string(),

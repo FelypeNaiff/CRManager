@@ -4,6 +4,7 @@ import { sellerGoalForSaleWhere } from "./sales-tenant-security";
 import { writeActivityLog } from "../auth/activity-log";
 import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from "../inventory/inventory-service";
 
 interface ExchangeReturnItemInput {
   variantId: string;
@@ -21,7 +22,7 @@ export interface ProcessExchangeReturnInput {
 }
 
 export class ExchangeService {
-  constructor(private readonly db: any = prisma) {}
+  constructor(private readonly db: any = prisma, private readonly inventory: any = { applyInventoryMovement, getOrCreateDefaultWarehouse }) {}
 
   async processExchangeReturn(data: ProcessExchangeReturnInput, auditContext?: ServerAuthContext) {
     return await this.db.$transaction(async (tx: any) => {
@@ -92,27 +93,18 @@ export class ExchangeService {
           invType = "LOSS";
         }
 
-        if (incrementAvailable) {
-          await tx.productVariant.update({
-            where: { id: itemInput.variantId },
-            data: {
-              currentStock: { increment: itemInput.quantity },
-              availableStock: { increment: itemInput.quantity }
-            }
-          });
-        } else {
-          // If damaged or loss, currentStock might be incremented and immediately isolated, but to follow Phase 6G logic exactly: "não incrementar availableStock". Wait, should we increment currentStock?
-          // The prompt: Se DAMAGED: criar InventoryMovement DAMAGE, não incrementar availableStock. (Assuming currentStock doesn't change either, or maybe it does? The safest is to only create InventoryMovement. If we want it back in current but not available, we increment current. The prompt says for NOVO: "incrementar currentStock, incrementar availableStock". For DAMAGED/DISCARD it omits currentStock. We will just create movement).
-        }
-
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: itemInput.variantId,
-            userId: data.userId,
-            type: invType,
-            quantity: itemInput.quantity,
-            reason: `Devolução/Troca da Venda ${sale.id}`
-          }
+        if (!auditContext) throw new Error('Contexto autenticado é obrigatório para registrar retorno.');
+        const warehouse = await this.inventory.getOrCreateDefaultWarehouse(tx, data.companyId);
+        await this.inventory.applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: itemInput.variantId,
+          physicalDelta: incrementAvailable ? itemInput.quantity : 0,
+          type: invType,
+          origin: data.type === 'RETURN' ? 'EXCHANGE_RETURN' : 'EXCHANGE',
+          documentType: 'SALE',
+          documentId: sale.id,
+          idempotencyKey: `exchange-return:${sale.id}:${existingReturns.length}:${itemInput.variantId}:${itemInput.condition}`,
+          reason: `Devolução/Troca da Venda ${sale.id}`,
         });
       }
 

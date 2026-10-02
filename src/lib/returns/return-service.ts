@@ -8,6 +8,7 @@ import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
 import { itemBelongsToSale, tenantResourceWhere } from "../exchanges/exchange-return-tenant-security";
 import { approvedAuthorizationWhere } from "../auth/authorization-security";
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from "../inventory/inventory-service";
 
 export interface CreateReturnInput {
   companyId: string;
@@ -28,6 +29,7 @@ export class ReturnService {
    * Creates a new SaleReturn, updates inventory, and credits the wallet if WALLET is chosen.
    */
   async createReturn(data: CreateReturnInput, auditContext?: ServerAuthContext) {
+    if (!auditContext) throw new Error('Contexto autenticado é obrigatório para registrar uma devolução.');
     const sale = await prisma.sale.findFirst({
       where: tenantResourceWhere(data.saleId, data.companyId),
       include: { items: true }
@@ -155,24 +157,17 @@ export class ReturnService {
           invType = "LOSS";
         }
 
-        if (incrementAvailable) {
-          await tx.productVariant.update({
-            where: { id: itemInput.variantId },
-            data: {
-              currentStock: { increment: itemInput.quantity },
-              availableStock: { increment: itemInput.quantity }
-            }
-          });
-        }
-
-        await tx.inventoryMovement.create({
-          data: {
-            variantId: itemInput.variantId,
-            userId: data.userId,
-            type: invType,
-            quantity: itemInput.quantity,
-            reason: `Devolução da Venda ${sale.id}`
-          }
+        const warehouse = await getOrCreateDefaultWarehouse(tx, data.companyId);
+        await applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: itemInput.variantId,
+          physicalDelta: incrementAvailable ? itemInput.quantity : 0,
+          type: invType,
+          origin: 'RETURN',
+          documentType: 'SALE',
+          documentId: sale.id,
+          idempotencyKey: `return:${sale.id}:${itemInput.variantId}:${itemInput.condition}`,
+          reason: `Devolução da Venda ${sale.id}`,
         });
       }
 
@@ -246,6 +241,7 @@ export class ReturnService {
    * Cancels a return, reverting inventory and debiting wallet (if WALLET was selected).
    */
   async cancelReturn(id: string, companyId: string, userId: string, auditContext?: ServerAuthContext) {
+    if (!auditContext) throw new Error('Contexto autenticado é obrigatório para cancelar uma devolução.');
     const returnRecord = await prisma.saleReturn.findUnique({
       where: { id }
     });
@@ -296,24 +292,17 @@ export class ReturnService {
 
       // Revert Inventory
       for (const item of items) {
-          if (item.condition === "RESALE") {
-            await tx.productVariant.update({
-              where: { id: item.variantId },
-              data: {
-                currentStock: { decrement: item.quantity },
-                availableStock: { decrement: item.quantity }
-              }
-            });
-          }
-
-          await tx.inventoryMovement.create({
-            data: {
-              variantId: item.variantId,
-              userId,
-              type: "CANCELLATION",
-              quantity: item.quantity,
-              reason: `Estorno de Devolução Cancelada ${returnRecord.id}`
-            }
+          const warehouse = await getOrCreateDefaultWarehouse(tx, companyId);
+          await applyInventoryMovement(tx, auditContext, {
+            warehouseId: warehouse.id,
+            variantId: item.variantId,
+            physicalDelta: item.condition === 'RESALE' ? -item.quantity : 0,
+            type: 'CANCELLATION',
+            origin: 'RETURN_CANCELLATION',
+            documentType: 'SALE_RETURN',
+            documentId: returnRecord.id,
+            idempotencyKey: `return-cancellation:${returnRecord.id}:${item.variantId}:${item.condition}`,
+            reason: `Estorno de Devolução Cancelada ${returnRecord.id}`,
           });
       }
 

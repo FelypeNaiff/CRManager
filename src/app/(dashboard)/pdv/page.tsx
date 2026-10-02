@@ -440,6 +440,8 @@ export default function PDVPage() {
     setLoading(true);
     setPinError("");
     const res = await createSaleAction({
+      channel: new URLSearchParams(window.location.search).get('channel') === 'PRODUCT' ? "PRODUCT" : "COUNTER",
+      freightAmount: 0,
       draftId: draftId || undefined,
       companyId: activeProfile.empresaId,
       sellerId: selectedSeller,

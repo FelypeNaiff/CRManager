@@ -1,6 +1,26 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { OperationalSettingsService } from './operational-settings-service';
+import { buildInitialOperationalSettings, OperationalSettingsService } from './operational-settings-service';
+
+test('legacy operational values are copied only into the initial canonical row', () => {
+  const result = buildInitialOperationalSettings({
+    allowNegativeStockOnPDV: true,
+    enableSellerCommission: false,
+    enableSellerGoals: false,
+  });
+  assert.equal(result.allowNegativeStock, true);
+  assert.equal(result.enableCommissions, false);
+  assert.equal(result.enableSellerGoals, false);
+  assert.equal(Number(result.sellerDiscountLimit), 5);
+  assert.equal(Number(result.adminDiscountLimit), 100);
+});
+
+test('initial operational values use safe defaults without a legacy company', () => {
+  const result = buildInitialOperationalSettings(null);
+  assert.equal(result.allowNegativeStock, false);
+  assert.equal(result.enableCommissions, true);
+  assert.equal(result.enableSellerGoals, true);
+});
 
 const settings = {
   allowDiscount: true,

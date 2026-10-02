@@ -617,18 +617,12 @@ export async function getCustomerHistory(customerId: string) {
 
 // ─── Birthdays Query ───
 
-export async function getBirthdayList(month: number) {
+export async function getBirthdayList(month: number, day?: number) {
   const session = await requirePermission('CLIENTES', 'VIEW');
   try {
-    // 1. Fetch customers with birthday in month
-    const customers = await prisma.customer.findMany({
-      where: {
-        companyId: session.companyId,
-        birthMonth: month,
-        status: { not: 'arquivado' },
-      },
-      orderBy: { name: 'asc' },
-    });
+    if (!Number.isInteger(month) || month < 1 || month > 12) throw new Error('Mês inválido.');
+    if (day !== undefined && (!Number.isInteger(day) || day < 1 || day > 31)) throw new Error('Dia inválido.');
+    const selectedDay = day ?? null;
 
     // 2. Fetch children whose birthday matches and parent is active via database EXTRACT MONTH
     const matchingChildren = await prisma.$queryRaw<any[]>`
@@ -638,24 +632,19 @@ export async function getBirthdayList(month: number) {
       WHERE c.company_id = ${session.companyId}
         AND c.status <> 'arquivado'
         AND EXTRACT(MONTH FROM cc.birth_date) = ${month}
-      ORDER BY cc.name ASC
+        AND (${selectedDay}::int IS NULL OR EXTRACT(DAY FROM cc.birth_date) = ${selectedDay})
+      ORDER BY EXTRACT(DAY FROM cc.birth_date), cc.name ASC
     `;
 
     return {
       success: true,
-      customers: customers.map((c) => ({
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        type: 'Cliente',
-        day: c.birthDay,
-      })),
       children: matchingChildren.map((c) => ({
         id: c.id,
-        name: `${c.name} (Filho de ${c.customerName})`,
+        name: c.name,
+        customerName: c.customerName,
         phone: c.customerPhone,
-        type: 'Filho',
-        day: c.birthDate ? new Date(c.birthDate).getDate() : null,
+        birthDate: c.birthDate,
+        day: c.birthDate ? new Date(c.birthDate).getUTCDate() : null,
       })),
     };
   } catch (error: any) {

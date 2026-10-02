@@ -13,6 +13,7 @@ import { approvedAuthorizationWhere } from "../auth/authorization-security";
 import { writeActivityLog } from "../auth/activity-log";
 import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from "../inventory/inventory-service";
 
 const money = (value: Prisma.Decimal.Value) =>
   new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
@@ -36,6 +37,7 @@ export class SalesService {
       authorization: authorizationService,
       receivables: receivablesService,
       sellerCommission: sellerCommissionService,
+      inventory: { applyInventoryMovement, getOrCreateDefaultWarehouse },
     },
   ) {}
 
@@ -146,7 +148,7 @@ export class SalesService {
           archivedAt: null,
           product: { is: { companyId: data.companyId, isActive: true, archivedAt: null } },
         },
-        include: { product: { select: { name: true } } },
+        include: { product: { select: { name: true, pdvEligible: true, commissionRate: true, category: { select: { commissionRate: true } } } } },
       });
       const variantMap = new Map<string, any>(variants.map((v: any) => [v.id, v]));
 
@@ -155,6 +157,7 @@ export class SalesService {
       const canonicalItems = data.items.map(item => {
         const variant = variantMap.get(item.variantId);
         if (!variant) throw new Error(`Variante ${item.variantId} não encontrada.`);
+        if (variant.product.pdvEligible === false) throw new Error(`Produto ${variant.product.name} não está habilitado para venda.`);
 
         const quantity = finiteDecimal(item.quantity, 'Quantidade');
         if (quantity.lte(0)) throw new Error('Quantidade inválida.');
@@ -228,8 +231,45 @@ export class SalesService {
         throw new Error('Desconto global não pode superar o subtotal após descontos dos itens.');
       }
 
+      let allocatedGlobalDiscount = money(0);
+      const canonicalItemsWithCommission = canonicalItems.map((item: any, index: number) => {
+        const variant = variantMap.get(item.variantId);
+        const isLast = index === canonicalItems.length - 1;
+        const share = isLast
+          ? money(canonicalGlobalDiscount.minus(allocatedGlobalDiscount))
+          : subtotalAfterItems.gt(0)
+            ? money(canonicalGlobalDiscount.mul(item.totalPrice).div(subtotalAfterItems))
+            : money(0);
+        allocatedGlobalDiscount = money(allocatedGlobalDiscount.plus(share));
+        const commissionBase = money(new Prisma.Decimal(item.totalPrice).minus(share));
+        const productRule = variant.product.commissionRate;
+        const categoryRule = variant.product.category?.commissionRate;
+        const rate = productRule !== null && productRule !== undefined
+          ? new Prisma.Decimal(productRule)
+          : categoryRule !== null && categoryRule !== undefined
+            ? new Prisma.Decimal(categoryRule)
+            : seller.commissionRate && new Prisma.Decimal(seller.commissionRate).gt(0)
+              ? new Prisma.Decimal(seller.commissionRate)
+              : new Prisma.Decimal(settings.defaultCommissionRate ?? 0);
+        const source = productRule !== null && productRule !== undefined
+          ? 'PRODUCT'
+          : categoryRule !== null && categoryRule !== undefined
+            ? 'CATEGORY'
+            : seller.commissionRate && new Prisma.Decimal(seller.commissionRate).gt(0)
+              ? 'SELLER'
+              : 'COMPANY';
+        return {
+          ...item,
+          commissionBaseSnapshot: commissionBase,
+          commissionRateSnapshot: rate,
+          commissionAmountSnapshot: money(commissionBase.mul(rate).div(100)),
+          commissionRuleSource: source,
+        };
+      });
+
       const canonicalDiscountAmount = money(canonicalItemDiscount.plus(canonicalGlobalDiscount));
-      const canonicalTotal = money(canonicalSubtotal.minus(canonicalDiscountAmount));
+      const freightAmount = money(finiteDecimal(data.freightAmount ?? 0, 'Frete'));
+      const canonicalTotal = money(canonicalSubtotal.minus(canonicalDiscountAmount).plus(freightAmount));
       if (canonicalTotal.lt(0)) throw new Error('Total da venda inválido.');
 
       const paymentMethodMap = new Map<string, any>(
@@ -319,16 +359,21 @@ export class SalesService {
           customerId: data.customerId,
           cashRegisterId,
           status: "PAID",
+          channel: data.channel,
           subtotal: canonicalSubtotal,
           discountAmount: canonicalDiscountAmount,
           globalDiscountType: data.globalDiscountType,
           globalDiscountValue: data.globalDiscountValue,
           totalAmount: canonicalTotal,
+          freightAmount,
+          deliveryType: data.deliveryType,
+          deliveryAddress: data.deliveryAddress,
+          deliveryDate: data.deliveryDate ? new Date(data.deliveryDate) : undefined,
           notes: data.notes,
           customerNameSnapshot: data.customerNameSnapshot,
           customerPhoneSnapshot: data.customerPhoneSnapshot,
           items: {
-            create: canonicalItems,
+            create: canonicalItemsWithCommission,
           },
           payments: {
             create: canonicalPayments.map(payment => ({
@@ -365,24 +410,21 @@ export class SalesService {
         authenticatedUserId: auditContext.authenticatedUserId,
       }, tx);
 
-      // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant em lote
-      await tx.inventoryMovement.createMany({
-        data: data.items.map(item => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          type: "SALE",
-          userId: auditContext.userId,
-          reason: `Venda #${sale.id}`
-        }))
-      });
-
+      // Etapa 5 & 6: movimentar o estoque pelo serviço canônico.
+      const warehouse = await this.dependencies.inventory.getOrCreateDefaultWarehouse(tx, data.companyId);
       for (const item of data.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            currentStock: { decrement: item.quantity },
-            availableStock: { decrement: item.quantity }
-          }
+        await this.dependencies.inventory.applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: item.variantId,
+          physicalDelta: new Prisma.Decimal(item.quantity).negated(),
+          type: "SALE",
+          origin: "SALE",
+          documentType: "SALE",
+          documentId: sale.id,
+          idempotencyKey: `sale:${sale.id}:${item.variantId}`,
+          reason: `Venda #${sale.id}`,
+          allowNegativePhysical: settings.allowNegativeStock,
+          allowNegativeAvailable: settings.allowNegativeStock,
         });
       }
 
@@ -476,6 +518,7 @@ export class SalesService {
       });
       if (!sale) throw new Error("Venda não encontrada.");
       if (sale.status === "CANCELLED") throw new Error("Venda já está cancelada.");
+      if (!auditContext) throw new Error('Contexto autenticado é obrigatório para cancelar uma venda.');
 
       // Travar o caixa associado, se houver
       if (sale.cashRegisterId) {
@@ -562,24 +605,21 @@ export class SalesService {
         tx,
       );
 
-      // Criar InventoryMovement tipo CANCELLATION e devolver estoque em lote
-      await tx.inventoryMovement.createMany({
-        data: sale.items.map((item: any) => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          type: "CANCELLATION",
-          userId: data.cancelledByUserId,
-          reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
-        }))
-      });
-
+      // Devolver estoque pelo mesmo núcleo transacional usado pela venda.
+      const warehouse = await this.dependencies.inventory.getOrCreateDefaultWarehouse(tx, companyId);
       for (const item of sale.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            currentStock: { increment: item.quantity },
-            availableStock: { increment: item.quantity }
-          }
+        await this.dependencies.inventory.applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: item.variantId,
+          physicalDelta: item.quantity,
+          type: "CANCELLATION",
+          origin: "SALE_CANCELLATION",
+          documentType: "SALE",
+          documentId: sale.id,
+          idempotencyKey: `sale-cancellation:${sale.id}:${item.variantId}`,
+          reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`,
+          allowNegativePhysical: settings.allowNegativeStock,
+          allowNegativeAvailable: settings.allowNegativeStock,
         });
       }
 
@@ -622,6 +662,7 @@ export class SalesService {
     sellerId?: string;
     customerId?: string;
     status?: string;
+    channel?: string;
     startDate?: Date;
     endDate?: Date;
   } & PaginationParams) {
@@ -630,6 +671,7 @@ export class SalesService {
     if (filters?.sellerId) whereClause.sellerId = filters.sellerId;
     if (filters?.customerId) whereClause.customerId = filters.customerId;
     if (filters?.status) whereClause.status = filters.status;
+    if (filters?.channel) whereClause.channel = filters.channel;
     
     if (filters?.startDate || filters?.endDate) {
       whereClause.createdAt = {};

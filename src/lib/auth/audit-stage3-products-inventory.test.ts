@@ -5,15 +5,17 @@ import { addAuditChange, type AuditChanges } from './audit-changes';
 import { sanitizeAuditDetails } from './audit-sanitization';
 
 const products = readFileSync(new URL('../crm/products-actions.ts', import.meta.url), 'utf8');
+const productWriter = readFileSync(new URL('../crm/product-write-service.ts', import.meta.url), 'utf8');
 const createSection = products.slice(products.indexOf('export async function createProduct(input'), products.indexOf('export async function updateProduct'));
 const updateSection = products.slice(products.indexOf('export async function updateProduct'), products.indexOf('export async function deleteProduct'));
 const deleteSection = products.slice(products.indexOf('export async function deleteProduct'), products.indexOf('export async function getInventoryMovements'));
 const inventorySection = products.slice(products.indexOf('export async function createInventoryMovement'), products.indexOf('export async function getProductPriceHistory'));
 const productImport = readFileSync(new URL('../sales/actions/import-products-action.ts', import.meta.url), 'utf8');
+const inventoryService = readFileSync(new URL('../inventory/inventory-service.ts', import.meta.url), 'utf8');
 
 test('product create generates a canonical critical log in the business transaction', () => {
-  assert.equal(createSection.match(/action: 'PRODUCT_CREATE'/g)?.length, 1);
-  assert.match(createSection, /policy: 'CRITICAL', tx/);
+  assert.equal(productWriter.match(/action: 'PRODUCT_CREATE'/g)?.length, 1);
+  assert.match(productWriter, /policy: 'CRITICAL', tx/);
 });
 
 test('product update records only effective deltas', () => {
@@ -36,8 +38,8 @@ test('price and cost Decimal values are normalized to numbers in deltas', () => 
 });
 
 test('default variant create generates its own event with the affected record id', () => {
-  assert.match(createSection, /action: 'PRODUCT_VARIANT_CREATE'/);
-  assert.match(createSection, /recordId: defaultVariant\.id/);
+  assert.match(productWriter, /action: 'PRODUCT_VARIANT_CREATE'/);
+  assert.match(productWriter, /recordId: variant\.id/);
   assert.match(productImport, /action: 'PRODUCT_VARIANT_CREATE'/);
 });
 
@@ -58,7 +60,10 @@ test('manual stock adjustment records before, after and delta', () => {
 test('tenant isolation is applied to target reads and writes', () => {
   assert.match(updateSection, /companyId: session\.companyId/);
   assert.match(deleteSection, /tenantWhere\(id, session\.companyId\)/);
-  assert.match(inventorySection, /tenantWhere\(variantId, session\.companyId\)/);
+  assert.match(inventorySection, /applyInventoryMovement\(tx, session/);
+  assert.match(inventoryService, /companyId: context\.companyId/);
+  assert.match(inventoryService, /warehouse\.findFirst\([\s\S]*companyId: context\.companyId/);
+  assert.match(inventoryService, /productVariant\.findFirst\([\s\S]*companyId: context\.companyId/);
 });
 
 test('operational actor is derived from the trusted server context', () => {
@@ -67,7 +72,7 @@ test('operational actor is derived from the trusted server context', () => {
 });
 
 test('direct admin actor uses the same trusted context path', () => {
-  assert.match(createSection, /context: session/);
+  assert.match(createSection, /createCanonicalProduct\(tx, session/);
   assert.doesNotMatch(createSection, /authenticatedUserId:\s*input|actorUserId:\s*input/);
 });
 
@@ -78,7 +83,9 @@ test('client supplied actor ids are never audit authority', () => {
 });
 
 test('critical audit failures share the transaction and therefore roll back mutations', () => {
-  for (const section of [createSection, updateSection, deleteSection, inventorySection]) {
+  assert.match(createSection, /prisma\.\$transaction\(tx => createCanonicalProduct\(tx, session/);
+  assert.match(productWriter, /policy: 'CRITICAL', tx/);
+  for (const section of [updateSection, deleteSection, inventorySection]) {
     assert.match(section, /prisma\.\$transaction\(async \(tx\)/);
     assert.match(section, /policy: 'CRITICAL', tx/);
   }

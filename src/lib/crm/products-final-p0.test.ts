@@ -6,6 +6,7 @@ const read = (path: string) => readFileSync(path, 'utf8');
 const createPage = read('src/app/(dashboard)/produtos/novo/page.tsx');
 const editPage = read('src/app/(dashboard)/produtos/editar/[id]/page.tsx');
 const actions = read('src/lib/crm/products-actions.ts');
+const productWriter = read('src/lib/crm/product-write-service.ts');
 const schema = read('prisma/schema.prisma');
 
 test('product create and edit pages have no legacy Firestore runtime', () => {
@@ -43,10 +44,11 @@ test('product mutations preserve RBAC, tenant ownership and canonical audit even
   const updateSection = actions.slice(actions.indexOf('export async function updateProduct('), actions.indexOf('export async function deleteProduct('));
   assert.match(createSection, /requirePermission\('PRODUTOS', 'CREATE'\)/);
   assert.match(updateSection, /requirePermission\('PRODUTOS', 'UPDATE'\)/);
-  assert.match(createSection, /companyId: session\.companyId/);
+  assert.match(createSection, /createCanonicalProduct\(tx, session/);
+  assert.match(productWriter, /companyId: context\.companyId/);
   assert.match(updateSection, /companyId: session\.companyId/);
-  assert.match(createSection, /action: 'PRODUCT_CREATE'/);
-  assert.match(createSection, /action: 'PRODUCT_VARIANT_CREATE'/);
+  assert.match(productWriter, /action: 'PRODUCT_CREATE'/);
+  assert.match(productWriter, /action: 'PRODUCT_VARIANT_CREATE'/);
   assert.match(updateSection, /action: 'PRODUCT_UPDATE'/);
   assert.match(updateSection, /action: 'PRODUCT_VARIANT_UPDATE'/);
   assert.doesNotMatch(createSection + updateSection, /writeLegacyActivityLog/);

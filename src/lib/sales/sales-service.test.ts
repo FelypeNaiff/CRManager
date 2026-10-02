@@ -168,6 +168,16 @@ function harness(options: {
       processSaleCommission: async (...args: any[]) => { depsCalls.process.push(args); },
       rollbackSaleCommission: async (...args: any[]) => { depsCalls.rollback.push(args); },
     },
+    inventory: {
+      getOrCreateDefaultWarehouse: async () => ({ id: 'warehouse-a' }),
+      applyInventoryMovement: async (_tx: any, context: any, input: any) => {
+        const physicalDelta = Number(input.physicalDelta ?? 0);
+        state.stocks[input.variantId as keyof typeof state.stocks] += physicalDelta;
+        const movement = { id: `movement-${state.movements.length + 1}`, variantId: input.variantId, quantity: physicalDelta, type: input.type, reason: input.reason, userId: context.userId };
+        state.movements.push(movement);
+        return movement;
+      },
+    },
   };
   return { service: new SalesService(db, dependencies), state, depsCalls };
 }

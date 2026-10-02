@@ -77,7 +77,16 @@ function harness(options: { existingQuantity?: number; failLog?: boolean; tenant
       try { return await callback(tx); } catch (error) { Object.assign(state, snapshot); throw error; }
     },
   };
-  return { service: new ExchangeService(db), state };
+  const inventory = {
+    getOrCreateDefaultWarehouse: async () => ({ id: 'warehouse-a' }),
+    applyInventoryMovement: async (_tx: any, _context: any, movement: any) => {
+      const delta = Number(movement.physicalDelta ?? 0);
+      state.stocks[movement.variantId as keyof typeof state.stocks].current += delta;
+      state.stocks[movement.variantId as keyof typeof state.stocks].available += delta;
+      state.movements.push({ ...movement, quantity: delta });
+    },
+  };
+  return { service: new ExchangeService(db, inventory), state };
 }
 
 test('partial RESALE return credits proportional wallet value and restores available stock', async () => {
@@ -98,7 +107,7 @@ test('partial RESALE return credits proportional wallet value and restores avail
 
 test('total return after a previous partial return completes sale without restocking damaged items', async () => {
   const { service, state } = harness({ existingQuantity: 1 });
-  const result = await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 2, condition: 'DAMAGED' }]));
+  const result = await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 2, condition: 'DAMAGED' }]), authContext);
   assert.equal(result.totalCredit, 200);
   assert.equal(state.saleStatus, 'RETURNED');
   assert.deepEqual(state.stocks['variant-a'], { current: 10, available: 10 });
@@ -110,7 +119,7 @@ test('total return after a previous partial return completes sale without restoc
 
 test('DISCARD creates loss movement without returning stock', async () => {
   const { service, state } = harness();
-  await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'DISCARD' }]));
+  await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'DISCARD' }]), authContext);
   assert.equal(state.movements[0].type, 'LOSS');
   assert.deepEqual(state.stocks['variant-a'], { current: 10, available: 10 });
 });
@@ -132,7 +141,7 @@ test('cross-tenant sale and item outside the original sale fail closed', async (
 
 test('historical rollback uses sale sellerId and does not require an active Seller', async () => {
   const { service, state } = harness();
-  await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }]));
+  await service.processExchangeReturn(input([{ variantId: 'variant-a', quantity: 1, condition: 'RESALE' }]), authContext);
   assert.equal(state.commission.sellerId, 'seller-a');
   assert.equal(state.goal.sellerId, 'seller-a');
   assert.equal(state.commission.amount, 20);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import test from 'node:test';
-import { QuickCustomerSchema } from './actions/create-quick-customer-action';
+import { QuickCustomerSchema } from './quick-customer-schema';
 
 const readSource = (relativePath: string) => readFileSync(resolve(process.cwd(), relativePath), 'utf8');
 
@@ -17,6 +17,7 @@ test('PDV serializes Prisma-backed lists used by client components', () => {
 
 test('quick customer registration is tenant-scoped, transactional, and permission protected', () => {
   const source = readSource('src/lib/sales/actions/create-quick-customer-action.ts');
+  const schema = readSource('src/lib/sales/quick-customer-schema.ts');
 
   assert.match(source, /requireAllPermissions/);
   assert.match(source, /module:\s*'CLIENTES',\s*action:\s*'CREATE'/);
@@ -24,10 +25,10 @@ test('quick customer registration is tenant-scoped, transactional, and permissio
   assert.match(source, /prisma\.\$transaction/);
   assert.match(source, /companyId:\s*session\.companyId/);
   assert.match(source, /children:\s*\{[\s\S]*?create:/);
-  assert.match(source, /children:\s*z\.array/);
-  assert.match(source, /\.min\(1, 'Informe pelo menos uma criança\.'\)/);
-  assert.match(source, /name:\s*z\.string\(\)\.trim\(\)\.min\(2/);
-  assert.match(source, /age:\s*z\.number\(\)\.int\(\)\.min\(0/);
+  assert.match(schema, /children:\s*z\.array/);
+  assert.match(schema, /\.min\(1, 'Informe pelo menos uma criança\.'\)/);
+  assert.match(schema, /name:\s*z\.string\(\)\.trim\(\)\.min\(2/);
+  assert.match(schema, /age:\s*z\.number\(\)\.int\(\)\.min\(0/);
 });
 
 test('quick customer schema accepts two valid children and refuses an empty child', () => {
@@ -80,10 +81,10 @@ test('held sales persist as tenant-scoped drafts without stock or financial effe
   assert.match(source, /where:\s*\{\s*id:\s*draftId,\s*companyId:\s*auth\.companyId,\s*status:\s*'DRAFT'/);
 });
 
-test('PDV list offers a new sale and continuation of held sales', () => {
+test('product-sales list offers a detailed sale and continuation of held sales', () => {
   const source = readSource('src/app/(dashboard)/comercial/vendas/page.tsx');
 
-  assert.match(source, /Nova venda \(PDV\)/);
+  assert.match(source, /Nova venda detalhada/);
   assert.match(source, /sale\.status === 'DRAFT'/);
   assert.match(source, /Continuar/);
 });

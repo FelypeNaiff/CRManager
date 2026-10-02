@@ -62,16 +62,56 @@ test('sale finds Seller and goal by sellerId, increments goal and creates commis
   assert.equal(fake.calls.find(c => c.operation === 'goal.findMany')!.args.where.sellerId, 'seller-a');
   assert.deepEqual(fake.calls.find(c => c.operation === 'goal.update')!.args.data,
     { achievedAmount: { increment: 100 } });
-  assert.deepEqual(fake.calls.find(c => c.operation === 'commission.create')!.args.data, {
-    sellerId: 'seller-a', saleId: 'sale-a', amount: 10, status: 'PENDING',
-  });
+  const commission = fake.calls.find(c => c.operation === 'commission.create')!.args.data;
+  assert.equal(commission.sellerId, 'seller-a');
+  assert.equal(commission.saleId, 'sale-a');
+  assert.equal(commission.amount.toFixed(2), '10.00');
+  assert.equal(commission.baseAmountSnapshot.toFixed(2), '100.00');
+  assert.equal(commission.rateSnapshot.toFixed(2), '10.00');
+  assert.equal(commission.releasePolicySnapshot, 'ON_FINANCIAL_OBLIGATION');
+  assert.equal(commission.releasedAmount.toFixed(2), '10.00');
+  assert.ok(commission.releasedAt instanceof Date);
+  assert.equal(commission.status, 'PENDING');
 });
 
 test('zero individual rate falls back to OperationalSettings default rate', async () => {
   const fake = createTransaction({ seller: { id: 'seller-a', companyId: 'company-a', status: 'ACTIVE', commissionRate: 0 } });
   const settings = async () => ({ enableSellerGoals: false, enableCommissions: true, defaultCommissionRate: 7.5 });
   await new SellerCommissionService(settings as any).processSaleCommission(fake.tx, sale);
-  assert.equal(fake.calls.find(c => c.operation === 'commission.create')!.args.data.amount, 7.5);
+  assert.equal(fake.calls.find(c => c.operation === 'commission.create')!.args.data.amount.toFixed(2), '7.50');
+});
+
+test('seller policy overrides the company policy and remains snapshotted', async () => {
+  const fake = createTransaction({ seller: {
+    id: 'seller-a', companyId: 'company-a', status: 'ACTIVE', commissionRate: 10,
+    commissionReleasePolicy: 'PROPORTIONAL_TO_RECEIPTS',
+  } });
+  const settings = async () => ({
+    enableSellerGoals: false, enableCommissions: true, defaultCommissionRate: 5,
+    commissionReleasePolicy: 'ON_FINANCIAL_OBLIGATION',
+  });
+  await new SellerCommissionService(settings as any).processSaleCommission(fake.tx, sale);
+  const commission = fake.calls.find(c => c.operation === 'commission.create')!.args.data;
+  assert.equal(commission.releasePolicySnapshot, 'PROPORTIONAL_TO_RECEIPTS');
+  assert.equal(commission.releasedAmount.toFixed(2), '0.00');
+  assert.equal(commission.releasedAt, null);
+});
+
+test('item snapshots aggregate different rates and explicit zero without fallback', async () => {
+  const fake = createTransaction();
+  const settings = async () => ({ enableSellerGoals: false, enableCommissions: true, defaultCommissionRate: 5 });
+  await new SellerCommissionService(settings as any).processSaleCommission(fake.tx, {
+    ...sale,
+    totalAmount: 100,
+    items: [
+      { commissionBaseSnapshot: 60, commissionRateSnapshot: 10, commissionAmountSnapshot: 6, commissionRuleSource: 'PRODUCT' },
+      { commissionBaseSnapshot: 40, commissionRateSnapshot: 0, commissionAmountSnapshot: 0, commissionRuleSource: 'CATEGORY' },
+    ],
+  });
+  const commission = fake.calls.find(c => c.operation === 'commission.create')!.args.data;
+  assert.equal(commission.baseAmountSnapshot.toFixed(2), '100.00');
+  assert.equal(commission.amount.toFixed(2), '6.00');
+  assert.equal(commission.rateSnapshot, null);
 });
 
 test('absence of an active goal does not prevent the current commission behavior', async () => {
