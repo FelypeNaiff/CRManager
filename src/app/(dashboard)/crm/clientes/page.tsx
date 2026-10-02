@@ -2,8 +2,9 @@
 
 import React, { useState, useMemo, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
-import { Baby, User, UserPlus } from "lucide-react"
+import { Baby, User, UserPlus, Settings, FileSpreadsheet, FileText, Download, Mail, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu"
 
 import { toast } from "@/hooks/use-toast"
 import { useProfile } from "@/lib/contexts/profile-context"
@@ -206,6 +207,33 @@ export default function ClientesPage() {
             <Button className="bg-indigo-600 hover:bg-indigo-500 gap-2 text-white h-10 font-semibold shadow-sm" onClick={() => handleOpenCreate(false)}>
               <UserPlus className="h-4 w-4" /> Cadastro Completo
             </Button>
+            
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" className="h-10 font-semibold gap-2 border-slate-200">
+                  <Settings className="h-4 w-4 text-slate-500" /> Mais ações
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 font-medium text-slate-700">
+                <DropdownMenuItem className="gap-2 cursor-pointer py-2" onClick={() => toast({ title: "Em breve", description: "Importação de planilha em desenvolvimento." })}>
+                  <FileSpreadsheet className="h-4 w-4 text-slate-500" /> Importar de uma planilha
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 cursor-pointer py-2" onClick={() => toast({ title: "Em breve", description: "Importação de NFe em desenvolvimento." })}>
+                  <FileText className="h-4 w-4 text-slate-500" /> Importar de notas fiscais
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 cursor-pointer py-2" onClick={() => toast({ title: "Em breve", description: "Exportação em desenvolvimento." })}>
+                  <Download className="h-4 w-4 text-slate-500" /> Exportar clientes
+                </DropdownMenuItem>
+                <DropdownMenuItem className="gap-2 cursor-pointer py-2" onClick={() => toast({ title: "Em breve", description: "Exportação de e-mails em desenvolvimento." })}>
+                  <Mail className="h-4 w-4 text-slate-500" /> Exportar e-mails
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem className="gap-2 cursor-pointer py-2 text-red-600 focus:text-red-600 focus:bg-red-50" onClick={() => toast({ title: "Em breve", description: "Exclusão em lote em desenvolvimento." })}>
+                  <Trash2 className="h-4 w-4" /> Excluir clientes
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         )}
       </div>

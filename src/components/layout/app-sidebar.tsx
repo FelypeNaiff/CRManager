@@ -176,8 +176,14 @@ const navItems = [
   },
   {
     title: "Relatórios",
-    url: "/relatorios",
     icon: FileText,
+    items: [
+      { title: "Cadastros", url: "/relatorios/cadastros", icon: Users },
+      { title: "Vendas", url: "/relatorios/vendas", icon: ShoppingCart },
+      { title: "Estoque", url: "/relatorios/estoque", icon: Package },
+      { title: "Financeiro", url: "/relatorios/financeiro", icon: DollarSign },
+      { title: "Vales e Adiantamentos", url: "/relatorios/vales", icon: Users },
+    ],
   },
   {
     title: "Configurações",
@@ -349,3 +355,4 @@ export function AppSidebar() {
     </Sidebar>
   )
 }
+

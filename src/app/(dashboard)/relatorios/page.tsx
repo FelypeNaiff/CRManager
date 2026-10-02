@@ -1,5 +1,5 @@
-import { redirect } from 'next/navigation'
+import { redirect } from "next/navigation"
 
-export default function RelatoriosRedirectPage() {
-  redirect('/comercial/relatorios')
+export default function RelatoriosRoot() {
+  redirect("/relatorios/vendas")
 }
