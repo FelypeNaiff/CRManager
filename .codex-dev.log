@@ -14970,3 +14970,6 @@ prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module"
  ✓ Compiled in 3.4s
  ✓ Compiled in 200ms
  ✓ Compiled in 144ms
+ ✓ Compiled in 1774ms
+ ✓ Compiled in 226ms
+ ✓ Compiled in 153ms
