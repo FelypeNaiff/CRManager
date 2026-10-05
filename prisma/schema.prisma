@@ -80,6 +80,7 @@ model Company {
   stockAdjustments                     StockAdjustment[]
   stockTransfers                       StockTransfer[]
   inventorySessions                    InventorySession[]
+  employeeAdvances                     EmployeeAdvance[]
 
   @@map("companies")
 }
@@ -146,6 +147,7 @@ model User {
   saleAuthorizationsApproved  SaleAuthorization[]    @relation("AuthApprovedBy")
   seller                      Seller?
   importBatches               ImportBatch[]
+  employeeAdvances            EmployeeAdvance[]
 
   @@index([companyId, status])
   @@index([companyId, name])
@@ -761,28 +763,29 @@ model PaymentMethod {
 }
 
 model CashRegister {
-  id              String                 @id @default(uuid())
-  companyId       String                 @map("company_id")
-  openedByUserId  String                 @map("opened_by_user_id")
-  closedByUserId  String?                @map("closed_by_user_id")
-  bankAccountId   String                 @map("bank_account_id")
-  terminalId      String?                @map("terminal_id")
-  deviceId        String?                @map("device_id")
-  openedAt        DateTime               @default(now()) @map("opened_at")
-  closedAt        DateTime?              @map("closed_at")
-  openingBalance  Decimal                @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
-  closingBalance  Decimal?               @map("closing_balance") @db.Decimal(15, 2)
-  expectedBalance Decimal?               @map("expected_balance") @db.Decimal(15, 2)
-  difference      Decimal?               @db.Decimal(15, 2)
-  status          CashRegisterStatus     @default(OPEN)
-  notes           String?
-  movements       CashMovement[]
-  bankAccount     BankAccount            @relation(fields: [bankAccountId], references: [id])
-  closedBy        User?                  @relation("CashRegisterClosedBy", fields: [closedByUserId], references: [id])
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  openedBy        User                   @relation("CashRegisterOpenedBy", fields: [openedByUserId], references: [id])
-  transactions    FinancialTransaction[]
-  sales           Sale[]
+  id               String                 @id @default(uuid())
+  companyId        String                 @map("company_id")
+  openedByUserId   String                 @map("opened_by_user_id")
+  closedByUserId   String?                @map("closed_by_user_id")
+  bankAccountId    String                 @map("bank_account_id")
+  terminalId       String?                @map("terminal_id")
+  deviceId         String?                @map("device_id")
+  openedAt         DateTime               @default(now()) @map("opened_at")
+  closedAt         DateTime?              @map("closed_at")
+  openingBalance   Decimal                @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance   Decimal?               @map("closing_balance") @db.Decimal(15, 2)
+  expectedBalance  Decimal?               @map("expected_balance") @db.Decimal(15, 2)
+  difference       Decimal?               @db.Decimal(15, 2)
+  status           CashRegisterStatus     @default(OPEN)
+  notes            String?
+  movements        CashMovement[]
+  bankAccount      BankAccount            @relation(fields: [bankAccountId], references: [id])
+  closedBy         User?                  @relation("CashRegisterClosedBy", fields: [closedByUserId], references: [id])
+  company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  openedBy         User                   @relation("CashRegisterOpenedBy", fields: [openedByUserId], references: [id])
+  transactions     FinancialTransaction[]
+  sales            Sale[]
+  employeeAdvances EmployeeAdvance[]
 
   @@index([companyId, status])
   @@index([openedAt])
@@ -1503,4 +1506,38 @@ model Seller {
   @@index([companyId, status])
   @@index([companyId, name])
   @@map("sellers")
+}
+
+model EmployeeAdvance {
+  id              String                @id @default(uuid())
+  companyId       String                @map("company_id")
+  employeeId      String                @map("employee_id")
+  amount          Decimal               @db.Decimal(15, 2)
+  date            DateTime              @default(now())
+  competenceMonth String                @map("competence_month")
+  type            EmployeeAdvanceType
+  status          EmployeeAdvanceStatus @default(PENDING)
+  observation     String?
+  cashRegisterId  String?               @map("cash_register_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([companyId, employeeId])
+  @@map("employee_advances")
+}
+
+enum EmployeeAdvanceType {
+  CASH_ADVANCE
+  PIX_ADVANCE
+  STORE_PRODUCT_WITHDRAWAL
+}
+
+enum EmployeeAdvanceStatus {
+  PENDING
+  DEDUCTED_PAYROLL
+  CANCELLED
 }
