@@ -68,8 +68,8 @@ export async function getUsersAction() {
  * Delete a user (soft delete)
  */
 export async function deleteUserAction(id: string) {
-  const session = await requirePermission('USUARIOS', 'DELETE');
   try {
+    const session = await requirePermission('USUARIOS', 'DELETE');
     if (session.userId === id) {
       return { success: false, error: 'Você não pode excluir seu próprio usuário.' };
     }
@@ -146,6 +146,9 @@ export async function deleteUserAction(id: string) {
       throw e;
     }
   } catch (error: any) {
+    if (error?.message === 'ACCESS_NOT_ALLOWED' || error?.message?.includes('permissão')) {
+      return { success: false, error: 'Você não tem permissão para excluir usuários.' };
+    }
     return { success: false, error: 'Erro ao excluir usuário.' };
   }
 }

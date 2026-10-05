@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getUsersAction } from '@/lib/users/user-actions';
+import { getUsersAction, deleteUserAction } from '@/lib/users/user-actions';
 import { ConfigPageHeader, ConfigStatusBadge, ConfigDataTable, ConfigDataTableHeader, ConfigDataTableBody, ConfigDataTableRow, ConfigDataTableHead, ConfigDataTableCell } from '@/components/configuracoes/config-ui';
 import { Button } from '@/components/ui/button';
 import { Plus, Search, Edit2, KeyRound, Trash2 } from 'lucide-react';
@@ -82,8 +82,7 @@ export default function UsuariosPage() {
   const handleDelete = async () => {
     if (!deleteUserId) return;
     try {
-      // We will need to import deleteUserAction
-      const { deleteUserAction } = await import('@/lib/users/user-actions');
+      
       const res = await deleteUserAction(deleteUserId);
       if (res.success) {
         toast({ title: 'Usuário excluído com sucesso.' });
@@ -91,8 +90,9 @@ export default function UsuariosPage() {
       } else {
         toast({ title: 'Erro ao excluir', description: res.error, variant: 'destructive' });
       }
-    } catch (err) {
-      toast({ title: 'Erro', description: 'Erro inesperado.', variant: 'destructive' });
+    } catch (err: any) {
+      console.error('Delete User Error:', err);
+      toast({ title: 'Erro', description: err.message || 'Erro inesperado.', variant: 'destructive' });
     } finally {
       setIsDeleteOpen(false);
       setDeleteUserId(null);
