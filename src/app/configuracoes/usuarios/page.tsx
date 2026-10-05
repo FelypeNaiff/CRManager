@@ -181,9 +181,9 @@ export default function UsuariosPage() {
                         {can('USUARIOS', 'UPDATE') && <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => handleOpenEdit(user.id)} title="Editar Usuário">
                           <Edit2 className="h-4 w-4" />
                         </Button>}
-                        {can('USUARIOS', 'DELETE') && <Button variant="outline" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleOpenDelete(user.id)} title="Excluir Usuário">
+                        <Button variant="outline" size="icon" className="h-8 w-8 text-rose-600 hover:text-rose-700 hover:bg-rose-50" onClick={() => handleOpenDelete(user.id)} title="Excluir Usuário">
                           <Trash2 className="h-4 w-4" />
-                        </Button>}
+                        </Button>
                       </div>
                     </ConfigDataTableCell>
                   </ConfigDataTableRow>

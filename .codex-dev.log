@@ -14967,3 +14967,6 @@ prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module"
  ✓ Compiled middleware in 8ms
  ✓ Compiled middleware in 2ms
  ✓ Compiled middleware in 2ms
+ ✓ Compiled in 3.4s
+ ✓ Compiled in 200ms
+ ✓ Compiled in 144ms
