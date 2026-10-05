@@ -98,28 +98,53 @@ export async function deleteUserAction(id: string) {
       }
     }
 
-    const deletedUser = await prisma.$transaction(async (tx) => {
-      const updated = await tx.user.update({
-        where: tenantEntityWhere(id, session.companyId),
-        data: {
-          status: 'DELETED',
-          permitirAcesso: false,
-        },
+    try {
+      // Tentativa de Hard Delete (exclusão definitiva)
+      const deletedUser = await prisma.$transaction(async (tx) => {
+        const deleted = await tx.user.delete({
+          where: tenantEntityWhere(id, session.companyId),
+        });
+
+        await writeActivityLog({
+          context: session,
+          action: 'USER_DELETE',
+          module: 'USERS',
+          recordId: id,
+          details: 'Usuário excluído definitivamente do sistema',
+          metadata: { name: deleted.name, email: deleted.email },
+        }, { policy: 'CRITICAL', tx });
+
+        return deleted;
       });
 
-      await writeActivityLog({
-        context: session,
-        action: 'USER_DELETE',
-        module: 'USERS',
-        recordId: id,
-        details: 'Usuário excluído logicamente',
-        metadata: { name: updated.name, email: updated.email },
-      }, { policy: 'CRITICAL', tx });
+      return { success: true, data: { id: deletedUser.id }, message: 'Usuário excluído definitivamente.' };
+    } catch (e: any) {
+      // Se houver erro de chave estrangeira (P2003), fazemos exclusão lógica (Soft Delete)
+      if (e.code === 'P2003') {
+        const deletedUser = await prisma.$transaction(async (tx) => {
+          const updated = await tx.user.update({
+            where: tenantEntityWhere(id, session.companyId),
+            data: {
+              status: 'DELETED',
+              permitirAcesso: false,
+            },
+          });
 
-      return updated;
-    });
+          await writeActivityLog({
+            context: session,
+            action: 'USER_DELETE',
+            module: 'USERS',
+            recordId: id,
+            details: 'Usuário arquivado/excluído logicamente (já possuía movimentações)',
+            metadata: { name: updated.name, email: updated.email },
+          }, { policy: 'CRITICAL', tx });
 
-    return { success: true, data: { id: deletedUser.id } };
+          return updated;
+        });
+        return { success: true, data: { id: deletedUser.id }, message: 'Usuário arquivado (não pôde ser excluído definitivamente pois já possui movimentações).' };
+      }
+      throw e;
+    }
   } catch (error: any) {
     return { success: false, error: 'Erro ao excluir usuário.' };
   }
