@@ -25,6 +25,7 @@ export const ProductVariantInputSchema = z.object({
   heightCm: z.number().min(0).optional().nullable(),
   widthCm: z.number().min(0).optional().nullable(),
   lengthCm: z.number().min(0).optional().nullable(),
+  currentStock: z.number().optional().nullable(),
 });
 
 export const ProductSchema = z.object({
@@ -53,6 +54,7 @@ export const ProductSchema = z.object({
   barcode: z.string().optional().nullable(),
   barcodeType: z.string().optional().nullable(),
   minimumStock: z.number().min(0, 'Estoque mínimo deve ser maior ou igual a 0').default(0).optional(),
+  currentStock: z.number().optional().nullable(),
 });
 
 export const InventoryMovementSchema = z.object({

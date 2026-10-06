@@ -235,7 +235,8 @@ export async function createProductVariant(productId: string, input: any) {
     const variant = await prisma.$transaction(async tx => {
       const product = await tx.product.findFirst({ where: { id: productId, companyId: session.companyId, isActive: true }, select: { id: true } });
       if (!product) throw new Error('Produto não encontrado.');
-      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...parsed.data, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock) } });
+      const { currentStock, ...restData } = parsed.data;
+      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...restData, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock), currentStock: new Prisma.Decimal(currentStock || 0) } });
       await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_CREATE', module: 'PRODUCT_VARIANTS', recordId: created.id, details: `Variação "${created.name}" criada.`, metadata: { productId, sku: created.sku, name: created.name } }, { policy: 'CRITICAL', tx });
       return created;
     });
@@ -252,7 +253,7 @@ export async function updateVariant(id: string, input: any) {
       const before = await tx.productVariant.findFirst({ where: tenantWhere(id, session.companyId) });
       if (!before) throw new Error('Variação não encontrada.');
       const data: any = { ...parsed.data };
-      for (const field of ['costPrice', 'salePrice', 'minimumStock'] as const) if (data[field] !== undefined) data[field] = new Prisma.Decimal(data[field]);
+      for (const field of ['costPrice', 'salePrice', 'minimumStock', 'currentStock'] as const) if (data[field] !== undefined && data[field] !== null) data[field] = new Prisma.Decimal(data[field]);
       const updated = await tx.productVariant.update({ where: tenantWhere(id, session.companyId), data });
       const changes: AuditChanges = {};
       for (const field of ['name','sku','barcode','barcodeType','costPrice','salePrice','minimumStock'] as const) addAuditChange(changes, field, before[field], updated[field]);

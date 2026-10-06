@@ -202,16 +202,16 @@ export default function ProductForm({ productId }: { productId?: string }) {
     });
   }, [loadDependencies, productId, loadProductData]);
 
-  if (isLoading) {
-    return <div className="p-8 text-center text-muted-foreground">Carregando dados do produto...</div>;
-  }
-
   const [isNewGrupoDialogOpen, setIsNewGrupoDialogOpen] = useState(false)
   const [isNewFornecedorDialogOpen, setIsNewFornecedorDialogOpen] = useState(false)
   const [newGrupoName, setNewGrupoName] = useState("")
   const [newFornecedorName, setNewFornecedorName] = useState("")
   const [isCreatingGrupo, setIsCreatingGrupo] = useState(false)
   const [isCreatingFornecedor, setIsCreatingFornecedor] = useState(false)
+
+  if (isLoading) {
+    return <div className="p-8 text-center text-muted-foreground">Carregando dados do produto...</div>;
+  }
 
   const handleFieldChange = (field: string, value: any) => {
     setForm(prev => ({ ...prev, [field]: value }))
@@ -434,6 +434,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
         pdvEligible: form.comercializavelPdv,
         commissionRate: safeNumber(form.comissaoVendedor) ?? null,
         minimumStock: form.possuiVariacoes === "Não" ? safeNumber(form.estoqueMinimo) : 0,
+        currentStock: form.possuiVariacoes === "Não" ? safeNumber(form.estoqueAtual) : 0,
       });
 
       if (!productRes.success || !productRes.data) {
@@ -453,6 +454,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
             costPrice: safeNumber(form.custoBase) ?? 0,
             salePrice: safeNumber(form.valorVenda) ?? 0,
             minimumStock: 0,
+            currentStock: Number(variacao.estoqueAtual) || 0,
           });
         }
       }
@@ -904,7 +906,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                       <div className="space-y-2">
                         <Label>Quantidade atual</Label>
                         <div className="relative">
-                          <Input type="number" disabled value={form.estoqueAtual} onChange={(e) => handleFieldChange("estoqueAtual", e.target.value)} className="pr-12" />
+                          <Input type="number" value={form.estoqueAtual} onChange={(e) => handleFieldChange("estoqueAtual", e.target.value)} className="pr-12" />
                           <div className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400">{form.unidadeMedida}</div>
                         </div>
                       </div>
@@ -996,7 +998,7 @@ export default function ProductForm({ productId }: { productId?: string }) {
                                       </td>
                                     )
                                   })}
-                                  <td className="p-2"><Input type="number" disabled value={v.estoqueAtual} className="h-8 w-24 bg-slate-50 text-center" /></td>
+                                  <td className="p-2"><Input type="number" value={v.estoqueAtual} onChange={(e) => updateVariacao(v.id, 'estoqueAtual', e.target.value)} className="h-8 w-24 text-center" /></td>
                                   <td className="p-2 text-center">
                                     <Button variant="ghost" size="icon" onClick={() => removeVariacao(v.id)} className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50"><Trash2 className="w-4 h-4" /></Button>
                                   </td>

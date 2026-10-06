@@ -18,6 +18,7 @@ export type CanonicalProductWrite = {
   cest?: string | null; fiscalOrigin?: string | null; commissionRate?: Prisma.Decimal.Value | null;
   imageUrl?: string | null; thumbnailUrl?: string | null; galleryUrls?: string[]; barcodeType?: string | null;
   minimumStock?: Prisma.Decimal.Value;
+  currentStock?: Prisma.Decimal.Value;
 };
 
 async function resolveSupplier(tx: Prisma.TransactionClient, context: ServerAuthContext, name?: string | null) {
@@ -49,7 +50,7 @@ export async function createCanonicalProduct(tx: Prisma.TransactionClient, conte
   const variant = await tx.productVariant.create({ data: {
     companyId: context.companyId, productId: product.id, name: 'Único', sku: input.sku.trim(), barcode: input.barcode?.trim() || null,
     barcodeType: input.barcodeType ?? null, costPrice: new Prisma.Decimal(input.costPrice ?? 0), salePrice: new Prisma.Decimal(input.salePrice ?? 0),
-    minimumStock: new Prisma.Decimal(input.minimumStock ?? 0),
+    minimumStock: new Prisma.Decimal(input.minimumStock ?? 0), currentStock: new Prisma.Decimal(input.currentStock ?? 0),
   } });
   await tx.productPriceHistory.create({ data: { productId: product.id, oldCostPrice: new Prisma.Decimal(0),
     newCostPrice: variant.costPrice, oldSalePrice: new Prisma.Decimal(0), newSalePrice: variant.salePrice,
