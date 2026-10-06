@@ -14973,3 +14973,66 @@ prisma:query SELECT "public"."permissions"."id", "public"."permissions"."module"
  ✓ Compiled in 1774ms
  ✓ Compiled in 226ms
  ✓ Compiled in 153ms
+ ✓ Compiled in 321ms
+ ✓ Compiled in 144ms
+ ✓ Compiled in 193ms
+ ✓ Compiled in 1309ms
+ ✓ Compiled middleware in 69ms
+ ✓ Compiled middleware in 3ms
+ ✓ Compiled middleware in 8ms
+ ⨯ ./src/lib/crm/grades-actions.ts:6:1
+Module not found: Can't resolve '@/lib/auth/tenant-security'
+[0m [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m'@/lib/prisma'[39m[33m;[39m
+ [90m 5 |[39m [36mimport[39m { requirePermission } [36mfrom[39m [32m'@/lib/auth/permissions'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 6 |[39m [36mimport[39m { tenantWhere } [36mfrom[39m [32m'@/lib/auth/tenant-security'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 7 |[39m [36mimport[39m { publicActionError } [36mfrom[39m [32m'@/lib/auth/public-action-error'[39m[33m;[39m
+ [90m 8 |[39m [36mimport[39m { writeActivityLog } [36mfrom[39m [32m'@/lib/auth/activity-log'[39m[33m;[39m
+ [90m 9 |[39m[0m
+
+Import map: aliased to relative './src/lib/auth/tenant-security' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ⨯ ./src/lib/crm/grades-actions.ts:6:1
+Module not found: Can't resolve '@/lib/auth/tenant-security'
+[0m [90m 4 |[39m [36mimport[39m { prisma } [36mfrom[39m [32m'@/lib/prisma'[39m[33m;[39m
+ [90m 5 |[39m [36mimport[39m { requirePermission } [36mfrom[39m [32m'@/lib/auth/permissions'[39m[33m;[39m
+[31m[1m>[22m[39m[90m 6 |[39m [36mimport[39m { tenantWhere } [36mfrom[39m [32m'@/lib/auth/tenant-security'[39m[33m;[39m
+ [90m   |[39m [31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m[31m[1m^[22m[39m
+ [90m 7 |[39m [36mimport[39m { publicActionError } [36mfrom[39m [32m'@/lib/auth/public-action-error'[39m[33m;[39m
+ [90m 8 |[39m [36mimport[39m { writeActivityLog } [36mfrom[39m [32m'@/lib/auth/activity-log'[39m[33m;[39m
+ [90m 9 |[39m[0m
+
+Import map: aliased to relative './src/lib/auth/tenant-security' inside of [project]/
+
+
+https://nextjs.org/docs/messages/module-not-found
+
+
+ ✓ Compiled in 77ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled middleware in 3ms
+ ✓ Compiled middleware in 4ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled in 616ms
+ ✓ Compiled in 242ms
+ ✓ Compiled in 222ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled middleware in 14ms
+ ✓ Compiled in 169ms
+ ✓ Compiled in 73ms
+ ✓ Compiled middleware in 14ms
+ ✓ Compiled in 1289ms
+ ✓ Compiled in 369ms
+ ✓ Compiled middleware in 14ms
+ ✓ Compiled middleware in 4ms
+ ✓ Compiled middleware in 1ms
+ ✓ Compiled middleware in 9ms
+ ✓ Compiled middleware in 1ms
+ ✓ Compiled middleware in 2ms
+ ✓ Compiled in 3.1s
