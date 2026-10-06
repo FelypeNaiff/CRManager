@@ -49,10 +49,28 @@ export async function getProductCategories() {
     const categories = await prisma.productCategory.findMany({
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { products: { where: { isActive: true } } }
+        }
+      }
     });
     return { success: true, data: serializePrisma(categories) };
   } catch (error: any) {
     return { success: false, error: publicActionError(error, 'Erro ao buscar categorias de produtos.') };
+  }
+}
+
+export async function getProductCategoryById(id: string) {
+  const session = await requirePermission('PRODUTOS', 'VIEW');
+  try {
+    const category = await prisma.productCategory.findFirst({
+      where: tenantWhere(id, session.companyId)
+    });
+    if (!category) return { success: false, error: 'Categoria não encontrada.' };
+    return { success: true, data: serializePrisma(category) };
+  } catch (error: any) {
+    return { success: false, error: publicActionError(error, 'Erro ao buscar categoria de produto.') };
   }
 }
 
@@ -106,6 +124,21 @@ export async function updateCategory(id: string, input: any) {
 export async function archiveProductCategory(id: string) {
   const session = await requirePermission('PRODUTOS', 'DELETE');
   try {
+    const category = await prisma.productCategory.findFirst({
+      where: tenantWhere(id, session.companyId),
+      include: {
+        _count: {
+          select: { products: { where: { isActive: true } } }
+        }
+      }
+    });
+
+    if (!category) return { success: false, error: 'Categoria não encontrada.' };
+
+    if (category._count.products > 0) {
+      return { success: false, error: 'Não é possível excluir o grupo, pois existem produtos ativos vinculados a ele.' };
+    }
+
     const result = await prisma.productCategory.updateMany({ where: { id, companyId: session.companyId, isActive: true }, data: { isActive: false, archivedAt: new Date() } });
     if (!result.count) return { success: false, error: 'Categoria não encontrada.' };
     await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EXCLUIR', module: 'PRODUTOS', recordId: id, details: 'Categoria inativada.' });
@@ -246,6 +279,7 @@ export async function archiveProductVariant(id: string) {
 // =========================================================================
 // Product Actions
 // =========================================================================
+
 
 export async function getProducts(filters?: { categoryId?: string; search?: string } & PaginationParams) {
   const session = await requirePermission('PRODUTOS', 'VIEW');

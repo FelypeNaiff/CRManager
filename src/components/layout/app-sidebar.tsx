@@ -96,7 +96,7 @@ const navItems = [
     icon: ShoppingCart,
     items: [
       { title: "Vendas Produto", url: "/comercial/vendas", icon: ShoppingCart },
-      { title: "Vendas Balcão - PDV", url: "/pdv/vendas", icon: Store },
+      { title: "Vendas Balcão - PDV", url: "/pdv", icon: Store },
       { title: "Orçamentos", url: "/comercial/orcamentos", icon: FileText },
       { title: "Metas", url: "/comercial/metas", icon: PieChart },
       { title: "Comissões", url: "/comercial/comissoes", icon: DollarSign },
@@ -119,16 +119,17 @@ const navItems = [
     icon: Package,
     items: [
       { title: "Gerenciar Produtos", url: "/produtos", icon: Package },
-      { title: "Movimentações", url: "/movimentacoes", icon: ArrowLeftRight },
+      { title: "Movimentações", url: "/estoque/movimentacoes", icon: ArrowLeftRight },
       { title: "Fornecedores", url: "/fornecedores", icon: Truck },
-      { title: "Etiquetas", url: "/etiquetas", icon: Tag },
+      { title: "Pedidos de Fábrica", url: "/fornecedores/pedidos-fabrica", icon: Truck },
+      { title: "Etiquetas", url: "/produtos/etiquetas", icon: Tag },
       { 
         title: "Opções Auxiliares",
         icon: Boxes,
         items: [
-          { title: "Grupos de Produtos", url: "/grupos-produtos" },
+          { title: "Grupos de Produtos", url: "/produtos/grupos" },
           { title: "Unidades de Produtos", url: "/unidades-produtos" },
-          { title: "Grades / Variações", url: "/grades-variacoes" }
+          { title: "Grades / Variações", url: "/produtos/grades" }
         ]
       }
     ],

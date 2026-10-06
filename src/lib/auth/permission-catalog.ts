@@ -176,6 +176,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { module: 'USUARIOS', action: 'VIEW', label: 'Listar Usuários', description: 'Visualizar equipe.', category: 'Segurança', critical: false, routePatterns: ['^/configuracoes/usuarios', '^/usuarios'] },
   { module: 'USUARIOS', action: 'CREATE', label: 'Criar Usuários', description: 'Registrar novos membros na equipe.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'UPDATE', label: 'Editar Usuários', description: 'Alterar nomes, emails e e-mails.', category: 'Segurança', critical: true },
+  { module: 'USUARIOS', action: 'DELETE', label: 'Excluir Usuários', description: 'Remover usuário ou inativar seu acesso definitivamente.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'DISABLE', label: 'Desativar Usuários', description: 'Bloquear acesso do funcionário.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'RESET_PIN', label: 'Resetar PIN', description: 'Gerar uma nova senha operacional forçada.', category: 'Segurança', critical: true },
 

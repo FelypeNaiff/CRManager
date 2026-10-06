@@ -99,51 +99,71 @@ export async function deleteUserAction(id: string) {
     }
 
     try {
-      // Tentativa de Hard Delete (exclusão definitiva)
+      // 1. Tenta a exclusão definitiva caso o usuário não tenha histórico operacional
       const deletedUser = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findFirst({
+          where: { id, companyId: session.companyId }
+        });
+        if (!user) throw new Error('USUARIO_NAO_ENCONTRADO');
+
         const deleted = await tx.user.delete({
-          where: tenantEntityWhere(id, session.companyId),
+          where: { id } // No Prisma, use apenas o id único
         });
 
         await writeActivityLog({
           context: session,
           action: 'USER_DELETE',
-          module: 'USERS',
+          module: 'USUARIOS',
           recordId: id,
-          details: 'Usuário excluído definitivamente do sistema',
-          metadata: { name: deleted.name, email: deleted.email },
+          details: `Usuário "${deleted.name}" excluído definitivamente do sistema`,
+          metadata: { email: deleted.email }
         }, { policy: 'CRITICAL', tx });
 
         return deleted;
       });
 
-      return { success: true, data: { id: deletedUser.id }, message: 'Usuário excluído definitivamente.' };
-    } catch (e: any) {
-      // Se houver erro de chave estrangeira (P2003), fazemos exclusão lógica (Soft Delete)
-      if (e.code === 'P2003') {
-        const deletedUser = await prisma.$transaction(async (tx) => {
-          const updated = await tx.user.update({
-            where: tenantEntityWhere(id, session.companyId),
+      return { success: true, message: 'Usuário excluído com sucesso.' };
+    } catch (error: any) {
+      // 2. Se houver registros vinculados (vendas, caixa, estoque, auditoria), faz Soft Delete inteligente
+      if (error.code === 'P2003' || error.message?.includes('foreign key')) {
+        await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findFirst({
+            where: { id, companyId: session.companyId }
+          });
+          if (!user) throw new Error('USUARIO_NAO_ENCONTRADO');
+
+          // Libera o e-mail para que possa ser reutilizado no futuro caso recadastrado
+          const anonymizedEmail = `deleted_${Date.now()}_${user.email}`;
+          const anonymizedUsername = user.username ? `deleted_${Date.now()}_${user.username}` : null;
+
+          await tx.user.update({
+            where: { id },
             data: {
               status: 'DELETED',
               permitirAcesso: false,
-            },
+              email: anonymizedEmail,
+              username: anonymizedUsername,
+            }
           });
 
           await writeActivityLog({
             context: session,
             action: 'USER_DELETE',
-            module: 'USERS',
+            module: 'USUARIOS',
             recordId: id,
-            details: 'Usuário arquivado/excluído logicamente (já possuía movimentações)',
-            metadata: { name: updated.name, email: updated.email },
+            details: `Acesso do usuário "${user.name}" revogado e arquivado (possuía histórico operacional)`,
+            metadata: { originalEmail: user.email }
           }, { policy: 'CRITICAL', tx });
-
-          return updated;
         });
-        return { success: true, data: { id: deletedUser.id }, message: 'Usuário arquivado (não pôde ser excluído definitivamente pois já possui movimentações).' };
+
+        return { success: true, message: 'Usuário arquivado com sucesso. O histórico de movimentações foi preservado.' };
       }
-      throw e;
+
+      if (error.message === 'USUARIO_NAO_ENCONTRADO') {
+        return { success: false, error: 'Usuário não encontrado.' };
+      }
+
+      return { success: false, error: 'Não foi possível excluir o usuário.' };
     }
   } catch (error: any) {
     if (error?.message === 'ACCESS_NOT_ALLOWED' || error?.message?.includes('permissão')) {

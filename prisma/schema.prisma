@@ -67,6 +67,8 @@ model Company {
   productVariants                      ProductVariant[]
   roles                                Role[]
   suppliers                            Supplier[]
+  factoryOrders                        FactoryOrder[]
+  factoryOrderItems                    FactoryOrderItem[]
   users                                User[]
   sales                                Sale[]
   exchangeReturns                      ExchangeReturn[]
@@ -81,6 +83,9 @@ model Company {
   stockTransfers                       StockTransfer[]
   inventorySessions                    InventorySession[]
   employeeAdvances                     EmployeeAdvance[]
+  productGrades                        ProductGrade[]
+  productGradeOptions                  ProductGradeOption[]
+  productLabelTemplates                ProductLabelTemplate[]
 
   @@map("companies")
 }
@@ -331,21 +336,37 @@ model ProductCategory {
 }
 
 model Supplier {
-  id               String            @id @default(uuid())
-  companyId        String            @map("company_id")
-  name             String
-  cnpjCpf          String?           @map("cnpj_cpf")
-  email            String?
-  phone            String?
-  isActive         Boolean           @default(true) @map("is_active")
-  archivedAt       DateTime?         @map("archived_at")
-  legacyFirebaseId String?           @map("legacy_firebase_id")
-  createdAt        DateTime          @default(now()) @map("created_at")
-  updatedAt        DateTime          @updatedAt @map("updated_at")
-  products         Product[]
-  productLinks     ProductSupplier[]
-  company          Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                String            @id @default(uuid())
+  companyId         String            @map("company_id")
+  name              String            // Razão Social ou Nome Completo
+  tradeName         String?           @map("trade_name") // Nome Fantasia
+  cnpjCpf           String?           @map("cnpj_cpf")
+  stateRegistration String?           @map("state_registration") // Inscrição Estadual
+  personType        String            @default("JURIDICA") @map("person_type") // JURIDICA ou FISICA
+  email             String?
+  phone             String?
+  mobile            String?           // Celular / WhatsApp
+  contactName       String?           @map("contact_name") // Nome do representante
+  cep               String?
+  street            String?
+  number            String?
+  complement        String?
+  neighborhood      String?
+  city              String?
+  state             String?           // UF (2 caracteres)
+  notes             String?           // Observações / Condições
+  isActive          Boolean           @default(true) @map("is_active")
+  archivedAt        DateTime?         @map("archived_at")
+  legacyFirebaseId  String?           @map("legacy_firebase_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
+  products          Product[]
+  productLinks      ProductSupplier[]
+  factoryOrders     FactoryOrder[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, name])
   @@index([name])
   @@map("suppliers")
 }
@@ -1540,4 +1561,124 @@ enum EmployeeAdvanceStatus {
   PENDING
   DEDUCTED_PAYROLL
   CANCELLED
+}
+
+model ProductGrade {
+  id        String               @id @default(uuid())
+  companyId String               @map("company_id")
+  name      String
+  isActive  Boolean              @default(true) @map("is_active")
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  options   ProductGradeOption[]
+  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, name])
+  @@map("product_grades")
+}
+
+model ProductGradeOption {
+  id        String       @id @default(uuid())
+  companyId String       @map("company_id")
+  gradeId   String       @map("grade_id")
+  name      String
+  order     Int          @default(0)
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  grade     ProductGrade @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([gradeId])
+  @@index([companyId])
+  @@map("product_grade_options")
+}
+
+model ProductLabelTemplate {
+  id                    String   @id @default(uuid())
+  companyId             String   @map("company_id")
+  name                  String
+  presetName            String?  @map("preset_name") // ex: "PIMACO - A4051/A4251/A4351"
+  paperSize             String   @default("A4 – 21,0 X 29,7 cm") @map("paper_size")
+  labelHeightCm         Decimal  @default(2.12) @map("label_height_cm") @db.Decimal(5, 2)
+  labelWidthCm          Decimal  @default(3.82) @map("label_width_cm") @db.Decimal(5, 2)
+  columnsOnPage         Int      @default(5) @map("columns_on_page")
+  rowsOnPage            Int      @default(13) @map("rows_on_page")
+  marginTopCm           Decimal  @default(1.07) @map("margin_top_cm") @db.Decimal(5, 2)
+  marginLeftCm          Decimal  @default(0.45) @map("margin_left_cm") @db.Decimal(5, 2)
+  verticalPitchCm       Decimal  @default(2.12) @map("vertical_pitch_cm") @db.Decimal(5, 2)
+  horizontalPitchCm     Decimal  @default(4.07) @map("horizontal_pitch_cm") @db.Decimal(5, 2)
+  topDescription        String?  @map("top_description")
+  maxCharsProductName   Int?     @map("max_chars_product_name")
+  fontFamily            String   @default("Helvetica") @map("font_family")
+  fontSizePt            Int      @default(6) @map("font_size_pt")
+  showInternalCode      Boolean  @default(true) @map("show_internal_code")
+  showBarcode           Boolean  @default(true) @map("show_barcode")
+  showBarcodeDigits     Boolean  @default(false) @map("show_barcode_digits")
+  barcodePosition       String   @default("Inferior") @map("barcode_position")
+  showPrice             Boolean  @default(true) @map("show_price")
+  priceFontSize         String   @default("Padrão") @map("price_font_size")
+  fieldPositions        Json?    @map("field_positions")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("product_label_templates")
+}
+
+model FactoryOrder {
+  id                   String             @id @default(uuid())
+  companyId            String             @map("company_id")
+  orderNumber          String             @map("order_number") // ex: "ped_1790441194348"
+  supplierId           String?            @map("supplier_id")
+  factoryName          String             @map("factory_name") // ex: "CATTAI", "KAMYLUS", "KYLY"
+  commercialDiscount   Decimal            @default(0) @map("commercial_discount") @db.Decimal(5, 2)
+  applySuframa         Boolean            @default(false) @map("apply_suframa")
+  suframaDiscount      Decimal            @default(0) @map("suframa_discount") @db.Decimal(5, 2)
+  status               String             @default("draft") // draft, in_production, completed, cancelled
+  operatorName         String             @map("operator_name")
+  totalPieces          Int                @default(0) @map("total_pieces")
+  totalGross           Decimal            @default(0) @map("total_gross") @db.Decimal(12, 2)
+  totalNet             Decimal            @default(0) @map("total_net") @db.Decimal(12, 2)
+  notes                String?
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  items                FactoryOrderItem[]
+  supplier             Supplier?          @relation(fields: [supplierId], references: [id])
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([orderNumber])
+  @@map("factory_orders")
+}
+
+model FactoryOrderItem {
+  id                      String       @id @default(uuid())
+  companyId               String       @map("company_id")
+  orderId                 String       @map("order_id")
+  partCode                String       @map("part_code") // Cód da Peça (ex: "8027", "8037")
+  reference               String       // Referência/Cor (ex: "VERMELHO", "AZUL", "2037+2037")
+  sizes                   String[]     // Tamanhos selecionados (ex: ["2", "4"] ou ["6", "8", "10", "12"])
+  quantity                Int          @default(1)
+  unitPrice               Decimal      @map("unit_price") @db.Decimal(10, 2)
+  priceWithCommercialDesc Decimal      @map("price_with_commercial_desc") @db.Decimal(10, 2)
+  priceWithSuframa        Decimal      @map("price_with_suframa") @db.Decimal(10, 2)
+  totalPrice              Decimal      @map("total_price") @db.Decimal(12, 2)
+  notes                   String?      // Observação
+  orderIndex              Int          @default(0) @map("order_index")
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+
+  order                   FactoryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  company                 Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("factory_order_items")
 }

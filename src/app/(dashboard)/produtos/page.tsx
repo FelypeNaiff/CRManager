@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown } from "lucide-react"
+import { Package, Plus, Loader2, Search, ChevronDown, List, Eye, Pencil, X, Minus, AlertCircle, FileSpreadsheet, FileText, Download, DollarSign, Tag as TagIcon, Trash2, ArrowLeftRight, History, Copy, ArrowUpDown, ArrowUp, ArrowDown, Layers } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import {
   DropdownMenu,
@@ -350,9 +350,7 @@ export default function ProdutosPage() {
       {/* Breadcrumb simulado */}
       <div className="flex justify-end text-[11px] text-muted-foreground uppercase tracking-wider mb-2">
         <span className="cursor-pointer hover:underline">Início</span>
-        <span className="mx-2">-</span>
-        <span className="cursor-pointer hover:underline">Produtos</span>
-        <span className="mx-2">-</span>
+        <span className="mx-2">&gt;</span>\n        <span className="cursor-pointer hover:underline">Produtos</span>\n        <span className="mx-2">&gt;</span>
         <span className="font-semibold text-foreground">Listar</span>
       </div>
 
@@ -367,7 +365,7 @@ export default function ProdutosPage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-2 border shadow-sm rounded-sm">
         <div className="flex items-center gap-1">
           <Button 
-            className="btn-erp-green gap-1 h-8 rounded-sm px-3 text-[13px]" 
+            className="bg-[#1e2229] hover:bg-black text-white gap-1 h-8 rounded-sm px-3 text-[13px]" 
             onClick={() => router.push("/produtos/novo")}
           >
             <Plus className="h-3.5 w-3.5" /> Adicionar
@@ -414,9 +412,9 @@ export default function ProdutosPage() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="h-8 rounded-sm w-full sm:w-[300px] border-gray-300 focus-visible:ring-0 focus-visible:border-primary text-[13px]"
-            placeholder="Pesquisar..."
+            placeholder="Buscar"
           />
-          <Button className="btn-erp-dark h-8 w-8 p-0 rounded-sm shrink-0">
+          <Button className="bg-[#1e2229] hover:bg-black text-white h-8 w-8 p-0 rounded-sm shrink-0">
             <Search className="h-3.5 w-3.5" />
           </Button>
           <Button 
@@ -500,7 +498,7 @@ export default function ProdutosPage() {
               <tr>
                 {cols.codigo && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('codigo')}>Código {renderSortIcon('codigo')}</th>}
                 {cols.nome && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('nome')}>Nome {renderSortIcon('nome')}</th>}
-                {cols.valor && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('valor')}>Valor {renderSortIcon('valor')}</th>}
+                {cols.valor && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('valor')}>Vr. varejo {renderSortIcon('valor')}</th>}
                 {cols.estoque && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('estoque')}>Estoque {renderSortIcon('estoque')}</th>}
                 {cols.cadastrado && <th className="px-3 py-2 font-semibold cursor-pointer hover:bg-gray-100 select-none" onClick={() => handleSort('cadastrado')}>Cadastrado em {renderSortIcon('cadastrado')}</th>}
                 <th className="px-3 py-2 font-semibold text-center w-36">Ações</th>
