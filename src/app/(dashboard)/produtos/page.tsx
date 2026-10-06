@@ -763,8 +763,8 @@ export default function ProdutosPage() {
         onOpenChange={setShowAuthDialog}
         authorizationId={authorizationId}
         authorizationType={authType}
-        title={authType === "NEGATIVE_STOCK" ? "Autorização de Estoque Negativo" : "Autorização de Ajuste de Estoque"}
-        description={authType === "NEGATIVE_STOCK" ? "Esta operação resultará em estoque negativo e exige autorização de um gerente." : "Este ajuste manual de estoque exige aprovação de um gerente."}
+        title={authType === "NEGATIVE_STOCK" ? "Autorização de Estoque Negativo" : "Autorização de Administrador Necessária"}
+        description={authType === "NEGATIVE_STOCK" ? "Esta operação resultará em estoque negativo e exige autorização de um administrador." : "Este ajuste manual de estoque exige aprovação de um administrador."}
         amount={0}
         onAuthorized={(auth) => handleSaveStock(auth.id)}
       />

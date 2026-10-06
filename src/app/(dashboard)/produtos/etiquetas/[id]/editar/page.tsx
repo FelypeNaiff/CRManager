@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Editar Etiqueta - CRManager',
 };
 
-export default function EditarEtiquetaPage({ params }: { params: { id: string } }) {
-  return <LabelForm templateId={params.id} />;
+export default async function EditarEtiquetaPage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  return <LabelForm templateId={resolvedParams.id} />;
 }

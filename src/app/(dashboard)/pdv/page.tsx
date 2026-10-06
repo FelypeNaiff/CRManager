@@ -20,6 +20,7 @@ import { listSellersAction } from "@/lib/sales/actions/list-sellers-action";
 import { listPaymentMethodsAction } from "@/lib/sales/actions/list-payment-methods-action";
 import { createSaleAction } from "@/lib/sales/actions/create-sale-action";
 import { saveDraftSaleAction, getDraftSaleAction } from "@/lib/sales/actions/draft-sale-actions";
+import { AuthorizationDialog } from "@/components/authorization/authorization-dialog";
 
 type CartItem = {
   id: string; // pseudo-id to avoid react key collisions
@@ -66,6 +67,11 @@ export default function PdvPage() {
   // Success Modal State
   const [isSuccessOpen, setIsSuccessOpen] = useState(false);
   const [successData, setSuccessData] = useState<any>(null);
+
+  // Auth Modal State
+  const [authorizationId, setAuthorizationId] = useState("");
+  const [authType, setAuthType] = useState<any>("");
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
 
   // Fetch initial data
   useEffect(() => {
@@ -258,7 +264,7 @@ export default function PdvPage() {
     setCurrentPaymentAmount((Math.max(0, remainingToPay - amt)).toFixed(2));
   };
 
-  const handleFinalizeSale = async () => {
+  const handleFinalizeSale = async (authId?: string) => {
     if (remainingToPay > 0 && total > 0) {
       return toast({ variant: "destructive", title: "O pagamento não foi integralizado." });
     }
@@ -303,15 +309,23 @@ export default function PdvPage() {
           amount: p.amount,
           installments: p.installments
         })),
-        draftId: draftId || undefined
+        draftId: draftId || undefined,
+        authorizationId: typeof authId === 'string' ? authId : undefined
       };
       const res = await createSaleAction(payload);
       if (res.success && res.sale) {
         setSuccessData(res.sale);
         setIsPaymentOpen(false);
         setIsSuccessOpen(true);
+        setShowAuthDialog(false);
       } else {
-        toast({ variant: "destructive", title: "Erro", description: res.error });
+        if ('requireAuthorization' in res && res.requireAuthorization) {
+          setAuthorizationId(res.authorizationId as string);
+          setAuthType("DISCOUNT");
+          setShowAuthDialog(true);
+        } else {
+          toast({ variant: "destructive", title: "Erro", description: res.error as string });
+        }
       }
     } catch (err: any) {
       toast({ variant: "destructive", title: "Erro fatal ao fechar venda." });
@@ -647,7 +661,7 @@ export default function PdvPage() {
                 <Button 
                   className="w-full h-14 text-xl font-bold bg-[#5cb85c] hover:bg-[#4cae4c] text-white disabled:opacity-50"
                   disabled={remainingToPay > 0 || isSubmitting}
-                  onClick={handleFinalizeSale}
+                  onClick={() => handleFinalizeSale()}
                 >
                   {isSubmitting ? <Loader2 className="animate-spin h-6 w-6 mx-auto" /> : "Confirmar Venda"}
                 </Button>
@@ -689,6 +703,17 @@ export default function PdvPage() {
           </div>
         </DialogContent>
       </Dialog>
+
+      <AuthorizationDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        authorizationId={authorizationId}
+        authorizationType={authType}
+        title="Autorização de Administrador Necessária"
+        description="Esta venda contém um desconto acima do limite permitido e exige aprovação de um administrador."
+        amount={globalDiscountAmount + itemsDiscountAmount}
+        onAuthorized={(auth: any) => handleFinalizeSale(auth.id)}
+      />
 
     </div>
   );

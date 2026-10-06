@@ -2,7 +2,7 @@
 import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
-import { requirePermission } from '@/lib/auth/permissions';
+import { requirePermission, requireAuth } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { getPaginationArgs, buildPaginatedResult, PaginationParams } from '@/lib/performance/pagination';
 import { buildProductSearchWhere } from '@/lib/performance/query-utils';
@@ -646,13 +646,49 @@ export async function getInventoryMovements(filters?: { variantId?: string } & P
 }
 
 export async function createInventoryMovement(input: any) {
-  const session = await requirePermission('ESTOQUE', 'ADJUST');
+  const session = await requireAuth();
   const parsed = InventoryMovementSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
   }
 
   const { variantId, quantity, type, reason, warehouseId } = parsed.data;
+
+  const isDirectlyAllowed = session.isAdmin || session.permissions['ESTOQUE:ADJUST'];
+
+  if (!isDirectlyAllowed) {
+    if (input.authorizationId) {
+      const auth = await prisma.actionAuthorization.findFirst({
+        where: {
+          id: input.authorizationId,
+          companyId: session.companyId,
+          status: 'APPROVED',
+          type: 'STOCK_ADJUST'
+        }
+      });
+      if (!auth) {
+        return { success: false, error: 'Autorização inválida ou não aprovada por um administrador.' };
+      }
+    } else {
+      const authReq = await authorizationService.createAuthorizationRequest({
+        companyId: session.companyId,
+        type: 'STOCK_ADJUST',
+        module: 'ESTOQUE',
+        requestedByUserId: session.userId,
+        referenceId: variantId,
+        referenceModule: 'PRODUCT_VARIANT',
+        amount: Number(Math.abs(quantity)),
+        reason: reason || 'Ajuste manual de estoque',
+        financialImpact: false,
+      });
+
+      return { 
+        success: false, 
+        requireAuthorization: true, 
+        authorizationId: authReq.id 
+      };
+    }
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {

@@ -5,6 +5,7 @@ export const metadata: Metadata = {
   title: 'Editar Grade - CRManager',
 };
 
-export default function EditarGradePage({ params }: { params: { id: string } }) {
-  return <GradeForm gradeId={params.id} />;
+export default async function EditarGradePage({ params }: { params: Promise<{ id: string }> }) {
+  const resolvedParams = await params;
+  return <GradeForm gradeId={resolvedParams.id} />;
 }

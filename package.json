@@ -12,7 +12,9 @@
     "test:safe": "node scripts/run-safe-tests.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "fix:encoding": "tsx scripts/fix-db-encoding.ts"
+    "fix:encoding": "tsx scripts/fix-db-encoding.ts",
+    "test:stress": "tsx scripts/stress-test-seed.ts",
+    "test:cleanup": "tsx scripts/stress-test-cleanup.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",

@@ -171,10 +171,10 @@ export default function ProductForm({ productId }: { productId?: string }) {
           
           variacoes: p.variants?.length > 1 ? p.variants.map((va: any) => ({
             id: va.id,
-            codigoInterno: va.sku,
+            codigoInterno: va.sku || "",
             codigoBarras: va.barcode || "",
             grade: "Tamanho", // mock
-            valorDaGrade: va.name.split(" - ")[1] || va.name,
+            valorDaGrade: (va.name ? va.name.split(" - ")[1] || va.name : "Único"),
             estoqueAtual: Number(va.currentStock) || 0
           })) : [],
           tiposGradeSelecionados: [],
