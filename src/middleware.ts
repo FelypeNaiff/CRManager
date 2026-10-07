@@ -51,11 +51,16 @@ export async function middleware(request: NextRequest) {
     ));
   }
 
-  const destination = decision === 'login'
-    ? '/login'
-    : decision === 'dashboard'
-      ? '/dashboard'
-      : '/selecionar-perfil';
+  let destination = '';
+  if (decision === 'login') {
+    const isRoot = request.nextUrl.pathname === '/';
+    destination = isRoot ? '/login' : `/login?returnTo=${encodeURIComponent(request.nextUrl.pathname + request.nextUrl.search)}`;
+  } else if (decision === 'dashboard') {
+    destination = '/dashboard';
+  } else {
+    destination = '/selecionar-perfil';
+  }
+
   const redirect = NextResponse.redirect(new URL(destination, request.url));
   preserveSupabaseCookies(response, redirect);
   if (selector && !hasValidSelector) redirect.cookies.delete(SESSION_COOKIE);
@@ -63,5 +68,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };

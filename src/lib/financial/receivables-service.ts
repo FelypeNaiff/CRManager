@@ -10,11 +10,20 @@ import {
   PaymentMethod
 } from "@prisma/client";
 
+export type SaleExecutionIdentity = {
+  actorUserId: string;
+  authenticatedUserId: string;
+};
+
 export class ReceivablesService {
   /**
    * Processa os pagamentos de uma venda e gera os títulos a receber, transações de caixa ou débitos de carteira.
    */
-  async generateReceivablesFromSale(saleId: string, tx: Prisma.TransactionClient) {
+  async generateReceivablesFromSale(
+    saleId: string,
+    identity: SaleExecutionIdentity,
+    tx: Prisma.TransactionClient,
+  ) {
     const sale = await tx.sale.findUnique({
       where: { id: saleId },
       include: {
@@ -26,20 +35,6 @@ export class ReceivablesService {
     });
 
     if (!sale) throw new Error("Venda não encontrada para gerar recebíveis.");
-
-    // Resolve creatorUserId: verify if sellerId is a valid User.id. If not, fallback to first active user in the company
-    let creatorUserId = sale.sellerId;
-    const userExists = await tx.user.findFirst({
-      where: { id: sale.sellerId }
-    });
-    if (!userExists) {
-      const fallbackUser = await tx.user.findFirst({
-        where: { companyId: sale.companyId, status: "ACTIVE" }
-      });
-      if (fallbackUser) {
-        creatorUserId = fallbackUser.id;
-      }
-    }
 
     const now = new Date();
 
@@ -84,7 +79,7 @@ export class ReceivablesService {
             balanceBefore: wallet.balance,
             balanceAfter: wallet.balance.minus(amount),
             description: `Uso de saldo na venda ${sale.id}`,
-            createdById: creatorUserId
+            createdById: identity.actorUserId
           }
         });
 
@@ -100,7 +95,7 @@ export class ReceivablesService {
 
         // Atualiza saldo do Caixa Físico
         await tx.cashRegister.update({
-          where: { id: sale.cashRegisterId },
+          where: { id: sale.cashRegisterId, companyId: sale.companyId },
           data: {
             expectedBalance: { increment: amount },
           }
@@ -114,7 +109,7 @@ export class ReceivablesService {
             type: "IN",
             amount: amount,
             description: `Recebimento em dinheiro - Venda ${sale.id}`,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -134,7 +129,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - Dinheiro`,
             amount: amount,
             paidAt: now,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -160,7 +155,7 @@ export class ReceivablesService {
             amount: amount,
             dueDate: now,
             paidAt: now,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -184,7 +179,8 @@ export class ReceivablesService {
 
         // Taxa do PIX/Débito (Se houver)
         if (pm.feePercentage.greaterThan(0)) {
-          const feeAmount = new Prisma.Decimal(amount.toNumber() * (pm.feePercentage.toNumber() / 100));
+          const feeAmount = amount.mul(pm.feePercentage).div(100)
+            .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
           await tx.financialTransaction.create({
             data: {
               companyId: sale.companyId,
@@ -198,7 +194,7 @@ export class ReceivablesService {
               description: `Taxa de Cartão/PIX - Venda ${sale.id}`,
               amount: feeAmount,
               paidAt: now,
-              createdByUserId: creatorUserId
+              createdByUserId: identity.actorUserId
             }
           });
         }
@@ -209,9 +205,14 @@ export class ReceivablesService {
       // 4. Cartão de Crédito e Crediário (A Prazo / Parcelado)
       // Dividimos o amount pelo número de parcelas
       const installments = payment.installments > 0 ? payment.installments : 1;
-      const installmentAmount = new Prisma.Decimal(amount.toNumber() / installments);
+      const totalCents = amount.mul(100).toDecimalPlaces(0, Prisma.Decimal.ROUND_HALF_UP);
+      const regularInstallmentCents = totalCents.dividedToIntegerBy(installments);
 
       for (let i = 1; i <= installments; i++) {
+        const installmentCents = i === installments
+          ? totalCents.minus(regularInstallmentCents.mul(installments - 1))
+          : regularInstallmentCents;
+        const installmentAmount = installmentCents.div(100).toDecimalPlaces(2);
         // Calcular vencimento (D + (settlementDays * i) ou mensal para crediário)
         // Simplificação: 30 dias por parcela
         const dueDate = new Date(now);
@@ -231,7 +232,7 @@ export class ReceivablesService {
             description: `Venda ${sale.id} - ${pm.name} - Parcela ${i}/${installments}`,
             amount: installmentAmount,
             dueDate: dueDate,
-            createdByUserId: creatorUserId
+            createdByUserId: identity.actorUserId
           }
         });
 
@@ -308,7 +309,8 @@ export class ReceivablesService {
     // Calcula e Gera Despesa da Taxa (Valor Líquido = Bruto - Taxa)
     const pm = finTx.paymentMethod;
     if (pm && pm.feePercentage && pm.feePercentage.greaterThan(0)) {
-      const feeAmount = new Prisma.Decimal(amount.toNumber() * (pm.feePercentage.toNumber() / 100));
+      const feeAmount = amount.mul(pm.feePercentage).div(100)
+        .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
       await tx.financialTransaction.create({
         data: {
           companyId: receivable.companyId,
@@ -336,9 +338,15 @@ export class ReceivablesService {
    * - CASH -> Devolve ao CashRegister e estorna CashMovement
    * - WALLET -> Devolve saldo para a CustomerWallet
    */
-  async cancelReceivablesFromSale(saleId: string, cancelledByUserId: string, tx: Prisma.TransactionClient) {
-    const sale = await tx.sale.findUnique({
-      where: { id: saleId },
+  async cancelReceivablesFromSale(
+    saleId: string,
+    cancelledByUserId: string,
+    companyId: string,
+    tx: Prisma.TransactionClient,
+    options?: { refundMethod?: 'ORIGINAL' | 'WALLET_CREDIT' }
+  ) {
+    const sale = await tx.sale.findFirst({
+      where: { id: saleId, companyId },
       include: {
         payments: {
           include: { paymentMethod: true }
@@ -348,29 +356,58 @@ export class ReceivablesService {
 
     if (!sale) throw new Error("Venda não encontrada para cancelamento de recebíveis.");
 
-    const now = new Date();
-
     // 1. Cancelar todas as FinancialTransactions ligadas à Sale
     await tx.financialTransaction.updateMany({
-      where: { referenceType: "SALE", referenceId: saleId, status: { not: "CANCELLED" } },
+      where: {
+        companyId,
+        referenceType: "SALE",
+        referenceId: saleId,
+        status: { not: "CANCELLED" },
+      },
       data: { status: "CANCELLED" }
     });
 
     // 2. Cancelar as FinancialTransactions das taxas, se houver, baseadas nos recebíveis.
     // Primeiro pegar os finTxs cancelados:
     const finTxs = await tx.financialTransaction.findMany({
-      where: { referenceType: "SALE", referenceId: saleId }
+      where: { companyId, referenceType: "SALE", referenceId: saleId },
+      select: { id: true },
     });
     const finTxIds = finTxs.map(f => f.id);
 
     await tx.financialTransaction.updateMany({
-      where: { referenceType: "SALE_FEE", referenceId: { in: finTxIds } },
+      where: {
+        companyId,
+        referenceType: "SALE_FEE",
+        referenceId: { in: finTxIds },
+        status: { not: "CANCELLED" },
+      },
       data: { status: "CANCELLED" }
     });
 
-    // 3. Cancelar todos os AccountsReceivable atrelados a esses finTxs que estão PENDING
+    const receivables = await tx.accountsReceivable.findMany({
+      where: { companyId, financialTransactionId: { in: finTxIds } },
+      select: { id: true },
+    });
+    const receivableIds = receivables.map(receivable => receivable.id);
+
+    await tx.financialTransaction.updateMany({
+      where: {
+        companyId,
+        referenceType: "RECEIVABLE_FEE",
+        referenceId: { in: receivableIds },
+        status: { not: "CANCELLED" },
+      },
+      data: { status: "CANCELLED" },
+    });
+
+    // 3. Cancelar todos os AccountsReceivable ainda não liquidados integralmente.
     await tx.accountsReceivable.updateMany({
-      where: { financialTransactionId: { in: finTxIds }, status: "PENDING" },
+      where: {
+        companyId,
+        financialTransactionId: { in: finTxIds },
+        status: { in: ["PENDING", "PARTIAL", "OVERDUE"] },
+      },
       data: { status: "CANCELLED" }
     });
 
@@ -378,7 +415,7 @@ export class ReceivablesService {
     // O sistema registra o cancelamento, mas não exclui fisicamente para histórico.
     // Recebíveis PAID ficarão como CANCELLED, marcando que o valor foi "estornado".
     await tx.accountsReceivable.updateMany({
-      where: { financialTransactionId: { in: finTxIds }, status: "PAID" },
+      where: { companyId, financialTransactionId: { in: finTxIds }, status: "PAID" },
       data: { status: "CANCELLED", notes: "Estornado por cancelamento da Venda" }
     });
 
@@ -390,22 +427,46 @@ export class ReceivablesService {
         if (!sale.cashRegisterId) continue;
 
         // Deduz saldo esperado do Caixa
-        await tx.cashRegister.update({
-          where: { id: sale.cashRegisterId },
-          data: { expectedBalance: { decrement: payment.amount } }
-        });
+        if (options?.refundMethod !== 'WALLET_CREDIT') {
+          await tx.cashRegister.update({
+            where: { id: sale.cashRegisterId, companyId: sale.companyId },
+            data: { expectedBalance: { decrement: payment.amount } }
+          });
+        } else if (sale.customerId) {
+          await tx.$queryRawUnsafe(`SELECT id FROM customer_wallets WHERE customer_id = $1 FOR UPDATE`, sale.customerId);
+          let wallet = await tx.customerWallet.findUnique({ where: { customerId: sale.customerId } });
+          if (!wallet) {
+            wallet = await tx.customerWallet.create({ data: { customerId: sale.customerId, balance: 0 } });
+          }
+          await tx.customerWallet.update({ where: { id: wallet.id }, data: { balance: { increment: payment.amount } } });
+          await tx.walletTransaction.create({
+            data: {
+              walletId: wallet.id,
+              customerId: sale.customerId,
+              saleId: sale.id,
+              type: "REFUND",
+              amount: payment.amount,
+              balanceBefore: wallet.balance,
+              balanceAfter: Number(wallet.balance) + Number(payment.amount),
+              description: `Crédito (Dinheiro retido) - Venda ${sale.id.slice(0,8)}`,
+              createdById: cancelledByUserId
+            }
+          });
+        }
 
         // Cria CashMovement de saída/estorno
-        await tx.cashMovement.create({
-          data: {
-            companyId: sale.companyId,
-            cashRegisterId: sale.cashRegisterId,
-            type: "OUT",
-            amount: payment.amount,
-            description: `Estorno - Cancelamento Venda ${sale.id}`,
-            createdByUserId: cancelledByUserId
-          }
-        });
+        if (options?.refundMethod !== 'WALLET_CREDIT') {
+          await tx.cashMovement.create({
+            data: {
+              companyId: sale.companyId,
+              cashRegisterId: sale.cashRegisterId,
+              type: "OUT",
+              amount: payment.amount,
+              description: `Estorno - Cancelamento Venda ${sale.id}`,
+              createdByUserId: cancelledByUserId
+            }
+          });
+        }
       }
 
       // 6. Reverter débitos na Carteira (Creditar de volta)

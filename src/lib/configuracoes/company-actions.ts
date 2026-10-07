@@ -9,6 +9,7 @@ import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 
 const CompanyFormSchema = z.object({
+  tipoPessoa: z.enum(['PF', 'PJ']).default('PJ'),
   razaoSocial: z.string().min(2, 'Razão Social inválida (mínimo 2 caracteres)'),
   nomeFantasia: z.string().min(2, 'Nome Fantasia inválido (mínimo 2 caracteres)'),
   cnpjCpf: z.string().min(11, 'CNPJ/CPF inválido (mínimo 11 caracteres)'),
@@ -68,7 +69,7 @@ export async function updateCompanyAction(rawData: any, updateType?: 'contatos' 
       if (!before) throw new Error('Empresa não encontrada.');
       const updated = await CompanyService.updateCompanyData(session.companyId, validatedData as CompanyDataInput, tx);
       const changes: AuditChanges = {};
-      for (const field of ['nomeFantasia', 'status', 'regimeTributario', 'crt', 'cnae', 'uf', 'cidade', 'regimeApuracao', 'naturezaReceitaPadrao', 'naturezaDespesaPadrao', 'pixTipo'] as const) {
+      for (const field of ['tipoPessoa', 'nomeFantasia', 'status', 'regimeTributario', 'crt', 'cnae', 'uf', 'cidade', 'regimeApuracao', 'naturezaReceitaPadrao', 'naturezaDespesaPadrao', 'pixTipo'] as const) {
         addAuditChange(changes, field, before[field], updated[field]);
       }
       if (Object.keys(changes).length > 0) await writeActivityLog({

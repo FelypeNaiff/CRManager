@@ -1,4 +1,4 @@
-import { AuthorizationType } from "@prisma/client";
+import { AuthorizationType, Prisma } from "@prisma/client";
 import { CreateSaleInput, CancelSaleInput } from "./sales-schemas";
 import { sellerCommissionService } from "./seller-commission-service";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
@@ -13,6 +13,21 @@ import { approvedAuthorizationWhere } from "../auth/authorization-security";
 import { writeActivityLog } from "../auth/activity-log";
 import type { ServerAuthContext } from "../auth/server-auth-context";
 import { sanitizeAuditDetails } from "../auth/audit-sanitization";
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from "../inventory/inventory-service";
+
+const money = (value: Prisma.Decimal.Value) =>
+  new Prisma.Decimal(value).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+
+function finiteDecimal(value: Prisma.Decimal.Value, field: string) {
+  let parsed: Prisma.Decimal;
+  try {
+    parsed = new Prisma.Decimal(value);
+  } catch {
+    throw new Error(`${field} inválido.`);
+  }
+  if (!parsed.isFinite()) throw new Error(`${field} inválido.`);
+  return parsed;
+}
 
 export class SalesService {
   constructor(
@@ -22,11 +37,27 @@ export class SalesService {
       authorization: authorizationService,
       receivables: receivablesService,
       sellerCommission: sellerCommissionService,
+      inventory: { applyInventoryMovement, getOrCreateDefaultWarehouse },
     },
   ) {}
 
-  async createSale(data: CreateSaleInput, operatorUserId: string, auditContext?: ServerAuthContext) {
+  async createSale(data: CreateSaleInput, operatorUserId: string, auditContext: ServerAuthContext) {
     return this.db.$transaction(async (tx: any) => {
+      if (auditContext.companyId !== data.companyId || auditContext.userId !== operatorUserId) {
+        throw new Error('Contexto de identidade inválido para a venda.');
+      }
+      if (data.draftId) {
+        await tx.$queryRawUnsafe(
+          `SELECT id FROM sales WHERE id = $1 AND company_id = $2 AND status = 'DRAFT' FOR UPDATE`,
+          data.draftId,
+          data.companyId,
+        );
+        const draft = await tx.sale.findFirst({
+          where: { id: data.draftId, companyId: data.companyId, status: 'DRAFT' },
+          select: { id: true },
+        });
+        if (!draft) throw new Error('Venda guardada não encontrada ou já finalizada.');
+      }
       // Etapa 1: Validar empresa, vendedor, cliente, caixa
       const company = await tx.company.findUnique({ where: { id: data.companyId } });
       if (!company) throw new Error("Empresa inválida.");
@@ -44,37 +75,50 @@ export class SalesService {
       }
 
       const paymentMethodIds = [...new Set(data.payments.map(payment => payment.paymentMethodId))];
-      const validPaymentMethods = await tx.paymentMethod.count({
-        where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true }
+      const paymentMethods = await tx.paymentMethod.findMany({
+        where: { id: { in: paymentMethodIds }, companyId: data.companyId, isActive: true },
+        select: {
+          id: true,
+          type: true,
+          allowsInstallments: true,
+          settlementDays: true,
+        },
       });
-      if (validPaymentMethods !== paymentMethodIds.length) {
+      if (paymentMethods.length !== paymentMethodIds.length) {
         throw new Error("Forma de pagamento inválida.");
       }
 
       // Carregar configurações operacionais da empresa
       const settings = await this.dependencies.operationalSettings.getOrCreateOperationalSettings(data.companyId, tx);
 
-      // Validar Caixa Aberto se exigido pelas configurações operacionais
-      if (settings.requireOpenCashRegister) {
-        if (!data.cashRegisterId) {
-          const activeRegister = await tx.cashRegister.findFirst({
-            where: { companyId: data.companyId, status: "OPEN" }
-          });
-          if (!activeRegister) throw new Error("Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.");
-          data.cashRegisterId = activeRegister.id;
-        } else {
-          const register = await tx.cashRegister.findFirst({
-            where: tenantResourceWhere(data.cashRegisterId, data.companyId)
-          });
-          if (!register || register.status !== "OPEN") throw new Error("Caixa informado não está aberto.");
+      const hasCashPayment = paymentMethods.some((method: any) => method.type === 'CASH');
+      let cashRegisterId = data.cashRegisterId;
+      if (cashRegisterId) {
+        const register = await tx.cashRegister.findFirst({
+          where: { ...tenantResourceWhere(cashRegisterId, data.companyId), status: 'OPEN' },
+          select: { id: true },
+        });
+        if (!register) throw new Error("Caixa informado não está aberto.");
+      } else if (hasCashPayment || settings.requireOpenCashRegister) {
+        const activeRegister = await tx.cashRegister.findFirst({
+          where: { companyId: data.companyId, status: "OPEN" },
+          select: { id: true },
+          orderBy: { openedAt: 'desc' },
+        });
+        cashRegisterId = activeRegister?.id;
+        if (!cashRegisterId) {
+          const reason = hasCashPayment
+            ? "Venda em dinheiro requer um caixa aberto."
+            : "Nenhum caixa aberto encontrado. Abra o caixa para realizar vendas.";
+          throw new Error(reason);
         }
       }
 
       // Travar Caixa se informado (ordem de trava: CashRegister -> ProductVariant)
-      if (data.cashRegisterId) {
+      if (cashRegisterId) {
         await tx.$queryRawUnsafe(
           `SELECT id FROM cash_registers WHERE id = $1 AND company_id = $2 FOR UPDATE`,
-          data.cashRegisterId,
+          cashRegisterId,
           data.companyId
         );
       }
@@ -83,58 +127,6 @@ export class SalesService {
       const blockNãoCustomer = !settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale;
       if (blockNãoCustomer && !data.customerId) {
         throw new Error("Cliente é obrigatório para finalizar a venda.");
-      }
-
-      // Etapa 1.5: Validar Desconto
-      let authorizedByUserId: string | null = null;
-      let maxAllowed = 0;
-      const discountPercentage = data.subtotal > 0 ? (data.discountAmount / data.subtotal) * 100 : 0;
-      
-      if (data.discountAmount > 0 && data.subtotal > 0) {
-        const policy = await this.dependencies.operationalSettings.validateDiscountPolicy({
-          companyId: data.companyId,
-          userId: operatorUserId,
-          discountPercent: discountPercentage,
-          saleTotal: data.totalAmount
-        }, tx);
-
-        maxAllowed = policy.limitApplied;
-
-        if (!policy.allowed) {
-          if (policy.requiresAuthorization) {
-            if (data.authorizationId) {
-              const auth = await tx.actionAuthorization.findFirst({
-                where: approvedAuthorizationWhere({
-                  id: data.authorizationId,
-                  companyId: data.companyId,
-                  type: AuthorizationType.DISCOUNT,
-                  module: 'PDV',
-                })
-              });
-              if (!auth) {
-                throw new Error('Autorização de desconto inválida ou não aprovada.');
-              }
-              authorizedByUserId = auth.authorizedByUserId;
-            } else {
-              const authReq = await this.dependencies.authorization.createAuthorizationRequest({
-                companyId: data.companyId,
-                type: AuthorizationType.DISCOUNT,
-                module: 'PDV',
-                requestedByUserId: operatorUserId,
-                percentage: discountPercentage,
-                amount: data.discountAmount,
-                reason: data.authReason || 'Desconto excede o limite',
-                metadata: { requesterLimit: maxAllowed },
-                financialImpact: true,
-              });
-              
-              // Interrompe o fluxo retornando a necessidade de autorização
-              return { requireAuthorization: true, authorizationId: authReq.id };
-            }
-          } else {
-            throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
-          }
-        }
       }
 
       // Etapa 2: Validar estoque disponível em lote com trava pessimista
@@ -149,9 +141,69 @@ export class SalesService {
       }
 
       const variants = await tx.productVariant.findMany({
-        where: { id: { in: variantIds }, companyId: data.companyId, isActive: true }
+        where: {
+          id: { in: variantIds },
+          companyId: data.companyId,
+          isActive: true,
+          archivedAt: null,
+          product: { is: { companyId: data.companyId, isActive: true, archivedAt: null } },
+        },
+        include: { product: { select: { name: true, pdvEligible: true, commissionRate: true, category: { select: { commissionRate: true } } } } },
       });
       const variantMap = new Map<string, any>(variants.map((v: any) => [v.id, v]));
+
+      let canonicalSubtotal = money(0);
+      let canonicalItemDiscount = money(0);
+      const canonicalItems = data.items.map(item => {
+        const variant = variantMap.get(item.variantId);
+        if (!variant) throw new Error(`Variante ${item.variantId} não encontrada.`);
+        if (variant.product.pdvEligible === false) throw new Error(`Produto ${variant.product.name} não está habilitado para venda.`);
+
+        const quantity = finiteDecimal(item.quantity, 'Quantidade');
+        if (quantity.lte(0)) throw new Error('Quantidade inválida.');
+
+        const unitPrice = money(variant.salePrice);
+        const costPrice = money(variant.costPrice);
+        const discountIntent = finiteDecimal(item.discountValue ?? item.discount ?? 0, 'Desconto do item');
+        if (discountIntent.lt(0)) throw new Error('Desconto do item não pode ser negativo.');
+
+        let unitDiscount: Prisma.Decimal;
+        if (item.discountType === 'PERCENTAGE') {
+          if (discountIntent.gt(100)) throw new Error('Percentual de desconto do item inválido.');
+          unitDiscount = money(unitPrice.mul(discountIntent).div(100));
+        } else {
+          unitDiscount = money(discountIntent);
+        }
+        if (unitDiscount.gt(unitPrice)) throw new Error('Desconto do item não pode superar o preço unitário.');
+
+        const lineSubtotal = money(unitPrice.mul(quantity));
+        const lineDiscount = money(unitDiscount.mul(quantity));
+        const lineTotal = money(lineSubtotal.minus(lineDiscount));
+        if (lineTotal.lt(0)) throw new Error('Total líquido do item inválido.');
+
+        canonicalSubtotal = money(canonicalSubtotal.plus(lineSubtotal));
+        canonicalItemDiscount = money(canonicalItemDiscount.plus(lineDiscount));
+        const margin = unitPrice.eq(0)
+          ? money(0)
+          : unitPrice.minus(costPrice).div(unitPrice).mul(100).toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+
+        return {
+          variantId: variant.id,
+          productNameSnapshot: variant.product.name,
+          variantNameSnapshot: variant.name,
+          skuSnapshot: variant.sku,
+          barcodeSnapshot: variant.barcode || null,
+          quantity,
+          unitPrice,
+          discountType: item.discountType ?? 'AMOUNT',
+          discountValue: discountIntent,
+          discount: unitDiscount,
+          totalPrice: lineTotal,
+          costPriceAtSale: costPrice,
+          salePriceAtSale: unitPrice,
+          marginAtSale: margin,
+        };
+      });
 
       for (const item of data.items) {
         const variant = variantMap.get(item.variantId);
@@ -165,46 +217,170 @@ export class SalesService {
         }
       }
 
+      const subtotalAfterItems = money(canonicalSubtotal.minus(canonicalItemDiscount));
+      const globalDiscountIntent = finiteDecimal(data.globalDiscountValue ?? 0, 'Desconto global');
+      if (globalDiscountIntent.lt(0)) throw new Error('Desconto global não pode ser negativo.');
+      let canonicalGlobalDiscount: Prisma.Decimal;
+      if (data.globalDiscountType === 'PERCENTAGE') {
+        if (globalDiscountIntent.gt(100)) throw new Error('Percentual de desconto global inválido.');
+        canonicalGlobalDiscount = money(subtotalAfterItems.mul(globalDiscountIntent).div(100));
+      } else {
+        canonicalGlobalDiscount = money(globalDiscountIntent);
+      }
+      if (canonicalGlobalDiscount.gt(subtotalAfterItems)) {
+        throw new Error('Desconto global não pode superar o subtotal após descontos dos itens.');
+      }
+
+      let allocatedGlobalDiscount = money(0);
+      const canonicalItemsWithCommission = canonicalItems.map((item: any, index: number) => {
+        const variant = variantMap.get(item.variantId);
+        const isLast = index === canonicalItems.length - 1;
+        const share = isLast
+          ? money(canonicalGlobalDiscount.minus(allocatedGlobalDiscount))
+          : subtotalAfterItems.gt(0)
+            ? money(canonicalGlobalDiscount.mul(item.totalPrice).div(subtotalAfterItems))
+            : money(0);
+        allocatedGlobalDiscount = money(allocatedGlobalDiscount.plus(share));
+        const commissionBase = money(new Prisma.Decimal(item.totalPrice).minus(share));
+        const productRule = variant.product.commissionRate;
+        const categoryRule = variant.product.category?.commissionRate;
+        const rate = productRule !== null && productRule !== undefined
+          ? new Prisma.Decimal(productRule)
+          : categoryRule !== null && categoryRule !== undefined
+            ? new Prisma.Decimal(categoryRule)
+            : seller.commissionRate && new Prisma.Decimal(seller.commissionRate).gt(0)
+              ? new Prisma.Decimal(seller.commissionRate)
+              : new Prisma.Decimal(settings.defaultCommissionRate ?? 0);
+        const source = productRule !== null && productRule !== undefined
+          ? 'PRODUCT'
+          : categoryRule !== null && categoryRule !== undefined
+            ? 'CATEGORY'
+            : seller.commissionRate && new Prisma.Decimal(seller.commissionRate).gt(0)
+              ? 'SELLER'
+              : 'COMPANY';
+        return {
+          ...item,
+          commissionBaseSnapshot: commissionBase,
+          commissionRateSnapshot: rate,
+          commissionAmountSnapshot: money(commissionBase.mul(rate).div(100)),
+          commissionRuleSource: source,
+        };
+      });
+
+      const canonicalDiscountAmount = money(canonicalItemDiscount.plus(canonicalGlobalDiscount));
+      const freightAmount = money(finiteDecimal(data.freightAmount ?? 0, 'Frete'));
+      const canonicalTotal = money(canonicalSubtotal.minus(canonicalDiscountAmount).plus(freightAmount));
+      if (canonicalTotal.lt(0)) throw new Error('Total da venda inválido.');
+
+      const paymentMethodMap = new Map<string, any>(
+        paymentMethods.map((method: any) => [method.id, method]),
+      );
+      const canonicalPayments = data.payments.map(payment => {
+        const paymentMethod = paymentMethodMap.get(payment.paymentMethodId);
+        if (!paymentMethod) throw new Error('Forma de pagamento inválida.');
+        if (!Number.isInteger(payment.installments) || payment.installments < 1) {
+          throw new Error('Quantidade de parcelas inválida.');
+        }
+        if (payment.installments > 1 && !paymentMethod.allowsInstallments) {
+          throw new Error('Forma de pagamento não permite parcelamento.');
+        }
+        const amount = finiteDecimal(payment.amount, 'Valor do pagamento');
+        if (amount.lte(0) || amount.decimalPlaces() > 2) throw new Error('Valor do pagamento inválido.');
+        const immediateSettlement = paymentMethod.type === 'CASH'
+          || paymentMethod.type === 'CUSTOMER_WALLET'
+          || paymentMethod.type === 'PIX'
+          || (paymentMethod.settlementDays === 0 && payment.installments === 1);
+        return {
+          ...payment,
+          amount: money(amount),
+          status: immediateSettlement ? 'PAID' : 'PENDING',
+        };
+      });
+      const paymentTotal = money(canonicalPayments.reduce(
+        (sum, payment) => sum.plus(payment.amount),
+        new Prisma.Decimal(0),
+      ));
+      if (!paymentTotal.eq(canonicalTotal)) {
+        throw new Error('A soma dos pagamentos deve ser igual ao total da venda.');
+      }
+
+      // Etapa 2.5: validar a política sobre os valores recalculados pelo servidor.
+      let authorizedByUserId: string | null = null;
+      let maxAllowed = 0;
+      const discountPercentage = canonicalSubtotal.gt(0)
+        ? canonicalDiscountAmount.div(canonicalSubtotal).mul(100).toNumber()
+        : 0;
+
+      if (canonicalDiscountAmount.gt(0) && canonicalSubtotal.gt(0)) {
+        const policy = await this.dependencies.operationalSettings.validateDiscountPolicy({
+          companyId: data.companyId,
+          userId: operatorUserId,
+          discountPercent: discountPercentage,
+          saleTotal: canonicalTotal.toNumber(),
+        }, tx);
+        maxAllowed = policy.limitApplied;
+        if (!policy.allowed) {
+          if (!policy.requiresAuthorization) {
+            throw new Error(policy.reason || 'Desconto excede o limite máximo permitido e não pode ser autorizado.');
+          }
+          if (data.authorizationId) {
+            const auth = await tx.actionAuthorization.findFirst({
+              where: approvedAuthorizationWhere({
+                id: data.authorizationId,
+                companyId: data.companyId,
+                type: AuthorizationType.DISCOUNT,
+                module: 'PDV',
+              }),
+            });
+            if (!auth) throw new Error('Autorização de desconto inválida ou não aprovada.');
+            authorizedByUserId = auth.authorizedByUserId;
+          } else {
+            const authReq = await this.dependencies.authorization.createAuthorizationRequest({
+              companyId: data.companyId,
+              type: AuthorizationType.DISCOUNT,
+              module: 'PDV',
+              requestedByUserId: operatorUserId,
+              percentage: discountPercentage,
+              amount: canonicalDiscountAmount.toNumber(),
+              reason: data.authReason || 'Desconto excede o limite',
+              metadata: { requesterLimit: maxAllowed },
+              financialImpact: true,
+            });
+            return { requireAuthorization: true, authorizationId: authReq.id };
+          }
+        }
+      }
+
       // Etapa 3: Criar Sale e SaleItems e SalePayments
       const sale = await tx.sale.create({
         data: {
           companyId: data.companyId,
           sellerId: data.sellerId,
           customerId: data.customerId,
-          cashRegisterId: data.cashRegisterId,
+          cashRegisterId,
           status: "PAID",
-          subtotal: data.subtotal,
-          discountAmount: data.discountAmount,
+          channel: data.channel,
+          subtotal: canonicalSubtotal,
+          discountAmount: canonicalDiscountAmount,
           globalDiscountType: data.globalDiscountType,
           globalDiscountValue: data.globalDiscountValue,
-          totalAmount: data.totalAmount,
+          totalAmount: canonicalTotal,
+          freightAmount,
+          deliveryType: data.deliveryType,
+          deliveryAddress: data.deliveryAddress,
+          deliveryDate: data.deliveryDate ? new Date(data.deliveryDate) : undefined,
           notes: data.notes,
           customerNameSnapshot: data.customerNameSnapshot,
           customerPhoneSnapshot: data.customerPhoneSnapshot,
           items: {
-            create: data.items.map(item => ({
-              variantId: item.variantId,
-              productNameSnapshot: item.productNameSnapshot,
-              variantNameSnapshot: item.variantNameSnapshot,
-              skuSnapshot: item.skuSnapshot,
-              barcodeSnapshot: item.barcodeSnapshot || null,
-              quantity: item.quantity,
-              unitPrice: item.unitPrice,
-              discountType: item.discountType,
-              discountValue: item.discountValue,
-              discount: item.discount,
-              totalPrice: item.totalPrice,
-              costPriceAtSale: item.costPriceAtSale,
-              salePriceAtSale: item.salePriceAtSale,
-              marginAtSale: item.marginAtSale
-            }))
+            create: canonicalItemsWithCommission,
           },
           payments: {
-            create: data.payments.map(payment => ({
+            create: canonicalPayments.map(payment => ({
               paymentMethodId: payment.paymentMethodId,
               amount: payment.amount,
               installments: payment.installments,
-              status: "PAID"
+              status: payment.status,
             }))
           }
         },
@@ -216,12 +392,12 @@ export class SalesService {
         await tx.saleAuthorization.create({
           data: {
             saleId: sale.id,
-            requestedByUserId: data.sellerId,
+            requestedByUserId: operatorUserId,
             authorizedByUserId: authorizedByUserId,
             type: "DISCOUNT_OVER_LIMIT",
             status: "APPROVED",
             reason: data.authReason || "Sem motivo informado",
-            requestedDiscount: data.discountAmount,
+            requestedDiscount: canonicalDiscountAmount,
             allowedDiscount: maxAllowed
           }
         });
@@ -229,32 +405,31 @@ export class SalesService {
       }
 
       // Etapa 4: Processar Pagamentos e Financeiro
-      await this.dependencies.receivables.generateReceivablesFromSale(sale.id, tx);
+      await this.dependencies.receivables.generateReceivablesFromSale(sale.id, {
+        actorUserId: auditContext.userId,
+        authenticatedUserId: auditContext.authenticatedUserId,
+      }, tx);
 
-      // Etapa 5 & 6: Criar InventoryMovement tipo SALE e atualizar ProductVariant em lote
-      await tx.inventoryMovement.createMany({
-        data: data.items.map(item => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          type: "SALE",
-          actorUserId: operatorUserId,
-          authenticatedUserId: operatorUserId,
-          reason: `Venda #${sale.id}`
-        }))
-      });
-
+      // Etapa 5 & 6: movimentar o estoque pelo serviço canônico.
+      const warehouse = await this.dependencies.inventory.getOrCreateDefaultWarehouse(tx, data.companyId);
       for (const item of data.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            currentStock: { decrement: item.quantity },
-            availableStock: { decrement: item.quantity }
-          }
+        await this.dependencies.inventory.applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: item.variantId,
+          physicalDelta: new Prisma.Decimal(item.quantity).negated(),
+          type: "SALE",
+          origin: "SALE",
+          documentType: "SALE",
+          documentId: sale.id,
+          idempotencyKey: `sale:${sale.id}:${item.variantId}`,
+          reason: `Venda #${sale.id}`,
+          allowNegativePhysical: settings.allowNegativeStock,
+          allowNegativeAvailable: settings.allowNegativeStock,
         });
       }
 
       if (auditContext) {
-        for (const [index, item] of data.items.entries()) {
+        for (const [index, item] of canonicalItems.entries()) {
           if (Number(item.discount) <= 0) continue;
           await writeActivityLog({
             context: auditContext,
@@ -271,7 +446,7 @@ export class SalesService {
             },
           }, { policy: 'CRITICAL', tx });
         }
-        if (Number(data.discountAmount) > 0) {
+        if (canonicalGlobalDiscount.gt(0)) {
           await writeActivityLog({
             context: auditContext,
             action: 'SALE_GLOBAL_DISCOUNT_APPLY',
@@ -280,8 +455,8 @@ export class SalesService {
             details: 'Desconto global aplicado à venda.',
             metadata: {
               type: data.globalDiscountType ?? 'AMOUNT',
-              requested: Number(data.globalDiscountValue ?? data.discountAmount),
-              discountAmount: Number(data.discountAmount),
+              requested: Number(data.globalDiscountValue ?? 0),
+              discountAmount: canonicalGlobalDiscount.toNumber(),
             },
           }, { policy: 'CRITICAL', tx });
         }
@@ -298,7 +473,7 @@ export class SalesService {
             subtotal: Number(sale.subtotal),
             discountAmount: Number(sale.discountAmount),
             total: Number(sale.totalAmount),
-            paymentMethodIds: [...new Set(data.payments.map(payment => payment.paymentMethodId))],
+            paymentMethodIds: [...new Set(canonicalPayments.map(payment => payment.paymentMethodId))],
             status: sale.status,
           },
         }, { policy: 'CRITICAL', tx });
@@ -309,13 +484,20 @@ export class SalesService {
           data: {
             customerId: data.customerId,
             actionType: "VENDA_CONCLUIDA",
-            description: `Venda #${sale.id} concluída. Valor Total: R$ ${data.totalAmount}`
+            description: `Venda #${sale.id} concluída. Valor Total: R$ ${canonicalTotal.toFixed(2)}`
           }
         });
       }
 
       // Etapa 8: Integrar comissões e metas
       await this.dependencies.sellerCommission.processSaleCommission(tx, sale);
+
+      if (data.draftId) {
+        const consumed = await tx.sale.deleteMany({
+          where: { id: data.draftId, companyId: data.companyId, status: 'DRAFT' },
+        });
+        if (consumed.count !== 1) throw new Error('Não foi possível consumir a venda guardada.');
+      }
 
       return sale;
     });
@@ -336,6 +518,7 @@ export class SalesService {
       });
       if (!sale) throw new Error("Venda não encontrada.");
       if (sale.status === "CANCELLED") throw new Error("Venda já está cancelada.");
+      if (!auditContext) throw new Error('Contexto autenticado é obrigatório para cancelar uma venda.');
 
       // Travar o caixa associado, se houver
       if (sale.cashRegisterId) {
@@ -405,7 +588,7 @@ export class SalesService {
 
       // Marcar Sale como CANCELLED e preencher motivos
       const cancelledSale = await tx.sale.update({
-        where: { id: data.saleId },
+        where: { id: data.saleId, companyId },
         data: {
           status: "CANCELLED",
           cancelReason: data.cancelReason,
@@ -415,27 +598,29 @@ export class SalesService {
       });
 
       // Estornar Contas a Receber e Saldo de Carteira / Dinheiro
-      await this.dependencies.receivables.cancelReceivablesFromSale(sale.id, data.cancelledByUserId, tx);
+      await this.dependencies.receivables.cancelReceivablesFromSale(
+        sale.id,
+        data.cancelledByUserId,
+        companyId,
+        tx,
+        { refundMethod: (data as any).refundMethod }
+      );
 
-      // Criar InventoryMovement tipo CANCELLATION e devolver estoque em lote
-      await tx.inventoryMovement.createMany({
-        data: sale.items.map((item: any) => ({
-          variantId: item.variantId,
-          quantity: item.quantity,
-          type: "CANCELLATION",
-          actorUserId: data.cancelledByUserId,
-          authenticatedUserId: data.cancelledByUserId,
-          reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`
-        }))
-      });
-
+      // Devolver estoque pelo mesmo núcleo transacional usado pela venda.
+      const warehouse = await this.dependencies.inventory.getOrCreateDefaultWarehouse(tx, companyId);
       for (const item of sale.items) {
-        await tx.productVariant.update({
-          where: { id: item.variantId },
-          data: {
-            currentStock: { increment: item.quantity },
-            availableStock: { increment: item.quantity }
-          }
+        await this.dependencies.inventory.applyInventoryMovement(tx, auditContext, {
+          warehouseId: warehouse.id,
+          variantId: item.variantId,
+          physicalDelta: item.quantity,
+          type: "CANCELLATION",
+          origin: "SALE_CANCELLATION",
+          documentType: "SALE",
+          documentId: sale.id,
+          idempotencyKey: `sale-cancellation:${sale.id}:${item.variantId}`,
+          reason: `Cancelamento da Venda #${sale.id}: ${data.cancelReason}`,
+          allowNegativePhysical: settings.allowNegativeStock,
+          allowNegativeAvailable: settings.allowNegativeStock,
         });
       }
 
@@ -478,6 +663,7 @@ export class SalesService {
     sellerId?: string;
     customerId?: string;
     status?: string;
+    channel?: string;
     startDate?: Date;
     endDate?: Date;
   } & PaginationParams) {
@@ -486,6 +672,7 @@ export class SalesService {
     if (filters?.sellerId) whereClause.sellerId = filters.sellerId;
     if (filters?.customerId) whereClause.customerId = filters.customerId;
     if (filters?.status) whereClause.status = filters.status;
+    if (filters?.channel) whereClause.channel = filters.channel;
     
     if (filters?.startDate || filters?.endDate) {
       whereClause.createdAt = {};

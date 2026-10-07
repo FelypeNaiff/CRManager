@@ -1,18 +1,23 @@
-import { revalidatePath } from 'next/cache';
+import React from 'react';
 import { getBankAccounts } from '@/lib/financial/financial-actions';
-import { addCashMovement, closeCashRegister, getCashRegisters, getCurrentOpenRegister, openCashRegister } from '@/lib/financial/cash-register-service';
-
-const money = (value: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
-async function open(formData: FormData) { 'use server'; await openCashRegister({ bankAccountId: String(formData.get('bankAccountId')), openingBalance: Number(formData.get('openingBalance') ?? 0), notes: String(formData.get('notes') ?? '') || null }); revalidatePath('/financeiro/caixas'); }
-async function close(formData: FormData) { 'use server'; await closeCashRegister(String(formData.get('id')), { closingBalance: Number(formData.get('closingBalance')), notes: String(formData.get('notes') ?? '') || null }); revalidatePath('/financeiro/caixas'); }
-async function movement(formData: FormData) { 'use server'; await addCashMovement({ cashRegisterId: String(formData.get('id')), type: String(formData.get('type')), amount: Number(formData.get('amount')), description: String(formData.get('description') ?? '') || null }); revalidatePath('/financeiro/caixas'); }
+import { getCashRegisters, getCurrentOpenRegister } from '@/lib/financial/cash-register-service';
+import CaixasClient from './CaixasClient';
+import { requirePermission } from '@/lib/auth/permissions';
 
 export default async function CashRegistersPage() {
-  const [currentResult, historyResult, accountResult] = await Promise.all([getCurrentOpenRegister(), getCashRegisters(), getBankAccounts()]);
-  if (!currentResult.success || !historyResult.success || !accountResult.success) throw new Error(currentResult.error ?? historyResult.error ?? accountResult.error);
-  const current = currentResult.data;
-  return <div className="space-y-6"><div><h1 className="text-2xl font-bold">Caixas</h1><p className="text-sm text-muted-foreground">Abertura, fechamento, suprimento e sangria no backend Prisma.</p></div>
-    {!current ? <form action={open} className="grid gap-3 rounded-lg border p-4 md:grid-cols-4"><select className="rounded border p-2" name="bankAccountId" required><option value="">Conta bancária</option>{(accountResult.data??[]).map(a=><option key={a.id} value={a.id}>{a.name}</option>)}</select><input className="rounded border p-2" name="openingBalance" type="number" min="0" step="0.01" defaultValue="0"/><input className="rounded border p-2" name="notes" placeholder="Observação"/><button className="rounded bg-primary px-4 text-primary-foreground">Abrir caixa</button></form> : <section className="space-y-4 rounded-lg border bg-card p-5"><div><h2 className="font-semibold">Caixa aberto</h2><p className="text-sm">{current.bankAccount.name} · aberto por {current.openedBy.name} · inicial {money(Number(current.openingBalance))}</p></div><div className="grid gap-4 md:grid-cols-2"><form action={movement} className="grid gap-2 rounded border p-3"><input type="hidden" name="id" value={current.id}/><select className="rounded border p-2" name="type"><option value="REFORCO">Suprimento</option><option value="SANGRIA">Sangria</option></select><input className="rounded border p-2" name="amount" type="number" min="0.01" step="0.01" required/><input className="rounded border p-2" name="description" placeholder="Descrição"/><button className="rounded bg-secondary p-2">Registrar movimento</button></form><form action={close} className="grid gap-2 rounded border p-3"><input type="hidden" name="id" value={current.id}/><input className="rounded border p-2" name="closingBalance" type="number" min="0" step="0.01" placeholder="Saldo contado" required/><input className="rounded border p-2" name="notes" placeholder="Observação"/><button className="rounded bg-primary p-2 text-primary-foreground">Fechar caixa</button></form></div></section>}
-    <section className="rounded-lg border"><table className="w-full text-sm"><thead><tr className="bg-muted"><th className="p-3 text-left">Abertura</th><th className="p-3 text-left">Conta</th><th className="p-3 text-left">Operador</th><th className="p-3 text-left">Status</th></tr></thead><tbody>{(historyResult.data??[]).map(r=><tr key={r.id} className="border-t"><td className="p-3">{new Date(r.openedAt).toLocaleString('pt-BR')}</td><td className="p-3">{r.bankAccount.name}</td><td className="p-3">{r.openedBy.name}</td><td className="p-3">{r.status}</td></tr>)}</tbody></table></section>
-  </div>;
+  await requirePermission('CAIXA', 'VIEW');
+
+  const [currentResult, historyResult, accountResult] = await Promise.all([
+    getCurrentOpenRegister(),
+    getCashRegisters(),
+    getBankAccounts()
+  ]);
+
+  return (
+    <CaixasClient 
+      initialCurrent={currentResult.data || null} 
+      initialHistory={historyResult.data || []} 
+      bankAccounts={accountResult.data || []} 
+    />
+  );
 }

@@ -11,7 +11,10 @@ export const metadata = {
 export default async function VendedoresPage() {
   const session = await requirePermission(SELLER_PERMISSIONS.view.module, SELLER_PERMISSIONS.view.action)
 
-  const sellers = await sellersService.getSellersByCompany(session.companyId)
+  const [sellers, users] = await Promise.all([
+    sellersService.getSellersByCompany(session.companyId),
+    sellersService.getLinkableUsers(session.companyId),
+  ])
 
   // Convert Decimal to number for the client
   const serializedSellers = sellers.map(s => ({
@@ -25,7 +28,10 @@ export default async function VendedoresPage() {
       <div className="flex items-center justify-between space-y-2">
         <h2 className="text-3xl font-bold tracking-tight">Vendedores</h2>
       </div>
-      <VendedoresClient initialData={serializedSellers} />
+      <VendedoresClient
+        initialData={serializedSellers}
+        users={users.map(user => ({ id: user.id, name: user.name, email: user.email, linkedSellerId: user.seller?.id ?? null }))}
+      />
     </div>
   )
 }

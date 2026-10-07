@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowLeft, Ban } from "lucide-react";
 import Link from "next/link";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { AuthorizationDialog } from "@/components/authorization/authorization-dialog";
 
 export default function DetalheVendaPage() {
@@ -24,9 +25,10 @@ export default function DetalheVendaPage() {
   const [movements, setMovements] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Modal Cancelamento (simples mock para fluxo)
+  // Estado do Cancelamento
   const [isCancelling, setIsCancelling] = useState(false);
   const [cancelReason, setCancelReason] = useState("");
+  const [refundMethod, setRefundMethod] = useState<"ORIGINAL" | "WALLET_CREDIT">("ORIGINAL");
   const [showAuthDialog, setShowAuthDialog] = useState(false);
   const [authorizationId, setAuthorizationId] = useState("");
 
@@ -58,7 +60,8 @@ export default function DetalheVendaPage() {
       saleId: id,
       cancelReason,
       cancelledByUserId: activeProfile.userId,
-      authorizationId: authId
+      authorizationId: authId,
+      refundMethod
     });
     
     setIsCancelling(false);
@@ -130,6 +133,17 @@ export default function DetalheVendaPage() {
                   value={cancelReason} 
                   onChange={(e) => setCancelReason(e.target.value)} 
                 />
+                {sale.customerId && (
+                  <Select value={refundMethod} onValueChange={(v: any) => setRefundMethod(v)}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Método de Estorno" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="ORIGINAL">Estorno Original (Devolver ao Caixa/Cartão)</SelectItem>
+                      <SelectItem value="WALLET_CREDIT">Gerar Crédito na Carteira do Cliente</SelectItem>
+                    </SelectContent>
+                  </Select>
+                )}
                 <Button 
                   variant="destructive" 
                   onClick={() => handleCancelSale()} 

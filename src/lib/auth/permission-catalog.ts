@@ -46,7 +46,11 @@ export const PERMISSION_ACTIONS = [
   'CREDIT',
   'DEBIT',
   'DISABLE',
-  'RESET_PIN'
+  'RESET_PIN',
+  'MANAGE_WAREHOUSES',
+  'TRANSFER',
+  'COUNT',
+  'APPROVE_INVENTORY'
 ] as const;
 
 export type PermissionModule = typeof PERMISSION_MODULES[number];
@@ -128,6 +132,10 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { module: 'ESTOQUE', action: 'IMPORT', label: 'Importar Estoque', description: 'Carga inicial via planilha.', category: 'Estoque', critical: false },
   { module: 'ESTOQUE', action: 'EXPORT', label: 'Exportar Estoque', description: 'Relatório de quantidades.', category: 'Estoque', critical: false },
   { module: 'ESTOQUE', action: 'AUTHORIZE_ADJUST', label: 'Autorizar Ajustes', description: 'Aprovar edições de estoque.', category: 'Estoque', critical: true },
+  { module: 'ESTOQUE', action: 'MANAGE_WAREHOUSES', label: 'Gerenciar Depósitos', description: 'Cadastrar e inativar depósitos.', category: 'Estoque', critical: true },
+  { module: 'ESTOQUE', action: 'TRANSFER', label: 'Transferir Estoque', description: 'Transferir saldo entre depósitos.', category: 'Estoque', critical: true },
+  { module: 'ESTOQUE', action: 'COUNT', label: 'Contar Inventário', description: 'Abrir inventário e registrar contagens.', category: 'Estoque', critical: false },
+  { module: 'ESTOQUE', action: 'APPROVE_INVENTORY', label: 'Aprovar Inventário', description: 'Aplicar divergências da contagem ao estoque.', category: 'Estoque', critical: true },
 
   // TROCAS
   { module: 'TROCAS', action: 'VIEW', label: 'Listar Trocas', description: 'Ver histórico de trocas.', category: 'Comercial', critical: false, routePatterns: ['^/comercial/trocas', '^/crm/trocas'] },
@@ -168,6 +176,7 @@ export const PERMISSION_CATALOG: PermissionDefinition[] = [
   { module: 'USUARIOS', action: 'VIEW', label: 'Listar Usuários', description: 'Visualizar equipe.', category: 'Segurança', critical: false, routePatterns: ['^/configuracoes/usuarios', '^/usuarios'] },
   { module: 'USUARIOS', action: 'CREATE', label: 'Criar Usuários', description: 'Registrar novos membros na equipe.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'UPDATE', label: 'Editar Usuários', description: 'Alterar nomes, emails e e-mails.', category: 'Segurança', critical: true },
+  { module: 'USUARIOS', action: 'DELETE', label: 'Excluir Usuários', description: 'Remover usuário ou inativar seu acesso definitivamente.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'DISABLE', label: 'Desativar Usuários', description: 'Bloquear acesso do funcionário.', category: 'Segurança', critical: true },
   { module: 'USUARIOS', action: 'RESET_PIN', label: 'Resetar PIN', description: 'Gerar uma nova senha operacional forçada.', category: 'Segurança', critical: true },
 

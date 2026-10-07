@@ -2,8 +2,6 @@
 
 import * as React from "react"
 import { useProfile } from "@/lib/contexts/profile-context"
-import { useFirestore, useDoc, useMemoFirebase } from "@/lib/legacy-stubs"
-import { doc } from "@/lib/legacy-firestore-stubs"
 import {
   LayoutDashboard,
   Users,
@@ -77,24 +75,18 @@ const navItems = [
     title: "CRM",
     icon: Users,
     items: [
-      { title: "Dashboard", url: "/crm/dashboard", icon: LayoutDashboard },
       { title: "Clientes", url: "/crm/clientes", icon: Users },
       { title: "Filhos", url: "/crm/filhos", icon: Baby },
-      { title: "Aniversariantes", url: "/crm/clientes?tab=aniversariantes", icon: Gift },
-      { title: "Campanhas WhatsApp", url: "/crm/campanhas", icon: MessageSquare },
-      { title: "Carteira / Saldos", url: "/crm/carteira", icon: Wallet },
-      { title: "Trocas e Devoluções", url: "/crm/trocas", icon: Repeat },
-      { title: "Clientes com Saldo", url: "/crm/carteira?filter=com-saldo", icon: Wallet },
-      { title: "Configurações", url: "/crm/configuracoes", icon: Settings },
+      { title: "Aniversariantes", url: "/crm/aniversariantes", icon: Gift },
+      { title: "Campanhas WhatsApp", url: "/crm/campanhas-whatsapp", icon: MessageSquare },
+      { title: "Carteira / Saldo", url: "/crm/carteira", icon: Wallet },
       {
-        title: "Info Auxiliar",
-        icon: FileText,
+        title: "Opções Auxiliares",
+        icon: Settings,
         items: [
-          { title: "Histórico", url: "/crm/historico" },
-          { title: "Carteira / Saldos", url: "/crm/carteira" },
-          { title: "Clientes Inativos", url: "/crm/clientes?status=inativo" },
-          { title: "Tags", url: "/crm/tags" },
-          { title: "Segmentações", url: "/crm/segmentacoes" }
+          { title: "Segmentações", url: "/crm/opcoes/segmentacoes" },
+          { title: "Tags", url: "/crm/opcoes/tags" },
+          { title: "Histórico", url: "/crm/opcoes/historico" }
         ]
       }
     ],
@@ -103,10 +95,11 @@ const navItems = [
     title: "Comercial",
     icon: ShoppingCart,
     items: [
-      { title: "Vendas", url: "/comercial/vendas", icon: ShoppingCart },
+      { title: "Vendas Produto", url: "/comercial/vendas", icon: ShoppingCart },
+      { title: "Vendas Balcão - PDV", url: "/pdv", icon: Store },
+      { title: "Orçamentos", url: "/comercial/orcamentos", icon: FileText },
       { title: "Metas", url: "/comercial/metas", icon: PieChart },
       { title: "Comissões", url: "/comercial/comissoes", icon: DollarSign },
-      { title: "PDV", url: "/pdv", icon: Store },
       { 
         title: "Trocas e Devoluções", 
         icon: Repeat,
@@ -126,16 +119,17 @@ const navItems = [
     icon: Package,
     items: [
       { title: "Gerenciar Produtos", url: "/produtos", icon: Package },
-      { title: "Movimentações", url: "/movimentacoes", icon: ArrowLeftRight },
+      { title: "Movimentações", url: "/estoque/movimentacoes", icon: ArrowLeftRight },
       { title: "Fornecedores", url: "/fornecedores", icon: Truck },
-      { title: "Etiquetas", url: "/etiquetas", icon: Tag },
+      { title: "Pedidos de Fábrica", url: "/fornecedores/pedidos-fabrica", icon: Truck },
+      { title: "Etiquetas", url: "/produtos/etiquetas", icon: Tag },
       { 
         title: "Opções Auxiliares",
         icon: Boxes,
         items: [
-          { title: "Grupos de Produtos", url: "/grupos-produtos" },
+          { title: "Grupos de Produtos", url: "/produtos/grupos" },
           { title: "Unidades de Produtos", url: "/unidades-produtos" },
-          { title: "Grades / Variações", url: "/grades-variacoes" }
+          { title: "Grades / Variações", url: "/produtos/grades" }
         ]
       }
     ],
@@ -144,17 +138,22 @@ const navItems = [
     title: "Financeiro",
     icon: DollarSign,
     items: [
-      { title: "Dashboard", url: "/financeiro", icon: PieChart },
       { title: "Contas a Pagar", url: "/financeiro/contas-a-pagar", icon: Wallet },
       { title: "Contas a Receber", url: "/financeiro/contas-a-receber", icon: DollarSign },
-      { title: "Calendário", url: "/financeiro/calendario", icon: CalendarDays },
-      { title: "Fluxo de Caixa", url: "/financeiro/fluxo-caixa", icon: ArrowLeftRight },
+      { title: "DRE Gerencial", url: "/financeiro/dre", icon: PieChart },
+      { title: "Calendário de Contas", url: "/financeiro/calendario", icon: CalendarDays },
       { title: "Caixas", url: "/financeiro/caixas", icon: Store },
-      { title: "Contas Bancárias", url: "/financeiro/contas-bancarias", icon: Building2 },
-      { title: "Transferências", url: "/financeiro/transferencias", icon: Repeat },
       { title: "Vales de Funcionários", url: "/financeiro/vales", icon: Users },
-      { title: "Relatórios", url: "/financeiro/relatorios", icon: FileText },
-      { title: "Opções Auxiliares", url: "/financeiro/opcoes-auxiliares", icon: Settings },
+      {
+        title: "Opções Auxiliares",
+        icon: Settings,
+        items: [
+          { title: "Formas de Pagamento", url: "/financeiro/opcoes/formas-pagamento" },
+          { title: "Plano de Contas", url: "/financeiro/opcoes/plano-contas" },
+          { title: "Transferência", url: "/financeiro/opcoes/transferencias" },
+          { title: "Conciliação Bancária", url: "/financeiro/opcoes/conciliacao" },
+        ],
+      },
     ],
   },
   {
@@ -177,8 +176,14 @@ const navItems = [
   },
   {
     title: "Relatórios",
-    url: "/relatorios",
     icon: FileText,
+    items: [
+      { title: "Cadastros", url: "/relatorios/cadastros", icon: Users },
+      { title: "Vendas", url: "/relatorios/vendas", icon: ShoppingCart },
+      { title: "Estoque", url: "/relatorios/estoque", icon: Package },
+      { title: "Financeiro", url: "/relatorios/financeiro", icon: DollarSign },
+      { title: "Vales e Adiantamentos", url: "/relatorios/vales", icon: Users },
+    ],
   },
   {
     title: "Configurações",
@@ -218,15 +223,13 @@ const navItems = [
 export function AppSidebar() {
   const pathname = usePathname()
   const { activeProfile, logoutProfile } = useProfile()
-  const db = useFirestore()
-  const configRef = useMemoFirebase(() => {
-    return db && activeProfile?.empresaId ? doc(db, "configuracoes_empresa", activeProfile.empresaId) : null
-  }, [db, activeProfile?.empresaId])
-  const { data: empresaConfig } = useDoc(configRef)
+  
+  
+  
 
-  const logoUrl = empresaConfig?.logo_url || empresaConfig?.logo_reduzida
-  const smallLogoUrl = empresaConfig?.logo_reduzida || empresaConfig?.logo_url
-  const companyName = empresaConfig?.nome_fantasia || "NEEX"
+  const logoUrl = null
+  const smallLogoUrl = null
+  const companyName = "NEEX"
 
   const { canAccessRoute, isLoading } = usePermissions()
 
@@ -352,3 +355,4 @@ export function AppSidebar() {
     </Sidebar>
   )
 }
+

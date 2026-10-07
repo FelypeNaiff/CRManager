@@ -1,12 +1,27 @@
-import { getFinancialTransactions } from '@/lib/financial/financial-actions';
-import { getAccountsReceivable } from '@/lib/financial/accounts-receivable-service';
-const money=(value:number)=>new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(value);
-export default async function FinancialCalendar({ searchParams }: { searchParams: Promise<Record<string,string|undefined>> }) {
-  const params=await searchParams; const base=params.month && /^\d{4}-\d{2}$/.test(params.month)?new Date(`${params.month}-01T00:00:00`):new Date();
-  const start=new Date(base.getFullYear(),base.getMonth(),1); const end=new Date(base.getFullYear(),base.getMonth()+1,0,23,59,59,999);
-  const startDate=start.toISOString(); const endDate=end.toISOString();
-  const [txResult,receivableResult]=await Promise.all([getFinancialTransactions({startDate,endDate}),getAccountsReceivable({startDueDate:startDate,endDueDate:endDate})]);
-  if(!txResult.success||!receivableResult.success) throw new Error(txResult.error??receivableResult.error);
-  const events=[...(txResult.data??[]).map(t=>({id:t.id,date:t.dueDate??t.paidAt??t.createdAt,label:t.description,kind:t.direction==='IN'?'Entrada':'Saída',amount:Number(t.amount),status:t.status})),...(receivableResult.data??[]).map(r=>({id:r.id,date:r.dueDate,label:r.customer?.name?`Receber de ${r.customer.name}`:'Conta a receber',kind:'Recebível',amount:Number(r.remainingAmount),status:r.status}))].sort((a,b)=>new Date(a.date).getTime()-new Date(b.date).getTime());
-  return <div className="space-y-6"><div><h1 className="text-2xl font-bold">Calendário financeiro</h1><p className="text-sm text-muted-foreground">Transações e recebíveis reais do período.</p></div><form className="rounded-lg border p-4"><input className="rounded border p-2" type="month" name="month" defaultValue={`${base.getFullYear()}-${String(base.getMonth()+1).padStart(2,'0')}`}/><button className="ml-2 rounded bg-primary px-4 py-2 text-primary-foreground">Abrir mês</button></form><div className="rounded-lg border"><table className="w-full text-sm"><thead><tr className="bg-muted"><th className="p-3 text-left">Data</th><th className="p-3 text-left">Evento</th><th className="p-3 text-left">Tipo</th><th className="p-3 text-left">Status</th><th className="p-3 text-right">Valor</th></tr></thead><tbody>{events.map(e=><tr key={`${e.kind}-${e.id}`} className="border-t"><td className="p-3">{new Date(e.date).toLocaleDateString('pt-BR')}</td><td className="p-3">{e.label}</td><td className="p-3">{e.kind}</td><td className="p-3">{e.status}</td><td className="p-3 text-right">{money(e.amount)}</td></tr>)}</tbody></table></div></div>;
+import React from 'react';
+import { requirePermission } from '@/lib/auth/permissions';
+import { getFinancialCalendarAction } from '@/lib/financial/calendar-actions';
+import CalendarioClient from './CalendarioClient';
+
+export default async function FinancialCalendarPage(props: { searchParams: Promise<{ month?: string; year?: string }> }) {
+  await requirePermission('FINANCEIRO', 'VIEW');
+
+  const searchParams = await props.searchParams;
+  const now = new Date();
+  const month = searchParams.month ? parseInt(searchParams.month, 10) : now.getMonth() + 1;
+  const year = searchParams.year ? parseInt(searchParams.year, 10) : now.getFullYear();
+
+  const result = await getFinancialCalendarAction(month, year);
+  
+  if (!result.success) {
+    throw new Error(result.error);
+  }
+
+  return (
+    <CalendarioClient 
+      initialMonth={month} 
+      initialYear={year} 
+      data={result.data as any} 
+    />
+  );
 }

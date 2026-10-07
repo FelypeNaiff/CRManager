@@ -3,6 +3,12 @@ import { z } from "zod";
 export const SaleStatusSchema = z.enum(["PENDING", "PAID", "CANCELLED"]);
 
 export const createSaleSchema = z.object({
+  channel: z.enum(["PRODUCT", "COUNTER"]).default("PRODUCT"),
+  freightAmount: z.number().min(0).default(0),
+  deliveryType: z.enum(["PICKUP", "DELIVERY"]).optional(),
+  deliveryAddress: z.record(z.string(), z.string()).optional(),
+  deliveryDate: z.string().datetime().optional(),
+  draftId: z.string().uuid().optional(),
   companyId: z.string(),
   sellerId: z.string(),
   customerId: z.string().optional(),
@@ -44,7 +50,8 @@ export const cancelSaleSchema = z.object({
   saleId: z.string(),
   cancelReason: z.string().min(3),
   cancelledByUserId: z.string(),
-  authorizationId: z.string().optional()
+  authorizationId: z.string().optional(),
+  refundMethod: z.enum(["ORIGINAL", "WALLET_CREDIT"]).optional()
 });
 
 export const exchangeReturnSchema = z.object({

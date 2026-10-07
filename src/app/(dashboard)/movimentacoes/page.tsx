@@ -1,208 +1,29 @@
-"use client"
+import Link from 'next/link';
+import { getInventoryLedger, getInventoryOverview } from '@/lib/inventory/inventory-actions';
 
-import { useState, useEffect } from "react"
-import { ArrowLeftRight, Loader2, Search, Filter } from "lucide-react"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { getInventoryMovements } from "@/lib/crm/products-actions"
-
-interface Movimentacao {
-  id: string
-  produtoId: string
-  produtoNãome?: string
-  dataHora: any
-  entidade: string
-  tipo: "Entrada" | "Saída"
-  qntMovim: number
-  qntFinal: number
-  custoUnit: number
-  custoTotal: number
-  descricao: string
-}
-
-export default function MovimentacoesPage() {
-  const [movimentacoes, setMovimentacoes] = useState<Movimentacao[]>([])
-  const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-
-  const [page, setPage] = useState(1)
-  const pageSize = 50
-  const [totalCount, setTotalCount] = useState(0)
-  const [totalPages, setTotalPages] = useState(1)
-
-  useEffect(() => {
-    loadMovimentacoes()
-  }, [])
-
-  const loadMovimentacoes = async () => {
-    setIsLoading(true)
-    try {
-      const res = await getInventoryMovements({ page, pageSize })
-      if (res.success && 'data' in res && res.data) {
-        const mapped = res.data.map((m: any) => {
-          const qty = Number(m.quantity)
-          const variantCost = Number(m.variant.costPrice || 0)
-          const variantSale = Number(m.variant.salePrice || 0)
-          
-          return {
-            id: m.id,
-            produtoId: m.variant.product.name,
-            produtoNãome: m.variant.product.name,
-            dataHora: {
-              seconds: Math.floor(new Date(m.createdAt).getTime() / 1000)
-            },
-            entidade: m.user ? m.user.name : "Sistema (Ajuste/ETL)",
-            tipo: qty > 0 ? "Entrada" : "Saída" as "Entrada" | "Saída",
-            qntMovim: qty,
-            qntFinal: Number(m.variant.currentStock),
-            custoUnit: variantSale,
-            custoTotal: variantSale * Math.abs(qty),
-            descricao: m.reason || ""
-          }
-        })
-        setMovimentacoes(mapped)
-        if ('metadata' in res && res.metadata) {
-          setTotalPages(res.metadata.totalPages)
-          setTotalCount(res.metadata.totalCount)
-        }
-      } else {
-        setMovimentacoes([])
-      }
-    } catch (error) {
-      console.error("Erro ao carregar movimentações:", error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const formatData = (timestamp: any) => {
-    if (!timestamp) return "-"
-    const d = new Date(timestamp.seconds * 1000)
-    return d.toLocaleString("pt-BR")
-  }
-
-  const formatCurrency = (val: number) => {
-    return Number(val || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })
-  }
-
-  const filteredData = movimentacoes.filter(m => 
-    m.descricao?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.entidade?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    m.produtoId?.toLowerCase().includes(searchTerm.toLowerCase())
-  )
-
-  return (
-    <div className="space-y-6 max-w-full overflow-hidden">
-      <div className="flex justify-between items-center border-b pb-4">
-        <div>
-          <h1 className="text-2xl font-headline font-bold text-foreground flex items-center gap-2">
-            <ArrowLeftRight className="h-6 w-6 text-sidebar-foreground" /> Movimentações de Estoque
-          </h1>
-          <p className="text-sm text-muted-foreground mt-1">
-            Acompanhe as entradas e saídas de produtos do estoque.
-          </p>
-        </div>
-      </div>
-
-      <div className="flex flex-col sm:flex-row gap-4 justify-between items-center">
-        <div className="flex items-center gap-2 w-full sm:w-auto">
-          <Input 
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="h-9 rounded-sm w-full sm:w-[300px] text-[13px]"
-            placeholder="Pesquisar movimentação..."
-          />
-          <Button variant="outline" className="h-9 rounded-sm shrink-0">
-            <Search className="h-4 w-4" />
-          </Button>
-          <Button variant="outline" className="h-9 rounded-sm shrink-0">
-            <Filter className="h-4 w-4 mr-2" /> Filtros
-          </Button>
-        </div>
-      </div>
-
-      <div className="bg-white border rounded-sm shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-[13px] text-left">
-            <thead className="bg-slate-50 border-b text-slate-700 uppercase font-semibold">
-              <tr>
-                <th className="px-3 py-3">Data/hora</th>
-                <th className="px-3 py-3">Produto</th>
-                <th className="px-3 py-3">Entidade</th>
-                <th className="px-3 py-3">Tipo</th>
-                <th className="px-3 py-3">Qnt. movim.</th>
-                <th className="px-3 py-3">Qnt. final</th>
-                <th className="px-3 py-3">Custo unit.</th>
-                <th className="px-3 py-3">Custo Total</th>
-                <th className="px-3 py-3">Descrição</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
-                    <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                    Carregando movimentações...
-                  </td>
-                </tr>
-              ) : filteredData.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="py-8 text-center text-slate-500">
-                    Nenhuma movimentação encontrada.
-                  </td>
-                </tr>
-              ) : (
-                filteredData.map((mov) => (
-                  <tr key={mov.id} className="border-b last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="px-3 py-2.5 whitespace-nowrap text-muted-foreground">{formatData(mov.dataHora)}</td>
-                    <td className="px-3 py-2.5 font-medium">{mov.produtoId}</td> {/* Aqui deveria ser mov.produtoNãome */}
-                    <td className="px-3 py-2.5">{mov.entidade || "-"}</td>
-                    <td className="px-3 py-2.5">
-                      <span className={`px-1.5 py-0.5 rounded text-xs font-medium ${mov.tipo === "Entrada" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>
-                        {mov.tipo}
-                      </span>
-                    </td>
-                    <td className={`px-3 py-2.5 font-medium ${mov.qntMovim > 0 ? "text-green-600" : "text-red-600"}`}>
-                      {mov.qntMovim > 0 ? `+ ${mov.qntMovim}` : `- ${Math.abs(mov.qntMovim)}`}
-                    </td>
-                    <td className="px-3 py-2.5 font-semibold">{mov.qntFinal}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">{formatCurrency(mov.custoUnit)}</td>
-                    <td className="px-3 py-2.5 whitespace-nowrap">{formatCurrency(mov.custoTotal)}</td>
-                    <td className="px-3 py-2.5 text-slate-600 max-w-[200px] truncate" title={mov.descricao}>{mov.descricao}</td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </div>
-      
-      <div className="flex justify-between items-center mt-4">
-        <span className="text-[12px] text-muted-foreground">
-          Mostrando {filteredData.length} de {totalCount} resultados
-        </span>
-        <div className="flex gap-2">
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setPage(p => Math.max(1, p - 1))}
-            disabled={page === 1 || isLoading}
-          >
-            Anterior
-          </Button>
-          <span className="text-sm px-4 py-2 bg-gray-50 border rounded-sm">
-            Página {page} de {totalPages}
-          </span>
-          <Button 
-            variant="outline" 
-            size="sm" 
-            onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-            disabled={page === totalPages || isLoading}
-          >
-            Próximo
-          </Button>
-        </div>
-      </div>
-    </div>
-  )
+export default async function MovimentacoesPage({ searchParams }: { searchParams: Promise<Record<string, string | undefined>> }) {
+  const query = await searchParams;
+  const page = Math.max(1, Number(query.page ?? 1));
+  const [{ warehouses, positions }, ledger] = await Promise.all([
+    getInventoryOverview(),
+    getInventoryLedger({ warehouseId: query.warehouse, variantId: query.variant, type: query.type, origin: query.origin, document: query.document, from: query.from ? new Date(`${query.from}T00:00:00`) : undefined, to: query.to ? new Date(`${query.to}T23:59:59.999`) : undefined, page, pageSize: 25 }),
+  ]);
+  const variants = Array.from(new Map(positions.map((item: any) => [item.variantId, item])).values()) as any[];
+  const pages = Math.max(1, Math.ceil(ledger.total / ledger.pageSize));
+  const pageHref = (target: number) => `/movimentacoes?${new URLSearchParams({ ...Object.fromEntries(Object.entries(query).filter(([, value]) => value)), page: String(target) } as Record<string, string>)}`;
+  return <main className="space-y-5 p-6">
+    <header><p className="text-sm text-muted-foreground">Histórico físico reconciliável</p><h1 className="text-2xl font-semibold">Extrato de estoque</h1></header>
+    <form className="grid gap-2 rounded-lg border p-4 md:grid-cols-4 xl:grid-cols-8">
+      <select className="rounded border p-2 text-sm" name="warehouse" defaultValue={query.warehouse ?? ''}><option value="">Todos os depósitos</option>{warehouses.map((item: any) => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+      <select className="rounded border p-2 text-sm" name="variant" defaultValue={query.variant ?? ''}><option value="">Todas as variantes</option>{variants.map(item => <option key={item.variantId} value={item.variantId}>{item.variant.product.name} · {item.variant.name}</option>)}</select>
+      <select className="rounded border p-2 text-sm" name="type" defaultValue={query.type ?? ''}><option value="">Todos os tipos</option>{['INITIAL','PURCHASE','SALE','RETURN','EXCHANGE','LOSS','DAMAGE','MANUAL_ADJUSTMENT','TRANSFER','RESERVATION','CANCELLATION'].map(type => <option key={type}>{type}</option>)}</select>
+      <input className="rounded border p-2 text-sm" name="origin" defaultValue={query.origin} placeholder="Origem" />
+      <input className="rounded border p-2 text-sm" name="document" defaultValue={query.document} placeholder="Documento" />
+      <input className="rounded border p-2 text-sm" name="from" defaultValue={query.from} type="date" />
+      <input className="rounded border p-2 text-sm" name="to" defaultValue={query.to} type="date" />
+      <button className="rounded bg-primary px-3 py-2 text-sm text-primary-foreground">Filtrar</button>
+    </form>
+    <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-3">Data</th><th className="p-3">Depósito</th><th className="p-3">Produto</th><th className="p-3">Origem</th><th className="p-3 text-right">Anterior</th><th className="p-3 text-right">Entrada</th><th className="p-3 text-right">Saída</th><th className="p-3 text-right">Final</th><th className="p-3">Documento</th></tr></thead><tbody>{ledger.rows.map((row: any) => <tr className="border-b last:border-0" key={row.id}><td className="p-3 whitespace-nowrap">{new Date(row.occurredAt).toLocaleString('pt-BR')}</td><td className="p-3">{row.warehouse.name}</td><td className="p-3">{row.variant.product.name} · {row.variant.name}</td><td className="p-3">{row.origin}</td><td className="p-3 text-right">{row.balanceBefore}</td><td className="p-3 text-right text-green-700">{row.entry}</td><td className="p-3 text-right text-red-700">{row.exit}</td><td className="p-3 text-right font-medium">{row.balanceAfter}</td><td className="p-3">{row.documentType ?? '—'} {row.documentId ?? ''}</td></tr>)}</tbody></table>{ledger.rows.length === 0 && <p className="p-8 text-center text-muted-foreground">Nenhum movimento encontrado.</p>}</div>
+    <footer className="flex items-center justify-between text-sm"><span>{ledger.total} resultado(s)</span><div className="flex items-center gap-2"><Link aria-disabled={page <= 1} className="rounded border px-3 py-2 aria-disabled:pointer-events-none aria-disabled:opacity-50" href={pageHref(page - 1)}>Anterior</Link><span>{page} / {pages}</span><Link aria-disabled={page >= pages} className="rounded border px-3 py-2 aria-disabled:pointer-events-none aria-disabled:opacity-50" href={pageHref(page + 1)}>Próxima</Link></div></footer>
+  </main>;
 }

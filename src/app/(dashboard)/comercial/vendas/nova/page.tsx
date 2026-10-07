@@ -1,18 +1,22 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useProfile } from "@/lib/contexts/profile-context";
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { searchVariantsAction, searchCustomersAction } from "@/lib/sales/actions/search-sales-entities-action";
 import { listSellersAction } from "@/lib/sales/actions/list-sellers-action";
+import { listPaymentMethodsAction } from "@/lib/sales/actions/list-payment-methods-action";
 import { createSaleAction } from "@/lib/sales/actions/create-sale-action";
+import { createQuoteAction } from "@/lib/sales/actions/quote-actions";
 import { ChevronRight, ChevronLeft, Plus, Search, Trash2 } from "lucide-react";
 
 export default function NãovaVendaPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const isQuote = searchParams.get('mode') === 'quote';
   const { activeProfile } = useProfile();
   
   const [step, setStep] = useState(1);
@@ -35,6 +39,11 @@ export default function NãovaVendaPage() {
   const [customers, setCustomers] = useState<any[]>([]);
   const [sellers, setSellers] = useState<any[]>([]);
   const [variants, setVariants] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [paymentMethodId, setPaymentMethodId] = useState("");
+  const [freightAmount, setFreightAmount] = useState(0);
+  const [deliveryType, setDeliveryType] = useState<"PICKUP" | "DELIVERY">("PICKUP");
+  const [deliveryAddress, setDeliveryAddress] = useState("");
 
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -42,6 +51,9 @@ export default function NãovaVendaPage() {
     if (activeProfile?.empresaId) {
       listSellersAction(activeProfile.empresaId).then(res => {
         if (res.success) setSellers(res.sellers || []);
+      });
+      listPaymentMethodsAction(activeProfile.empresaId).then(res => {
+        if (res.success) setPaymentMethods(res.paymentMethods || []);
       });
     }
   }, [activeProfile?.empresaId]);
@@ -97,7 +109,7 @@ export default function NãovaVendaPage() {
   };
 
   const calculateSubtotal = () => cartItems.reduce((acc, item) => acc + (item.unitPrice * item.quantity), 0);
-  const calculateTotal = () => cartItems.reduce((acc, item) => acc + ((item.unitPrice - item.discount) * item.quantity), 0);
+  const calculateTotal = () => cartItems.reduce((acc, item) => acc + ((item.unitPrice - item.discount) * item.quantity), 0) + freightAmount;
 
   const handleCreateSale = async (pin?: string, reason?: string) => {
     if (!activeProfile?.empresaId || !sellerId || cartItems.length === 0) return;
@@ -106,21 +118,11 @@ export default function NãovaVendaPage() {
 
     const subtotal = calculateSubtotal();
     const totalAmount = calculateTotal();
-    const discountAmount = subtotal - totalAmount;
+    const discountAmount = subtotal - (totalAmount - freightAmount);
 
-    // Criar payment method dummy de dinheiro para a Venda que já vem como PAID no fluxo atual
-    const payments = [
-      {
-        paymentMethodId: "00000000-0000-0000-0000-000000000000", // Isso idealmente vem de um select, mas a FASE 6D nao exige tela completa de pagamento. Vamos usar um workaround ou o usuario tera q criar metodo real
-        amount: totalAmount,
-        installments: 1
-      }
-    ];
-    // Mas a Action de venda exige um ID de pagamento válido. 
-    // Como a FASE 6D não tem tela de PDV de pagamentos finais "NÃO implementar PDV ainda",
-    // faremos sem pagamentos se o schema permitir, senao enviamos o total com um ID placeholder vazio que pode falhar?
-    // Vamos chamar a action.
+    if (!paymentMethodId) { alert("Selecione a forma de pagamento."); setLoading(false); return; }
     const res = await createSaleAction({
+      channel: "PRODUCT",
       companyId: activeProfile.empresaId,
       sellerId: sellerId,
       customerId: customerId || undefined,
@@ -128,11 +130,14 @@ export default function NãovaVendaPage() {
       subtotal,
       discountAmount,
       totalAmount,
+      freightAmount,
+      deliveryType,
+      deliveryAddress: deliveryType === "DELIVERY" ? { address: deliveryAddress } : undefined,
       items: cartItems.map(i => ({
         ...i,
         totalPrice: (i.unitPrice - i.discount) * i.quantity
       })),
-      payments: [], // Se a API permitir sem pagamentos. Se não, precisaremos buscar 1 metodo.
+      payments: [{ paymentMethodId, amount: totalAmount, installments: 1 }],
       authorizationId: pin,
       authReason: reason
     });
@@ -154,9 +159,21 @@ export default function NãovaVendaPage() {
     }
   };
 
+  const handleCreateQuote = async () => {
+    if (!sellerId || cartItems.length === 0) return;
+    setLoading(true);
+    try {
+      const result = await createQuoteAction({ sellerId, customerId: customerId || undefined, freightAmount, deliveryType,
+        deliveryAddress: deliveryType === 'DELIVERY' ? { address: deliveryAddress } : undefined,
+        items: cartItems.map(item => ({ variantId: item.variantId, quantity: item.quantity, discount: item.discount })) });
+      if (result.success) router.push('/comercial/orcamentos');
+    } catch (error) { alert(error instanceof Error ? error.message : 'Não foi possível criar o orçamento.'); }
+    finally { setLoading(false); }
+  };
+
   return (
     <div className="max-w-4xl mx-auto p-6 space-y-6">
-      <h1 className="text-3xl font-bold">Nova Venda</h1>
+      <h1 className="text-3xl font-bold">{isQuote ? 'Novo Orçamento' : 'Nova Venda de Produto'}</h1>
 
       <div className="flex items-center space-x-2 text-sm text-muted-foreground mb-6">
         <span className={step >= 1 ? "text-primary font-bold" : ""}>1. Cliente</span>
@@ -207,7 +224,7 @@ export default function NãovaVendaPage() {
               <div className="space-y-2">
                 {sellers.map(s => (
                   <div key={s.id} className="flex justify-between items-center p-3 border rounded">
-                    <p className="font-bold">{s.nome}</p>
+                    <p className="font-bold">{s.name}</p>
                     <Button variant={sellerId === s.id ? "default" : "outline"} onClick={() => setSellerId(s.id)}>
                       Selecionar
                     </Button>
@@ -283,8 +300,15 @@ export default function NãovaVendaPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Vendedor:</p>
-                  <p className="font-bold">{sellers.find(s => s.id === sellerId)?.nome}</p>
+                  <p className="font-bold">{sellers.find(s => s.id === sellerId)?.name}</p>
                 </div>
+              </div>
+
+              <div className="grid gap-3 rounded-md border p-4 md:grid-cols-2">
+                <label className="space-y-1"><span className="text-sm font-medium">Entrega</span><select className="h-10 w-full rounded-md border bg-background px-3" value={deliveryType} onChange={e => setDeliveryType(e.target.value as "PICKUP" | "DELIVERY")}><option value="PICKUP">Retirada</option><option value="DELIVERY">Entrega</option></select></label>
+                <label className="space-y-1"><span className="text-sm font-medium">Frete</span><Input type="number" min="0" step="0.01" value={freightAmount} onChange={e => setFreightAmount(Number(e.target.value) || 0)} /></label>
+                {deliveryType === "DELIVERY" && <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">Endereço completo de entrega</span><Input value={deliveryAddress} onChange={e => setDeliveryAddress(e.target.value)} required /></label>}
+                {!isQuote && <label className="space-y-1 md:col-span-2"><span className="text-sm font-medium">Forma de pagamento</span><select className="h-10 w-full rounded-md border bg-background px-3" value={paymentMethodId} onChange={e => setPaymentMethodId(e.target.value)}><option value="">Selecione</option>{paymentMethods.map(method => <option key={method.id} value={method.id}>{method.name}</option>)}</select></label>}
               </div>
 
               <div className="border rounded-md divide-y">
@@ -303,8 +327,8 @@ export default function NãovaVendaPage() {
 
               <div className="pt-4 flex justify-between">
                 <Button variant="ghost" onClick={() => setStep(3)}>Voltar</Button>
-                <Button onClick={() => handleCreateSale()} disabled={loading}>
-                  {loading ? "Finalizando..." : "Finalizar Venda"}
+                <Button onClick={() => isQuote ? handleCreateQuote() : handleCreateSale()} disabled={loading || (deliveryType === "DELIVERY" && !deliveryAddress.trim()) || (!isQuote && !paymentMethodId)}>
+                  {loading ? "Processando..." : isQuote ? "Salvar Orçamento" : "Finalizar Venda"}
                 </Button>
               </div>
             </div>

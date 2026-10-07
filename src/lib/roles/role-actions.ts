@@ -190,8 +190,10 @@ export async function updateRoleAction(id: string, rawData: any) {
         validatedData.isAdmin,
         validatedData.status,
       );
+      const existing = await tx.role.findUnique({ where: { id } });
+      if (!existing || existing.companyId !== session.companyId) throw new Error('Grupo não encontrado');
       const updated = await tx.role.update({
-        where: tenantEntityWhere(id, session.companyId),
+        where: { id },
         data: {
           name: validatedData.name,
           description: validatedData.description,
@@ -231,5 +233,50 @@ export async function updateRoleAction(id: string, rawData: any) {
       return { success: false, error: 'O tenant deve manter ao menos um usuário administrador ativo.' };
     }
     return { success: false, error: 'Erro ao atualizar grupo.' };
+  }
+}
+
+/**
+ * Delete a role
+ */
+export async function deleteRoleAction(id: string) {
+  const session = await requirePermission('GRUPOS_USUARIOS', 'DELETE');
+  try {
+    const existingRole = await prisma.role.findFirst({
+      where: { id, companyId: session.companyId },
+    });
+
+    if (!existingRole) {
+      return { success: false, error: 'Grupo não encontrado.' };
+    }
+
+    if (existingRole.isAdmin) {
+      // Allow if we still have another admin role
+      const otherAdmins = await prisma.role.count({
+        where: { companyId: session.companyId, isAdmin: true, id: { not: id }, status: 'ACTIVE' }
+      });
+      if (otherAdmins === 0) {
+        return { success: false, error: 'Não é possível excluir o último grupo administrativo.' };
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.role.delete({ where: { id } });
+      await writeActivityLog({
+        context: session,
+        action: 'ROLE_DELETE',
+        module: 'ROLES',
+        recordId: id,
+        details: 'Role excluída',
+        metadata: { name: existingRole.name },
+      }, { policy: 'CRITICAL', tx });
+    });
+
+    return { success: true };
+  } catch (error: any) {
+    if (error.code === 'P2003') {
+      return { success: false, error: 'Não é possível excluir o grupo, pois existem usuários vinculados a ele. Altere o grupo dos usuários primeiro.' };
+    }
+    return { success: false, error: 'Erro ao excluir grupo de usuários.' };
   }
 }

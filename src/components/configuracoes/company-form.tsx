@@ -28,6 +28,7 @@ export default function CompanyForm() {
   const [initialData, setInitialData] = useState<any>(null);
 
   const [form, setForm] = useState({
+    tipoPessoa: 'PJ' as 'PF' | 'PJ',
     razaoSocial: '',
     nomeFantasia: '',
     cnpjCpf: '',
@@ -61,6 +62,7 @@ export default function CompanyForm() {
         if (response.success && response.data) {
           const comp = response.data;
           const initialFormState = {
+            tipoPessoa: (comp.tipoPessoa || 'PJ') as 'PF' | 'PJ',
             razaoSocial: comp.razaoSocial || '',
             nomeFantasia: comp.nomeFantasia || '',
             cnpjCpf: comp.cnpjCpf || '',
@@ -325,6 +327,16 @@ export default function CompanyForm() {
                 description="Dados oficiais da empresa para emissão fiscal, faturamento e identificação jurídica."
               >
                 <div className="grid gap-4 md:grid-cols-2">
+                  <ConfigSelectField
+                    label="Tipo de pessoa"
+                    id="tipoPessoa"
+                    value={form.tipoPessoa}
+                    onValueChange={(val) => setForm({ ...form, tipoPessoa: val as 'PF' | 'PJ' })}
+                    options={[
+                      { label: 'Pessoa Jurídica', value: 'PJ' },
+                      { label: 'Pessoa Física', value: 'PF' },
+                    ]}
+                  />
                   <div className="space-y-1">
                     <ConfigInputField
                       label="Razão Social *"

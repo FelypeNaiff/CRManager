@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 
 export interface CompanyDataInput {
+  tipoPessoa: 'PF' | 'PJ';
   razaoSocial: string;
   nomeFantasia: string;
   cnpjCpf: string;
@@ -63,6 +64,7 @@ export const CompanyService = {
         razaoSocial: data.razaoSocial,
         nomeFantasia: data.nomeFantasia,
         cnpjCpf: data.cnpjCpf,
+        tipoPessoa: data.tipoPessoa,
         inscricaoEstadual: data.inscricaoEstadual ?? null,
         inscricaoMunicipal: data.inscricaoMunicipal ?? null,
         regimeTributario: data.regimeTributario ?? null,

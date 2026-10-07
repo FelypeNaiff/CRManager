@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getRolesAction } from '@/lib/roles/role-actions';
+import { getRolesAction, deleteRoleAction } from '@/lib/roles/role-actions';
 import { ConfigPageHeader, ConfigStatusBadge, ConfigDataTable, ConfigDataTableHeader, ConfigDataTableBody, ConfigDataTableRow, ConfigDataTableHead, ConfigDataTableCell } from '@/components/configuracoes/config-ui';
 import { Button } from '@/components/ui/button';
-import { Search, ShieldCheck } from 'lucide-react';
+import { Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import Link from 'next/link';
 
@@ -34,6 +34,21 @@ export default function PermissoesPage() {
   useEffect(() => {
     loadRoles();
   }, []);
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o grupo "${name}" e sua matriz de permissões?`)) return;
+    try {
+      const res = await deleteRoleAction(id);
+      if (res.success) {
+        toast({ title: 'Sucesso', description: 'Grupo e matriz de permissões excluídos.' });
+        loadRoles();
+      } else {
+        toast({ title: 'Erro', description: res.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Erro', description: 'Erro ao excluir grupo.', variant: 'destructive' });
+    }
+  };
 
   const filteredRoles = roles.filter(role => 
     role.name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -121,12 +136,17 @@ export default function PermissoesPage() {
                         <ConfigStatusBadge status={role.status === 'ACTIVE' ? 'ativo' : 'inativo'} />
                       </ConfigDataTableCell>
                       <ConfigDataTableCell className="text-right">
-                        <Button asChild variant="outline" size="sm" className="h-8 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50">
-                          <Link href={`/configuracoes/grupos-usuarios/${role.id}/permissoes`}>
-                            <ShieldCheck className="h-4 w-4" />
-                            Editar Matriz
-                          </Link>
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button asChild variant="outline" size="sm" className="h-8 gap-2 border-purple-200 text-purple-700 hover:bg-purple-50">
+                            <Link href={`/configuracoes/grupos-usuarios/${role.id}/permissoes`}>
+                              <ShieldCheck className="h-4 w-4" />
+                              Editar Matriz
+                            </Link>
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => handleDelete(role.id, role.name)} title="Excluir Matriz e Grupo">
+                            <Trash2 className="h-4 w-4 text-red-600" />
+                          </Button>
+                        </div>
                       </ConfigDataTableCell>
                     </ConfigDataTableRow>
                   )

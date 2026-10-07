@@ -11,9 +11,9 @@ export function createCreateSaleAction(deps: any) {
       };
       const result = await deps.service.createSale(createSaleSchema.parse(normalizedData), auth.userId, auth);
       if (result && 'requireAuthorization' in result) return { success: false, requireAuthorization: true, authorizationId: result.authorizationId };
-      try { deps.revalidate('sales-reports'); deps.revalidate('crm-segmentation'); } catch { /* CLI/test mode */ }
+      try { deps.revalidate('sales-reports'); deps.revalidate('crm-segmentation'); } catch (error: any) { if (error?.name === 'ServerAuthError') return { success: false, error: error.message, authError: true }; /* CLI/test mode */ }
       return { success: true, sale: result };
-    } catch {
+    } catch (error: any) { if (error?.name === 'ServerAuthError') return { success: false, error: error.message, authError: true };
       return { success: false, error: 'Não foi possível registrar a venda.' };
     }
   };
@@ -28,7 +28,7 @@ export function createCancelSaleAction(deps: any) {
       deps.revalidateTag('sales-reports'); deps.revalidateTag('crm-segmentation');
       deps.revalidatePath('/comercial/vendas'); deps.revalidatePath(`/comercial/vendas/${data.saleId}`);
       return { success: true, sale: result };
-    } catch {
+    } catch (error: any) { if (error?.name === 'ServerAuthError') return { success: false, error: error.message, authError: true };
       return { success: false, error: 'Não foi possível cancelar a venda.' };
     }
   };
@@ -40,17 +40,23 @@ export function createGetSaleAction(deps: any) {
       const auth = await deps.authorize('VENDAS', 'VIEW');
       const sale = await deps.service.getSaleById(saleId, auth.companyId);
       return sale ? { success: true, sale } : { success: false, error: 'Venda não encontrada.' };
-    } catch { return { success: false, error: 'Venda não encontrada.' }; }
+    } catch (error: any) {
+      if (error?.name === 'ServerAuthError') return { success: false, error: error.message, authError: true };
+      return { success: false, error: 'Venda não encontrada.' };
+    }
   };
 }
 
-export type ListSalesFilters = { sellerId?: string; customerId?: string; status?: string; startDate?: Date; endDate?: Date; page?: number; pageSize?: number };
+export type ListSalesFilters = { sellerId?: string; customerId?: string; status?: string; channel?: string; startDate?: Date; endDate?: Date; page?: number; pageSize?: number };
 
 export function createListSalesAction(deps: any) {
   return async (_companyId: string, filters?: ListSalesFilters) => {
     try {
-      const auth = await deps.authorize('VENDAS', 'VIEW');
+      const auth = await deps.authorize([{ module: 'VENDAS', action: 'VIEW' }, { module: 'PDV', action: 'VIEW' }]);
       return { success: true, ...await deps.service.listSales(auth.companyId, filters) };
-    } catch { return { success: false, error: 'Não foi possível listar as vendas.' }; }
+    } catch (error: any) {
+      if (error?.name === 'ServerAuthError') return { success: false, error: error.message, authError: true };
+      return { success: false, error: 'Não foi possível listar as vendas.' };
+    }
   };
 }

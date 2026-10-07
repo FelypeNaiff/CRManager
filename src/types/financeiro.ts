@@ -15,7 +15,7 @@ export interface BankAccount {
   accountNumber?: string;
   status: 'ACTIVE' | 'INACTIVE';
   empresaId?: string;
-  createdAt: any; // Firestore Timestamp
+  createdAt: any;
   updatedAt: any;
 }
 
@@ -143,7 +143,7 @@ export interface CashRegister {
   id?: string;
   userId: string;
   userName: string;
-  openedAt: any; // Firestore Timestamp
+  openedAt: any;
   closedAt?: any;
   initialBalance: number;
   currentBalance: number;

@@ -12,7 +12,9 @@
     "test:safe": "node scripts/run-safe-tests.mjs",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "fix:encoding": "tsx scripts/fix-db-encoding.ts"
+    "fix:encoding": "tsx scripts/fix-db-encoding.ts",
+    "test:stress": "tsx scripts/stress-test-seed.ts",
+    "test:cleanup": "tsx scripts/stress-test-cleanup.ts"
   },
   "dependencies": {
     "@genkit-ai/google-genai": "^1.28.0",
@@ -69,6 +71,8 @@
     "@types/react-dom": "^19.2.1",
     "@types/uuid": "^10.0.0",
     "cross-env": "^10.1.0",
+    "eslint": "^8.57.1",
+    "eslint-config-next": "^15.5.9",
     "genkit-cli": "^1.28.0",
     "postcss": "^8",
     "prisma": "^6.19.3",

@@ -56,7 +56,7 @@ export async function searchVariantsAction(_companyId: string, query: string) {
       },
       take: 20
     });
-    return { success: true, variants };
+    return { success: true, variants: serializePrisma(variants) };
   } catch {
     return { success: false, error: 'Não foi possível buscar produtos.' };
   }
@@ -80,7 +80,7 @@ export async function searchCustomersAction(_companyId: string, query: string) {
       },
       take: 20
     });
-    return { success: true, customers };
+    return { success: true, customers: serializePrisma(customers) };
   } catch {
     return { success: false, error: 'Não foi possível buscar clientes.' };
   }

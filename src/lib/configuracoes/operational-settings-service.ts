@@ -24,6 +24,46 @@ export interface SalePolicyParams {
   isDraft?: boolean;
 }
 
+type LegacyCompanyOperationalFields = {
+  allowNegativeStockOnPDV: boolean;
+  enableSellerCommission: boolean;
+  enableSellerGoals: boolean;
+};
+
+/** Compatibility adapter used only while creating the canonical settings row. */
+export function buildInitialOperationalSettings(company?: LegacyCompanyOperationalFields | null) {
+  return {
+    allowDiscount: true,
+    sellerDiscountLimit: new Prisma.Decimal(5),
+    managerDiscountLimit: new Prisma.Decimal(10),
+    adminDiscountLimit: new Prisma.Decimal(100),
+    requireAuthorizationAboveLimit: true,
+    requireOpenCashRegister: true,
+    requireCloseCashRegister: true,
+    allowCashWithdrawal: true,
+    allowCashSupply: true,
+    allowSaleWithoutCustomer: true,
+    requireCustomerOnSale: false,
+    allowNegativeStock: company?.allowNegativeStockOnPDV ?? false,
+    reserveStockOnDraftSale: false,
+    allowSaleCancellation: true,
+    requireAuthorizationToCancelSale: true,
+    cancellationTimeLimit: 30,
+    autoPrintReceipt: false,
+    enableThermalPrinter: false,
+    receiptModel: 'simples',
+    maxInstallments: 1,
+    defaultInterestRate: new Prisma.Decimal(0),
+    enableCommissions: company?.enableSellerCommission ?? true,
+    defaultCommissionRate: new Prisma.Decimal(0),
+    enableSellerGoals: company?.enableSellerGoals ?? true,
+    commissionReleasePolicy: 'ON_FINANCIAL_OBLIGATION' as const,
+    enableCustomerWallet: true,
+    walletExpirationDays: null,
+    allowPartialWalletUsage: true,
+  };
+}
+
 export const OperationalSettingsService = {
   /**
    * Retrieves the operational settings for a company.
@@ -45,36 +85,14 @@ export const OperationalSettingsService = {
     });
 
     if (!settings) {
+      const legacyCompany = await client.company.findUnique({
+        where: { id: companyId },
+        select: { allowNegativeStockOnPDV: true, enableSellerCommission: true, enableSellerGoals: true },
+      });
       settings = await client.operationalSettings.create({
         data: {
           companyId,
-          allowDiscount: true,
-          sellerDiscountLimit: new Prisma.Decimal(5.0),
-          managerDiscountLimit: new Prisma.Decimal(10.0),
-          adminDiscountLimit: new Prisma.Decimal(100.0),
-          requireAuthorizationAboveLimit: true,
-          requireOpenCashRegister: true,
-          requireCloseCashRegister: true,
-          allowCashWithdrawal: true,
-          allowCashSupply: true,
-          allowSaleWithoutCustomer: true,
-          requireCustomerOnSale: false,
-          allowNegativeStock: false,
-          reserveStockOnDraftSale: false,
-          allowSaleCancellation: true,
-          requireAuthorizationToCancelSale: true,
-          cancellationTimeLimit: 30,
-          autoPrintReceipt: false,
-          enableThermalPrinter: false,
-          receiptModel: 'simples',
-          maxInstallments: 1,
-          defaultInterestRate: new Prisma.Decimal(0.0),
-          enableCommissions: true,
-          defaultCommissionRate: new Prisma.Decimal(0.0),
-          enableSellerGoals: true,
-          enableCustomerWallet: true,
-          walletExpirationDays: null,
-          allowPartialWalletUsage: true,
+          ...buildInitialOperationalSettings(legacyCompany),
         },
       });
     }

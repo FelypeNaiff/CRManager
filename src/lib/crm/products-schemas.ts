@@ -20,6 +20,13 @@ export const ProductVariantInputSchema = z.object({
   costPrice: z.number().min(0, 'Preço de custo deve ser maior ou igual a 0'),
   salePrice: z.number().min(0, 'Preço de venda deve ser maior ou igual a 0'),
   minimumStock: z.number().min(0, 'Estoque mínimo deve ser maior ou igual a 0').default(0),
+  initialStock: z.number().min(0).default(0).optional(),
+  maximumStock: z.number().min(0).optional().nullable(),
+  weightKg: z.number().min(0).optional().nullable(),
+  heightCm: z.number().min(0).optional().nullable(),
+  widthCm: z.number().min(0).optional().nullable(),
+  lengthCm: z.number().min(0).optional().nullable(),
+  currentStock: z.number().optional().nullable(),
 });
 
 export const ProductSchema = z.object({
@@ -31,6 +38,15 @@ export const ProductSchema = z.object({
   imageUrl: z.string().url('URL inválida').optional().or(z.literal('')).nullable(),
   thumbnailUrl: z.string().url('URL inválida').optional().or(z.literal('')).nullable(),
   galleryUrls: z.array(z.string().url('URL inválida')).default([]),
+  salesUnit: z.string().trim().min(1).max(10).default('UN'),
+  purchaseUnit: z.string().trim().min(1).max(10).default('UN'),
+  purchaseFactor: z.number().positive('Fator de compra deve ser positivo').default(1),
+  trackStock: z.boolean().default(true),
+  pdvEligible: z.boolean().default(true),
+  ncm: z.string().trim().optional().nullable(),
+  cest: z.string().trim().optional().nullable(),
+  fiscalOrigin: z.string().trim().optional().nullable(),
+  commissionRate: z.number().min(0).max(100).optional().nullable(),
   
   // Para simplificar a criação simplificada (variante única)
   costPrice: z.number().min(0, 'Preço de custo deve ser maior ou igual a 0').optional(),
@@ -39,6 +55,8 @@ export const ProductSchema = z.object({
   barcode: z.string().optional().nullable(),
   barcodeType: z.string().optional().nullable(),
   minimumStock: z.number().min(0, 'Estoque mínimo deve ser maior ou igual a 0').default(0).optional(),
+  initialStock: z.number().min(0).default(0).optional(),
+  currentStock: z.number().optional().nullable(),
 });
 
 export const InventoryMovementSchema = z.object({

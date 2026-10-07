@@ -129,7 +129,7 @@ export default function DashboardPage() {
           salesList.forEach((s: any) => {
             const sDate = new Date(s.createdAt)
             const dayBucket = daysList.find(d => d.dateStr === sDate.toDateString())
-            if (dayBucket && s.status !== 'CANCELLED') {
+            if (dayBucket && ['PAID', 'PENDING'].includes(s.status)) {
               dayBucket.total += Number(s.totalAmount)
             }
           })

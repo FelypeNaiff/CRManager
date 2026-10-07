@@ -384,9 +384,30 @@ export async function updatePaymentMethod(id: string, input: any) {
   if (!parsed.success) return { success: false, error: parsed.error.errors[0].message };
 
   try {
+    const current = await prisma.paymentMethod.findFirst({
+      where: { id, companyId: session.companyId },
+      include: { _count: { select: { salePayments: true, transactions: true } } },
+    });
+    if (!current) return { success: false, error: 'Forma de pagamento não encontrada.' };
+
     const data: any = { ...parsed.data };
     if (parsed.data.feePercentage !== undefined) {
       data.feePercentage = new Prisma.Decimal(parsed.data.feePercentage);
+    }
+
+    const hasHistoricalReferences = current._count.salePayments > 0 || current._count.transactions > 0;
+    const changesHistoricalRule =
+      (parsed.data.type !== undefined && parsed.data.type !== current.type)
+      || (parsed.data.allowsInstallments !== undefined && parsed.data.allowsInstallments !== current.allowsInstallments)
+      || (parsed.data.autoReceive !== undefined && parsed.data.autoReceive !== current.autoReceive)
+      || (parsed.data.requiresAuthorization !== undefined && parsed.data.requiresAuthorization !== current.requiresAuthorization)
+      || (parsed.data.feePercentage !== undefined && !current.feePercentage.equals(parsed.data.feePercentage))
+      || (parsed.data.settlementDays !== undefined && parsed.data.settlementDays !== current.settlementDays);
+    if (hasHistoricalReferences && changesHistoricalRule) {
+      return {
+        success: false,
+        error: 'Esta forma de pagamento possui histórico. Apenas o nome pode ser alterado.',
+      };
     }
 
     await prisma.paymentMethod.updateMany({
@@ -413,7 +434,8 @@ export async function deletePaymentMethod(id: string) {
   const session = await requirePermission('FINANCEIRO', 'DELETE');
   try {
     const method = await prisma.paymentMethod.findFirst({ where: { id, companyId: session.companyId } });
-    if (method?.isSystemDefault) return { success: false, error: 'Formas de pagamento padrão do sistema não podem ser excluídas.' };
+    if (!method) return { success: false, error: 'Forma de pagamento não encontrada.' };
+    if (method.isSystemDefault) return { success: false, error: 'Formas de pagamento padrão do sistema não podem ser excluídas.' };
 
     await prisma.paymentMethod.updateMany({
       where: { id, companyId: session.companyId },

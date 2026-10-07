@@ -1,0 +1,8 @@
+import Link from 'next/link';
+import { listQuotesAction } from '@/lib/sales/actions/quote-actions';
+
+export default async function OrcamentosPage() {
+  const quotes = await listQuotesAction();
+  return <main className="space-y-5 p-6"><header className="flex items-end justify-between"><div><p className="text-sm text-muted-foreground">Sem movimentação de estoque</p><h1 className="text-2xl font-semibold">Orçamentos</h1></div><Link className="rounded bg-primary px-4 py-2 text-sm text-primary-foreground" href="/comercial/vendas/nova?mode=quote">Novo orçamento</Link></header>
+    <div className="overflow-x-auto rounded-lg border"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-3">Data</th><th className="p-3">Cliente</th><th className="p-3">Vendedor</th><th className="p-3 text-right">Itens</th><th className="p-3 text-right">Total</th><th className="p-3"></th></tr></thead><tbody>{quotes.map((quote: any) => <tr className="border-b last:border-0" key={quote.id}><td className="p-3">{new Date(quote.createdAt).toLocaleString('pt-BR')}</td><td className="p-3">{quote.customer?.name ?? 'Consumidor'}</td><td className="p-3">{quote.seller.name}</td><td className="p-3 text-right">{quote._count.items}</td><td className="p-3 text-right">{Number(quote.totalAmount).toLocaleString('pt-BR',{style:'currency',currency:'BRL'})}</td><td className="p-3 text-right"><Link className="text-primary underline" href={`/pdv?draft=${quote.id}&channel=PRODUCT`}>Transformar em venda de produto</Link></td></tr>)}</tbody></table>{quotes.length === 0 && <p className="p-8 text-center text-muted-foreground">Nenhum orçamento em aberto.</p>}</div></main>;
+}

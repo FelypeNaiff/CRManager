@@ -2,10 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { getRolesAction } from '@/lib/roles/role-actions';
+import { getRolesAction, deleteRoleAction } from '@/lib/roles/role-actions';
 import { ConfigPageHeader, ConfigStatusBadge, ConfigDataTable, ConfigDataTableHeader, ConfigDataTableBody, ConfigDataTableRow, ConfigDataTableHead, ConfigDataTableCell } from '@/components/configuracoes/config-ui';
 import { Button } from '@/components/ui/button';
-import { Plus, Search, Edit3, KeyRound, Users } from 'lucide-react';
+import { Plus, Search, Edit3, KeyRound, Users, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import RoleFormModal from '@/components/users/role-form-modal';
 import { format } from 'date-fns';
@@ -60,6 +60,21 @@ export default function GruposUsuariosPage() {
   const handleOpenEdit = (id: string) => {
     setSelectedRoleId(id);
     setIsFormOpen(true);
+  };
+
+  const handleDelete = async (id: string, name: string) => {
+    if (!window.confirm(`Tem certeza que deseja excluir o grupo "${name}"?`)) return;
+    try {
+      const res = await deleteRoleAction(id);
+      if (res.success) {
+        toast({ title: 'Sucesso', description: 'Grupo excluído.' });
+        loadRoles();
+      } else {
+        toast({ title: 'Erro', description: res.error, variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Erro', description: 'Erro ao excluir grupo.', variant: 'destructive' });
+    }
   };
 
   const filteredRoles = roles.filter(role => 
@@ -157,6 +172,9 @@ export default function GruposUsuariosPage() {
                         </Button>
                         {can('GRUPOS_USUARIOS', 'UPDATE') && <Button variant="ghost" size="icon" onClick={() => handleOpenEdit(role.id)} title="Editar Grupo">
                           <Edit3 className="h-4 w-4 text-amber-600" />
+                        </Button>}
+                        {can('GRUPOS_USUARIOS', 'DELETE') && <Button variant="ghost" size="icon" onClick={() => handleDelete(role.id, role.name)} title="Excluir Grupo">
+                          <Trash2 className="h-4 w-4 text-red-600" />
                         </Button>}
                       </div>
                     </ConfigDataTableCell>

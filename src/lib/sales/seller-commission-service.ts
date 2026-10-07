@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/prisma";
+import { Prisma, type CommissionReleasePolicy } from "@prisma/client";
 import { OperationalSettingsService } from "../configuracoes/operational-settings-service";
 
 export class SellerCommissionService {
@@ -37,21 +37,38 @@ export class SellerCommissionService {
 
     // Se empresa habilita comissões, calcula e cria
     if (settings.enableCommissions) {
-      let rate = 0;
+      let rate = new Prisma.Decimal(0);
       if (seller.commissionRate && Number(seller.commissionRate) > 0) {
-        rate = Number(seller.commissionRate);
+        rate = new Prisma.Decimal(seller.commissionRate);
       } else if (settings.defaultCommissionRate && Number(settings.defaultCommissionRate) > 0) {
-        rate = Number(settings.defaultCommissionRate);
+        rate = new Prisma.Decimal(settings.defaultCommissionRate);
       }
 
-      if (rate > 0) {
-        const commissionAmount = Number(sale.totalAmount) * (rate / 100);
+      const itemSnapshots = Array.isArray(sale.items) ? sale.items : [];
+      const hasItemSnapshots = itemSnapshots.length > 0 && itemSnapshots.every((item: any) => item.commissionAmountSnapshot !== null && item.commissionAmountSnapshot !== undefined);
+      const baseAmount = hasItemSnapshots
+        ? itemSnapshots.reduce((sum: Prisma.Decimal, item: any) => sum.plus(item.commissionBaseSnapshot), new Prisma.Decimal(0))
+        : new Prisma.Decimal(sale.totalAmount);
+      const commissionAmount = hasItemSnapshots
+        ? itemSnapshots.reduce((sum: Prisma.Decimal, item: any) => sum.plus(item.commissionAmountSnapshot), new Prisma.Decimal(0)).toDecimalPlaces(2)
+        : baseAmount.mul(rate).div(100).toDecimalPlaces(2);
+
+      if (commissionAmount.gt(0)) {
+        const releasePolicy = (seller.commissionReleasePolicy
+          ?? settings.commissionReleasePolicy
+          ?? 'ON_FINANCIAL_OBLIGATION') as CommissionReleasePolicy;
+        const releasedAt = releasePolicy === 'ON_FINANCIAL_OBLIGATION' ? new Date() : null;
         await tx.sellerCommission.create({
           data: {
             sellerId: seller.id,
             saleId: sale.id,
             amount: commissionAmount,
-            status: "PENDING"
+            status: "PENDING",
+            baseAmountSnapshot: baseAmount,
+            rateSnapshot: hasItemSnapshots ? null : rate,
+            releasePolicySnapshot: releasePolicy,
+            releasedAmount: releasedAt ? commissionAmount : new Prisma.Decimal(0),
+            releasedAt,
           }
         });
       }

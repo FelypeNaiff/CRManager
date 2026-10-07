@@ -38,7 +38,10 @@ export async function getUsersAction() {
   const session = await requirePermission('USUARIOS', 'VIEW');
   try {
     const users = await prisma.user.findMany({
-      where: { companyId: session.companyId },
+      where: { 
+        companyId: session.companyId,
+        status: { not: 'DELETED' }
+      },
       select: {
         id: true,
         name: true,
@@ -58,6 +61,115 @@ export async function getUsersAction() {
     return { success: true, data: serializePrisma(users) };
   } catch (error: any) {
     return { success: false, error: 'Erro ao buscar usuários.' };
+  }
+}
+
+/**
+ * Delete a user (soft delete)
+ */
+export async function deleteUserAction(id: string) {
+  try {
+    const session = await requirePermission('USUARIOS', 'DELETE');
+    if (session.userId === id) {
+      return { success: false, error: 'Você não pode excluir seu próprio usuário.' };
+    }
+
+    const existingUser = await prisma.user.findFirst({
+      where: tenantEntityWhere(id, session.companyId),
+      include: { role: { select: { isAdmin: true } } },
+    });
+
+    if (!existingUser) {
+      return { success: false, error: 'Usuário não encontrado.' };
+    }
+
+    if (existingUser.role?.isAdmin) {
+      const otherAdminsCount = await prisma.user.count({
+        where: {
+          companyId: session.companyId,
+          id: { not: id },
+          status: 'ACTIVE',
+          permitirAcesso: true,
+          role: { is: { isAdmin: true, status: 'ACTIVE' } },
+        },
+      });
+      if (otherAdminsCount === 0) {
+        return { success: false, error: 'Não é possível excluir o único administrador ativo do sistema.' };
+      }
+    }
+
+    try {
+      // 1. Tenta a exclusão definitiva caso o usuário não tenha histórico operacional
+      const deletedUser = await prisma.$transaction(async (tx) => {
+        const user = await tx.user.findFirst({
+          where: { id, companyId: session.companyId }
+        });
+        if (!user) throw new Error('USUARIO_NAO_ENCONTRADO');
+
+        const deleted = await tx.user.delete({
+          where: { id } // No Prisma, use apenas o id único
+        });
+
+        await writeActivityLog({
+          context: session,
+          action: 'USER_DELETE',
+          module: 'USUARIOS',
+          recordId: id,
+          details: `Usuário "${deleted.name}" excluído definitivamente do sistema`,
+          metadata: { email: deleted.email }
+        }, { policy: 'CRITICAL', tx });
+
+        return deleted;
+      });
+
+      return { success: true, message: 'Usuário excluído com sucesso.' };
+    } catch (error: any) {
+      // 2. Se houver registros vinculados (vendas, caixa, estoque, auditoria), faz Soft Delete inteligente
+      if (error.code === 'P2003' || error.message?.includes('foreign key')) {
+        await prisma.$transaction(async (tx) => {
+          const user = await tx.user.findFirst({
+            where: { id, companyId: session.companyId }
+          });
+          if (!user) throw new Error('USUARIO_NAO_ENCONTRADO');
+
+          // Libera o e-mail para que possa ser reutilizado no futuro caso recadastrado
+          const anonymizedEmail = `deleted_${Date.now()}_${user.email}`;
+          const anonymizedUsername = user.username ? `deleted_${Date.now()}_${user.username}` : null;
+
+          await tx.user.update({
+            where: { id },
+            data: {
+              status: 'DELETED',
+              permitirAcesso: false,
+              email: anonymizedEmail,
+              username: anonymizedUsername,
+            }
+          });
+
+          await writeActivityLog({
+            context: session,
+            action: 'USER_DELETE',
+            module: 'USUARIOS',
+            recordId: id,
+            details: `Acesso do usuário "${user.name}" revogado e arquivado (possuía histórico operacional)`,
+            metadata: { originalEmail: user.email }
+          }, { policy: 'CRITICAL', tx });
+        });
+
+        return { success: true, message: 'Usuário arquivado com sucesso. O histórico de movimentações foi preservado.' };
+      }
+
+      if (error.message === 'USUARIO_NAO_ENCONTRADO') {
+        return { success: false, error: 'Usuário não encontrado.' };
+      }
+
+      return { success: false, error: 'Não foi possível excluir o usuário.' };
+    }
+  } catch (error: any) {
+    if (error?.message === 'ACCESS_NOT_ALLOWED' || error?.message?.includes('permissão')) {
+      return { success: false, error: 'Você não tem permissão para excluir usuários.' };
+    }
+    return { success: false, error: 'Erro ao excluir usuário.' };
   }
 }
 

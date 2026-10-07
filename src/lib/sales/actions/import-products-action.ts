@@ -6,6 +6,8 @@ import { revalidatePath } from 'next/cache';
 import { Decimal } from '@prisma/client/runtime/library';
 import { writeActivityLog } from '@/lib/auth/activity-log';
 import { addAuditChange, type AuditChanges } from '@/lib/auth/audit-changes';
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from '@/lib/inventory/inventory-service';
+import { randomUUID } from 'crypto';
 
 interface ProductImportItem {
   codigo?: string;
@@ -23,12 +25,14 @@ interface ProductImportItem {
 
 export async function importProductsAction(items: ProductImportItem[]) {
   const auth = await requirePermission('PRODUTOS', 'IMPORT');
+  const importRunId = randomUUID();
   try {
     const companyId = auth.companyId;
     let createdCount = 0;
     let updatedCount = 0;
 
     await prisma.$transaction(async (tx) => {
+      const warehouse = await getOrCreateDefaultWarehouse(tx, companyId);
       for (const item of items) {
         const nome = item.nome.trim();
         const sku = item.sku?.trim() || "";
@@ -142,23 +146,16 @@ export async function importProductsAction(items: ProductImportItem[]) {
 
           if (!delta.isZero()) {
             // Register controlled initial adjustment
-            const movement = await tx.inventoryMovement.create({
-              data: {
-                variantId: existingVariant.id,
-                quantity: delta,
-                type: 'INITIAL',
-                reason: 'GO-LIVE-04',
-                userId: auth.userId
-              }
-            });
-
-            // Apply stock adjustment
-            await tx.productVariant.update({
-              where: { id: existingVariant.id, companyId },
-              data: {
-                currentStock: currentStock.plus(delta),
-                availableStock: currentAvailable.plus(delta)
-              }
+            const movement = await applyInventoryMovement(tx, auth, {
+              warehouseId: warehouse.id,
+              variantId: existingVariant.id,
+              physicalDelta: delta,
+              type: 'INITIAL',
+              origin: 'LEGACY_PRODUCT_IMPORT',
+              idempotencyKey: `legacy-import:${importRunId}:${existingVariant.id}`,
+              reason: 'GO-LIVE-04',
+              allowNegativePhysical: true,
+              allowNegativeAvailable: true,
             });
 
             await writeActivityLog({
@@ -302,22 +299,16 @@ export async function importProductsAction(items: ProductImportItem[]) {
 
           // Geração de estoque inicial
           if (!targetStock.isZero()) {
-            const movement = await tx.inventoryMovement.create({
-              data: {
-                variantId: newVariant.id,
-                quantity: targetStock,
-                type: 'INITIAL',
-                reason: 'GO-LIVE-04',
-                userId: auth.userId
-              }
-            });
-
-            await tx.productVariant.update({
-              where: { id: newVariant.id, companyId },
-              data: {
-                currentStock: targetStock,
-                availableStock: targetStock
-              }
+            const movement = await applyInventoryMovement(tx, auth, {
+              warehouseId: warehouse.id,
+              variantId: newVariant.id,
+              physicalDelta: targetStock,
+              type: 'INITIAL',
+              origin: 'LEGACY_PRODUCT_IMPORT',
+              idempotencyKey: `legacy-import:${importRunId}:${newVariant.id}`,
+              reason: 'GO-LIVE-04',
+              allowNegativePhysical: true,
+              allowNegativeAvailable: true,
             });
 
             await writeActivityLog({

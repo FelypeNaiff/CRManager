@@ -2,7 +2,7 @@
 import { serializePrisma } from '@/lib/serialize';
 
 import { prisma } from '@/lib/prisma';
-import { requirePermission } from '@/lib/auth/permissions';
+import { requirePermission, requireAuth } from '@/lib/auth/permissions';
 import { revalidatePath } from 'next/cache';
 import { getPaginationArgs, buildPaginatedResult, PaginationParams } from '@/lib/performance/pagination';
 import { buildProductSearchWhere } from '@/lib/performance/query-utils';
@@ -21,6 +21,10 @@ import { authorizationService } from '../auth/authorization-service';
 import { tenantWhere } from './tenant-security';
 import { approvedAuthorizationWhere } from '../auth/authorization-security';
 import { publicActionError } from '../auth/public-action-error';
+import { OperationalSettingsService } from '../configuracoes/operational-settings-service';
+import { createCanonicalProduct } from './product-write-service';
+import { applyInventoryMovement, getOrCreateDefaultWarehouse } from '../inventory/inventory-service';
+import { randomUUID } from 'crypto';
 
 async function validateProductRelations(
   companyId: string,
@@ -45,10 +49,28 @@ export async function getProductCategories() {
     const categories = await prisma.productCategory.findMany({
       where: { companyId: session.companyId, isActive: true },
       orderBy: { name: 'asc' },
+      include: {
+        _count: {
+          select: { products: { where: { isActive: true } } }
+        }
+      }
     });
     return { success: true, data: serializePrisma(categories) };
   } catch (error: any) {
     return { success: false, error: publicActionError(error, 'Erro ao buscar categorias de produtos.') };
+  }
+}
+
+export async function getProductCategoryById(id: string) {
+  const session = await requirePermission('PRODUTOS', 'VIEW');
+  try {
+    const category = await prisma.productCategory.findFirst({
+      where: tenantWhere(id, session.companyId)
+    });
+    if (!category) return { success: false, error: 'Categoria não encontrada.' };
+    return { success: true, data: serializePrisma(category) };
+  } catch (error: any) {
+    return { success: false, error: publicActionError(error, 'Erro ao buscar categoria de produto.') };
   }
 }
 
@@ -102,6 +124,21 @@ export async function updateCategory(id: string, input: any) {
 export async function archiveProductCategory(id: string) {
   const session = await requirePermission('PRODUTOS', 'DELETE');
   try {
+    const category = await prisma.productCategory.findFirst({
+      where: tenantWhere(id, session.companyId),
+      include: {
+        _count: {
+          select: { products: { where: { isActive: true } } }
+        }
+      }
+    });
+
+    if (!category) return { success: false, error: 'Categoria não encontrada.' };
+
+    if (category._count.products > 0) {
+      return { success: false, error: 'Não é possível excluir o grupo, pois existem produtos ativos vinculados a ele.' };
+    }
+
     const result = await prisma.productCategory.updateMany({ where: { id, companyId: session.companyId, isActive: true }, data: { isActive: false, archivedAt: new Date() } });
     if (!result.count) return { success: false, error: 'Categoria não encontrada.' };
     await writeLegacyActivityLog({ companyId: session.companyId, userId: session.userId, action: 'EXCLUIR', module: 'PRODUTOS', recordId: id, details: 'Categoria inativada.' });
@@ -198,7 +235,34 @@ export async function createProductVariant(productId: string, input: any) {
     const variant = await prisma.$transaction(async tx => {
       const product = await tx.product.findFirst({ where: { id: productId, companyId: session.companyId, isActive: true }, select: { id: true } });
       if (!product) throw new Error('Produto não encontrado.');
-      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...parsed.data, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock) } });
+      const { currentStock, initialStock, ...restData } = parsed.data;
+      const initialStockVal = initialStock || 0;
+      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...restData, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock), currentStock: new Prisma.Decimal(initialStockVal), availableStock: new Prisma.Decimal(initialStockVal) } });
+
+      if (initialStockVal > 0) {
+        const warehouse = await getOrCreateDefaultWarehouse(tx, session.companyId);
+        await tx.stockPosition.create({
+          data: {
+            companyId: session.companyId,
+            warehouseId: warehouse.id,
+            variantId: created.id,
+            physicalStock: new Prisma.Decimal(initialStockVal),
+          }
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            companyId: session.companyId,
+            warehouseId: warehouse.id,
+            variantId: created.id,
+            quantity: new Prisma.Decimal(initialStockVal),
+            type: 'INITIAL',
+            origin: 'PRODUCT_CREATE',
+            reason: 'Saldo inicial de cadastro',
+            userId: session.userId,
+            idempotencyKey: `initial-stock-create-${created.id}`
+          }
+        });
+      }
       await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_CREATE', module: 'PRODUCT_VARIANTS', recordId: created.id, details: `Variação "${created.name}" criada.`, metadata: { productId, sku: created.sku, name: created.name } }, { policy: 'CRITICAL', tx });
       return created;
     });
@@ -215,7 +279,7 @@ export async function updateVariant(id: string, input: any) {
       const before = await tx.productVariant.findFirst({ where: tenantWhere(id, session.companyId) });
       if (!before) throw new Error('Variação não encontrada.');
       const data: any = { ...parsed.data };
-      for (const field of ['costPrice', 'salePrice', 'minimumStock'] as const) if (data[field] !== undefined) data[field] = new Prisma.Decimal(data[field]);
+      for (const field of ['costPrice', 'salePrice', 'minimumStock', 'currentStock'] as const) if (data[field] !== undefined && data[field] !== null) data[field] = new Prisma.Decimal(data[field]);
       const updated = await tx.productVariant.update({ where: tenantWhere(id, session.companyId), data });
       const changes: AuditChanges = {};
       for (const field of ['name','sku','barcode','barcodeType','costPrice','salePrice','minimumStock'] as const) addAuditChange(changes, field, before[field], updated[field]);
@@ -242,6 +306,7 @@ export async function archiveProductVariant(id: string) {
 // =========================================================================
 // Product Actions
 // =========================================================================
+
 
 export async function getProducts(filters?: { categoryId?: string; search?: string } & PaginationParams) {
   const session = await requirePermission('PRODUTOS', 'VIEW');
@@ -277,6 +342,7 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
           category: { select: { name: true } },
           supplierId: true,
           supplier: { select: { name: true } },
+          createdAt: true,
           variants: {
             where: { isActive: true, companyId: session.companyId },
             select: {
@@ -297,7 +363,10 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
       })
     ]);
 
-    return { success: true, ...buildPaginatedResult(products, totalCount, page, pageSize) };
+    return {
+      success: true,
+      ...serializePrisma(buildPaginatedResult(products, totalCount, page, pageSize)),
+    };
   } catch (error: any) {
     return { success: false, error: publicActionError(error, 'Erro ao buscar produtos.') };
   }
@@ -341,81 +410,17 @@ export async function createProduct(input: any) {
     if (!(await validateProductRelations(session.companyId, parsed.data.categoryId, parsed.data.supplierId))) {
       return { success: false, error: 'Categoria ou fornecedor não encontrado.' };
     }
-    const result = await prisma.$transaction(async (tx) => {
-      // 1. Criar o produto principal
-      const newProduct = await tx.product.create({
-        data: {
-          companyId: session.companyId,
-          categoryId: parsed.data.categoryId || null,
-          supplierId: parsed.data.supplierId || null,
-          name: parsed.data.name,
-          internalCode: parsed.data.internalCode,
-          description: parsed.data.description,
-          imageUrl: parsed.data.imageUrl,
-          thumbnailUrl: parsed.data.thumbnailUrl,
-          galleryUrls: parsed.data.galleryUrls,
-        },
-      });
-
-      // 2. Criar a variação única padrão
-      const defaultVariant = await tx.productVariant.create({
-        data: {
-          companyId: session.companyId,
-          productId: newProduct.id,
-          name: 'Único',
-          sku: skuVal,
-          barcode: parsed.data.barcode || null,
-          barcodeType: parsed.data.barcodeType || null,
-          costPrice: new Prisma.Decimal(cost),
-          salePrice: new Prisma.Decimal(sale),
-          minimumStock: new Prisma.Decimal(minStock),
-          currentStock: new Prisma.Decimal(0),
-          reservedStock: new Prisma.Decimal(0),
-          availableStock: new Prisma.Decimal(0),
-        },
-      });
-
-      // 3. Registrar o preço inicial no histórico de preços
-      await tx.productPriceHistory.create({
-        data: {
-          productId: newProduct.id,
-          oldCostPrice: new Prisma.Decimal(0),
-          newCostPrice: new Prisma.Decimal(cost),
-          oldSalePrice: new Prisma.Decimal(0),
-          newSalePrice: new Prisma.Decimal(sale),
-          changedByUserId: session.userId,
-          changeReason: 'Preço inicial de cadastro',
-        },
-      });
-
-      await writeActivityLog({
-        context: session,
-        action: 'PRODUCT_CREATE',
-        module: 'PRODUCTS',
-        recordId: newProduct.id,
-        details: `Produto "${newProduct.name}" criado.`,
-        metadata: {
-          name: newProduct.name,
-          internalCode: newProduct.internalCode,
-          categoryId: newProduct.categoryId,
-        },
-      }, { policy: 'CRITICAL', tx });
-
-      await writeActivityLog({
-        context: session,
-        action: 'PRODUCT_VARIANT_CREATE',
-        module: 'PRODUCT_VARIANTS',
-        recordId: defaultVariant.id,
-        details: `Variação "${defaultVariant.name}" criada para o produto.`,
-        metadata: {
-          productId: newProduct.id,
-          sku: defaultVariant.sku,
-          name: defaultVariant.name,
-        },
-      }, { policy: 'CRITICAL', tx });
-
-      return { product: newProduct, variant: defaultVariant };
-    });
+    const result = await prisma.$transaction(tx => createCanonicalProduct(tx, session, {
+      name: parsed.data.name, internalCode: parsed.data.internalCode, sku: skuVal,
+      barcode: parsed.data.barcode, costPrice: cost, salePrice: sale,
+      unit: parsed.data.salesUnit, purchaseUnit: parsed.data.purchaseUnit, purchaseFactor: parsed.data.purchaseFactor,
+      ncm: parsed.data.ncm, cest: parsed.data.cest, fiscalOrigin: parsed.data.fiscalOrigin,
+      categoryId: parsed.data.categoryId, supplierId: parsed.data.supplierId, description: parsed.data.description,
+      trackStock: parsed.data.trackStock, pdvEligible: parsed.data.pdvEligible, commissionRate: parsed.data.commissionRate,
+      imageUrl: parsed.data.imageUrl, thumbnailUrl: parsed.data.thumbnailUrl, galleryUrls: parsed.data.galleryUrls,
+      barcodeType: parsed.data.barcodeType, minimumStock: minStock,
+      initialStock: parsed.data.initialStock ?? 0,
+    }));
 
     
 
@@ -484,11 +489,32 @@ export async function updateProduct(id: string, input: any) {
           name: parsed.data.name,
           internalCode: parsed.data.internalCode,
           description: parsed.data.description,
+          salesUnit: parsed.data.salesUnit,
+          purchaseUnit: parsed.data.purchaseUnit,
+          purchaseFactor: new Prisma.Decimal(parsed.data.purchaseFactor),
+          trackStock: parsed.data.trackStock,
+          pdvEligible: parsed.data.pdvEligible,
+          ncm: parsed.data.ncm || null,
+          cest: parsed.data.cest || null,
+          fiscalOrigin: parsed.data.fiscalOrigin || null,
+          commissionRate: parsed.data.commissionRate === null || parsed.data.commissionRate === undefined ? null : new Prisma.Decimal(parsed.data.commissionRate),
           imageUrl: parsed.data.imageUrl,
           thumbnailUrl: parsed.data.thumbnailUrl,
           galleryUrls: parsed.data.galleryUrls,
         },
       });
+
+      if (updated.supplierId) {
+        await tx.productSupplier.updateMany({
+          where: { companyId: session.companyId, productId: id, isPrimary: true },
+          data: { isPrimary: false },
+        });
+        await tx.productSupplier.upsert({
+          where: { productId_supplierId: { productId: id, supplierId: updated.supplierId } },
+          update: { isPrimary: true },
+          create: { companyId: session.companyId, productId: id, supplierId: updated.supplierId, isPrimary: true },
+        });
+      }
 
       // 2. Atualizar variante padrão (Único) se existir
       if (defaultVariant) {
@@ -649,13 +675,49 @@ export async function getInventoryMovements(filters?: { variantId?: string } & P
 }
 
 export async function createInventoryMovement(input: any) {
-  const session = await requirePermission('ESTOQUE', 'ADJUST');
+  const session = await requireAuth();
   const parsed = InventoryMovementSchema.safeParse(input);
   if (!parsed.success) {
     return { success: false, error: parsed.error.errors[0].message };
   }
 
   const { variantId, quantity, type, reason, warehouseId } = parsed.data;
+
+  const isDirectlyAllowed = session.isAdmin || session.permissions['ESTOQUE:ADJUST'];
+
+  if (!isDirectlyAllowed) {
+    if (input.authorizationId) {
+      const auth = await prisma.actionAuthorization.findFirst({
+        where: {
+          id: input.authorizationId,
+          companyId: session.companyId,
+          status: 'APPROVED',
+          type: 'STOCK_ADJUST'
+        }
+      });
+      if (!auth) {
+        return { success: false, error: 'Autorização inválida ou não aprovada por um administrador.' };
+      }
+    } else {
+      const authReq = await authorizationService.createAuthorizationRequest({
+        companyId: session.companyId,
+        type: 'STOCK_ADJUST',
+        module: 'ESTOQUE',
+        requestedByUserId: session.userId,
+        referenceId: variantId,
+        referenceModule: 'PRODUCT_VARIANT',
+        amount: Number(Math.abs(quantity)),
+        reason: reason || 'Ajuste manual de estoque',
+        financialImpact: false,
+      });
+
+      return { 
+        success: false, 
+        requireAuthorization: true, 
+        authorizationId: authReq.id 
+      };
+    }
+  }
 
   try {
     const result = await prisma.$transaction(async (tx) => {
@@ -682,6 +744,8 @@ export async function createInventoryMovement(input: any) {
         throw new Error('Empresa não encontrada.');
       }
 
+      const operationalSettings = await OperationalSettingsService.getOrCreateOperationalSettings(session.companyId, tx);
+
       // 3. Calcular novos saldos com base no tipo de movimentação
       const currentStock = Number(variant.currentStock);
       const reservedStock = Number(variant.reservedStock);
@@ -702,7 +766,7 @@ export async function createInventoryMovement(input: any) {
       const isManual = type === 'MANUAL_ADJUSTMENT' || type === 'DAMAGE' || type === 'LOSS';
 
       if (newAvailableStock < 0) {
-        if (isPDV && !company.allowNegativeStockOnPDV) {
+        if (isPDV && !operationalSettings.allowNegativeStock) {
           throw new Error('Estoque insuficiente para esta venda (Operação PDV bloqueada).');
         }
 
@@ -770,26 +834,21 @@ export async function createInventoryMovement(input: any) {
         }
       }
 
-      // 5. Registrar a movimentação
-      const movement = await tx.inventoryMovement.create({
-        data: {
-          variantId,
-          quantity: new Prisma.Decimal(quantity),
-          type: type as InventoryMovementType,
-          reason,
-          warehouseId,
-          userId: session.userId,
-        },
-      });
-
-      // 6. Atualizar os saldos consolidados na variante
-      await tx.productVariant.update({
-        where: tenantWhere(variantId, session.companyId),
-        data: {
-          currentStock: new Prisma.Decimal(newCurrentStock),
-          reservedStock: new Prisma.Decimal(newReservedStock),
-          availableStock: new Prisma.Decimal(newAvailableStock),
-        },
+      // 5. Registrar e consolidar pelo serviço canônico.
+      const resolvedWarehouse = warehouseId === 'LOJA_PRINCIPAL'
+        ? await getOrCreateDefaultWarehouse(tx, session.companyId)
+        : { id: warehouseId };
+      const movement = await applyInventoryMovement(tx, session, {
+        warehouseId: resolvedWarehouse.id,
+        variantId,
+        physicalDelta: type === 'RESERVATION' ? 0 : quantity,
+        reservedDelta: type === 'RESERVATION' ? quantity : 0,
+        type: type as InventoryMovementType,
+        origin: 'MANUAL_ACTION',
+        idempotencyKey: `manual:${randomUUID()}`,
+        reason,
+        allowNegativePhysical: company.allowNegativeStockOnManualAdjustment || operationalSettings.allowNegativeStock,
+        allowNegativeAvailable: company.allowNegativeStockOnManualAdjustment || operationalSettings.allowNegativeStock,
       });
 
       const manualAuditAction = type === 'MANUAL_ADJUSTMENT'

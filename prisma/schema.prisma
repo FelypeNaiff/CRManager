@@ -67,10 +67,25 @@ model Company {
   productVariants                      ProductVariant[]
   roles                                Role[]
   suppliers                            Supplier[]
+  factoryOrders                        FactoryOrder[]
+  factoryOrderItems                    FactoryOrderItem[]
   users                                User[]
   sales                                Sale[]
   exchangeReturns                      ExchangeReturn[]
   sellers                              Seller[]
+  productSuppliers                     ProductSupplier[]
+  priceTables                          PriceTable[]
+  importBatches                        ImportBatch[]
+  warehouses                           Warehouse[]
+  stockPositions                       StockPosition[]
+  inventoryMovements                   InventoryMovement[]
+  stockAdjustments                     StockAdjustment[]
+  stockTransfers                       StockTransfer[]
+  inventorySessions                    InventorySession[]
+  employeeAdvances                     EmployeeAdvance[]
+  productGrades                        ProductGrade[]
+  productGradeOptions                  ProductGradeOption[]
+  productLabelTemplates                ProductLabelTemplate[]
 
   @@map("companies")
 }
@@ -123,8 +138,8 @@ model User {
   pinLastChangedAt            DateTime?              @map("pin_last_changed_at")
   createdAt                   DateTime               @default(now()) @map("created_at")
   updatedAt                   DateTime               @updatedAt @map("updated_at")
-  activityLogsAsActor         ActivityLog[]         @relation("ActivityLogActor")
-  activityLogsAsAuthenticated ActivityLog[]         @relation("ActivityLogAuthenticatedUser")
+  activityLogsAsActor         ActivityLog[]          @relation("ActivityLogActor")
+  activityLogsAsAuthenticated ActivityLog[]          @relation("ActivityLogAuthenticatedUser")
   cashMovements               CashMovement[]         @relation("CashMovementCreatedBy")
   cashRegistersClosed         CashRegister[]         @relation("CashRegisterClosedBy")
   cashRegistersOpened         CashRegister[]         @relation("CashRegisterOpenedBy")
@@ -135,6 +150,9 @@ model User {
   cancelledSales              Sale[]                 @relation("SaleCancelledBy")
   saleAuthorizationsRequested SaleAuthorization[]    @relation("AuthRequestedBy")
   saleAuthorizationsApproved  SaleAuthorization[]    @relation("AuthApprovedBy")
+  seller                      Seller?
+  importBatches               ImportBatch[]
+  employeeAdvances            EmployeeAdvance[]
 
   @@index([companyId, status])
   @@index([companyId, name])
@@ -153,8 +171,8 @@ model ActivityLog {
   metadata            Json?
   createdAt           DateTime @default(now()) @map("created_at")
   company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  actorUser            User     @relation("ActivityLogActor", fields: [actorUserId], references: [id])
-  authenticatedUser    User     @relation("ActivityLogAuthenticatedUser", fields: [authenticatedUserId], references: [id])
+  actorUser           User     @relation("ActivityLogActor", fields: [actorUserId], references: [id])
+  authenticatedUser   User     @relation("ActivityLogAuthenticatedUser", fields: [authenticatedUserId], references: [id])
 
   @@index([companyId, createdAt])
   @@index([companyId, module, action])
@@ -308,6 +326,7 @@ model ProductCategory {
   legacyFirebaseId String?   @map("legacy_firebase_id")
   createdAt        DateTime  @default(now()) @map("created_at")
   updatedAt        DateTime  @updatedAt @map("updated_at")
+  commissionRate   Decimal?  @map("commission_rate") @db.Decimal(5, 2)
   company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   products         Product[]
 
@@ -317,20 +336,37 @@ model ProductCategory {
 }
 
 model Supplier {
-  id               String    @id @default(uuid())
-  companyId        String    @map("company_id")
-  name             String
-  cnpjCpf          String?   @map("cnpj_cpf")
-  email            String?
-  phone            String?
-  isActive         Boolean   @default(true) @map("is_active")
-  archivedAt       DateTime? @map("archived_at")
-  legacyFirebaseId String?   @map("legacy_firebase_id")
-  createdAt        DateTime  @default(now()) @map("created_at")
-  updatedAt        DateTime  @updatedAt @map("updated_at")
-  products         Product[]
-  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                String            @id @default(uuid())
+  companyId         String            @map("company_id")
+  name              String            // Razão Social ou Nome Completo
+  tradeName         String?           @map("trade_name") // Nome Fantasia
+  cnpjCpf           String?           @map("cnpj_cpf")
+  stateRegistration String?           @map("state_registration") // Inscrição Estadual
+  personType        String            @default("JURIDICA") @map("person_type") // JURIDICA ou FISICA
+  email             String?
+  phone             String?
+  mobile            String?           // Celular / WhatsApp
+  contactName       String?           @map("contact_name") // Nome do representante
+  cep               String?
+  street            String?
+  number            String?
+  complement        String?
+  neighborhood      String?
+  city              String?
+  state             String?           // UF (2 caracteres)
+  notes             String?           // Observações / Condições
+  isActive          Boolean           @default(true) @map("is_active")
+  archivedAt        DateTime?         @map("archived_at")
+  legacyFirebaseId  String?           @map("legacy_firebase_id")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
+  products          Product[]
+  productLinks      ProductSupplier[]
+  factoryOrders     FactoryOrder[]
+  company           Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, name])
   @@index([name])
   @@map("suppliers")
 }
@@ -343,6 +379,15 @@ model Product {
   name             String
   internalCode     String                @map("internal_code")
   description      String?
+  salesUnit        String                @default("UN") @map("sales_unit")
+  purchaseUnit     String                @default("UN") @map("purchase_unit")
+  purchaseFactor   Decimal               @default(1.000000) @map("purchase_factor") @db.Decimal(15, 6)
+  trackStock       Boolean               @default(true) @map("track_stock")
+  pdvEligible      Boolean               @default(true) @map("pdv_eligible")
+  ncm              String?
+  cest             String?
+  fiscalOrigin     String?               @map("fiscal_origin")
+  commissionRate   Decimal?              @map("commission_rate") @db.Decimal(5, 2)
   imageUrl         String?               @map("image_url")
   thumbnailUrl     String?               @map("thumbnail_url")
   galleryUrls      String[]              @map("gallery_urls")
@@ -356,6 +401,7 @@ model Product {
   category         ProductCategory?      @relation(fields: [categoryId], references: [id])
   company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   supplier         Supplier?             @relation(fields: [supplierId], references: [id])
+  suppliers        ProductSupplier[]
 
   @@unique([companyId, internalCode])
   @@index([companyId, name])
@@ -378,6 +424,11 @@ model ProductVariant {
   currentStock        Decimal              @default(0.00) @map("current_stock") @db.Decimal(10, 2)
   reservedStock       Decimal              @default(0.00) @map("reserved_stock") @db.Decimal(10, 2)
   minimumStock        Decimal              @default(0.00) @map("minimum_stock") @db.Decimal(10, 2)
+  maximumStock        Decimal?             @map("maximum_stock") @db.Decimal(10, 2)
+  weightKg            Decimal?             @map("weight_kg") @db.Decimal(10, 3)
+  heightCm            Decimal?             @map("height_cm") @db.Decimal(10, 2)
+  widthCm             Decimal?             @map("width_cm") @db.Decimal(10, 2)
+  lengthCm            Decimal?             @map("length_cm") @db.Decimal(10, 2)
   availableStock      Decimal              @default(0.00) @map("available_stock") @db.Decimal(10, 2)
   isActive            Boolean              @default(true) @map("is_active")
   archivedAt          DateTime?            @map("archived_at")
@@ -385,8 +436,13 @@ model ProductVariant {
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   inventoryMovements  InventoryMovement[]
+  stockPositions      StockPosition[]
+  stockAdjustments    StockAdjustment[]
+  stockTransferItems  StockTransferItem[]
+  inventoryCountItems InventoryCountItem[]
   saleItems           SaleItem[]
   exchangeReturnItems ExchangeReturnItem[]
+  priceTableItems     PriceTableItem[]
   product             Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
   company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -396,6 +452,52 @@ model ProductVariant {
   @@index([sku])
   @@index([barcode])
   @@map("product_variants")
+}
+
+model ProductSupplier {
+  id           String   @id @default(uuid())
+  companyId    String   @map("company_id")
+  productId    String   @map("product_id")
+  supplierId   String   @map("supplier_id")
+  isPrimary    Boolean  @default(false) @map("is_primary")
+  supplierCode String?  @map("supplier_code")
+  createdAt    DateTime @default(now()) @map("created_at")
+  product      Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  supplier     Supplier @relation(fields: [supplierId], references: [id], onDelete: Cascade)
+  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, supplierId])
+  @@index([companyId, supplierId])
+  @@map("product_suppliers")
+}
+
+model PriceTable {
+  id        String           @id @default(uuid())
+  companyId String           @map("company_id")
+  name      String
+  isActive  Boolean          @default(true) @map("is_active")
+  isDefault Boolean          @default(false) @map("is_default")
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @updatedAt @map("updated_at")
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  prices    PriceTableItem[]
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("price_tables")
+}
+
+model PriceTableItem {
+  id           String         @id @default(uuid())
+  priceTableId String         @map("price_table_id")
+  variantId    String         @map("variant_id")
+  price        Decimal        @db.Decimal(10, 2)
+  priceTable   PriceTable     @relation(fields: [priceTableId], references: [id], onDelete: Cascade)
+  variant      ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([priceTableId, variantId])
+  @@index([variantId])
+  @@map("price_table_items")
 }
 
 model ProductPriceHistory {
@@ -420,16 +522,174 @@ model InventoryMovement {
   quantity         Decimal               @db.Decimal(10, 2)
   type             InventoryMovementType
   reason           String?
-  warehouseId      String                @default("LOJA_PRINCIPAL") @map("warehouse_id")
+  companyId        String                @map("company_id")
+  warehouseId      String                @map("warehouse_id")
+  reservedQuantity Decimal               @default(0.00) @map("reserved_quantity") @db.Decimal(10, 2)
+  origin           String                @default("LEGACY")
+  documentType     String?               @map("document_type")
+  documentId       String?               @map("document_id")
+  idempotencyKey   String?               @map("idempotency_key")
+  correlationId    String?               @map("correlation_id")
+  reversalOfId     String?               @unique @map("reversal_of_id")
+  unit             String                @default("UN")
+  unitCost         Decimal?              @map("unit_cost") @db.Decimal(10, 2)
+  occurredAt       DateTime              @default(now()) @map("occurred_at")
   legacyFirebaseId String?               @map("legacy_firebase_id")
   userId           String?               @map("user_id")
+  importRowId      String?               @unique @map("import_row_id")
   createdAt        DateTime              @default(now()) @map("created_at")
   updatedAt        DateTime              @updatedAt @map("updated_at")
   variant          ProductVariant        @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  company          Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  warehouse        Warehouse             @relation(fields: [warehouseId], references: [id])
   user             User?                 @relation(fields: [userId], references: [id], onDelete: SetNull)
+  importRow        ImportBatchRow?       @relation(fields: [importRowId], references: [id], onDelete: SetNull)
+  reversalOf       InventoryMovement?    @relation("InventoryMovementReversal", fields: [reversalOfId], references: [id])
+  reversedBy       InventoryMovement?    @relation("InventoryMovementReversal")
 
+  @@unique([companyId, idempotencyKey])
   @@index([variantId, createdAt(sort: Desc)])
+  @@index([companyId, warehouseId, variantId, occurredAt, id])
+  @@index([companyId, origin, documentId])
   @@map("inventory_movements")
+}
+
+model Warehouse {
+  id            String              @id @default(uuid())
+  companyId     String              @map("company_id")
+  code          String
+  name          String
+  isDefault     Boolean             @default(false) @map("is_default")
+  isActive      Boolean             @default(true) @map("is_active")
+  createdAt     DateTime            @default(now()) @map("created_at")
+  updatedAt     DateTime            @updatedAt @map("updated_at")
+  company       Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  positions     StockPosition[]
+  movements     InventoryMovement[]
+  adjustments   StockAdjustment[]
+  transfersFrom StockTransfer[]     @relation("TransferFromWarehouse")
+  transfersTo   StockTransfer[]     @relation("TransferToWarehouse")
+  inventories   InventorySession[]
+
+  @@unique([companyId, code])
+  @@index([companyId, isActive])
+  @@map("warehouses")
+}
+
+model StockPosition {
+  id            String         @id @default(uuid())
+  companyId     String         @map("company_id")
+  warehouseId   String         @map("warehouse_id")
+  variantId     String         @map("variant_id")
+  physicalStock Decimal        @default(0.00) @map("physical_stock") @db.Decimal(15, 2)
+  reservedStock Decimal        @default(0.00) @map("reserved_stock") @db.Decimal(15, 2)
+  version       Int            @default(0)
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  company       Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  warehouse     Warehouse      @relation(fields: [warehouseId], references: [id])
+  variant       ProductVariant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, warehouseId, variantId])
+  @@index([companyId, variantId])
+  @@map("stock_positions")
+}
+
+model StockAdjustment {
+  id                String           @id @default(uuid())
+  companyId         String           @map("company_id")
+  warehouseId       String           @map("warehouse_id")
+  variantId         String           @map("variant_id")
+  kind              String
+  requestedQuantity Decimal          @map("requested_quantity") @db.Decimal(15, 2)
+  appliedDelta      Decimal          @map("applied_delta") @db.Decimal(15, 2)
+  expectedVersion   Int?             @map("expected_version")
+  reason            String
+  status            String           @default("COMPLETED")
+  idempotencyKey    String           @map("idempotency_key")
+  reversalOfId      String?          @unique @map("reversal_of_id")
+  createdByUserId   String           @map("created_by_user_id")
+  createdAt         DateTime         @default(now()) @map("created_at")
+  company           Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  warehouse         Warehouse        @relation(fields: [warehouseId], references: [id])
+  variant           ProductVariant   @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  reversalOf        StockAdjustment? @relation("StockAdjustmentReversal", fields: [reversalOfId], references: [id])
+  reversedBy        StockAdjustment? @relation("StockAdjustmentReversal")
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("stock_adjustments")
+}
+
+model StockTransfer {
+  id              String              @id @default(uuid())
+  companyId       String              @map("company_id")
+  fromWarehouseId String              @map("from_warehouse_id")
+  toWarehouseId   String              @map("to_warehouse_id")
+  status          String              @default("COMPLETED")
+  reason          String?
+  idempotencyKey  String              @map("idempotency_key")
+  reversalOfId    String?             @unique @map("reversal_of_id")
+  createdByUserId String              @map("created_by_user_id")
+  createdAt       DateTime            @default(now()) @map("created_at")
+  company         Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  fromWarehouse   Warehouse           @relation("TransferFromWarehouse", fields: [fromWarehouseId], references: [id])
+  toWarehouse     Warehouse           @relation("TransferToWarehouse", fields: [toWarehouseId], references: [id])
+  items           StockTransferItem[]
+  reversalOf      StockTransfer?      @relation("StockTransferReversal", fields: [reversalOfId], references: [id])
+  reversedBy      StockTransfer?      @relation("StockTransferReversal")
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, createdAt(sort: Desc)])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String         @id @default(uuid())
+  transferId String         @map("transfer_id")
+  variantId  String         @map("variant_id")
+  quantity   Decimal        @db.Decimal(15, 2)
+  transfer   StockTransfer  @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  variant    ProductVariant @relation(fields: [variantId], references: [id])
+
+  @@unique([transferId, variantId])
+  @@map("stock_transfer_items")
+}
+
+model InventorySession {
+  id               String               @id @default(uuid())
+  companyId        String               @map("company_id")
+  warehouseId      String               @map("warehouse_id")
+  status           String               @default("COUNTING")
+  name             String
+  createdByUserId  String               @map("created_by_user_id")
+  approvedByUserId String?              @map("approved_by_user_id")
+  startedAt        DateTime             @default(now()) @map("started_at")
+  approvedAt       DateTime?            @map("approved_at")
+  cancelledAt      DateTime?            @map("cancelled_at")
+  company          Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  warehouse        Warehouse            @relation(fields: [warehouseId], references: [id])
+  items            InventoryCountItem[]
+
+  @@index([companyId, status, startedAt(sort: Desc)])
+  @@map("inventory_sessions")
+}
+
+model InventoryCountItem {
+  id                String           @id @default(uuid())
+  sessionId         String           @map("session_id")
+  variantId         String           @map("variant_id")
+  referencePhysical Decimal          @map("reference_physical") @db.Decimal(15, 2)
+  referenceVersion  Int              @map("reference_version")
+  countedQuantity   Decimal?         @map("counted_quantity") @db.Decimal(15, 2)
+  recountQuantity   Decimal?         @map("recount_quantity") @db.Decimal(15, 2)
+  appliedMovementId String?          @unique @map("applied_movement_id")
+  appliedAt         DateTime?        @map("applied_at")
+  session           InventorySession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  variant           ProductVariant   @relation(fields: [variantId], references: [id])
+
+  @@unique([sessionId, variantId])
+  @@map("inventory_count_items")
 }
 
 model BankAccount {
@@ -524,28 +784,29 @@ model PaymentMethod {
 }
 
 model CashRegister {
-  id              String                 @id @default(uuid())
-  companyId       String                 @map("company_id")
-  openedByUserId  String                 @map("opened_by_user_id")
-  closedByUserId  String?                @map("closed_by_user_id")
-  bankAccountId   String                 @map("bank_account_id")
-  terminalId      String?                @map("terminal_id")
-  deviceId        String?                @map("device_id")
-  openedAt        DateTime               @default(now()) @map("opened_at")
-  closedAt        DateTime?              @map("closed_at")
-  openingBalance  Decimal                @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
-  closingBalance  Decimal?               @map("closing_balance") @db.Decimal(15, 2)
-  expectedBalance Decimal?               @map("expected_balance") @db.Decimal(15, 2)
-  difference      Decimal?               @db.Decimal(15, 2)
-  status          CashRegisterStatus     @default(OPEN)
-  notes           String?
-  movements       CashMovement[]
-  bankAccount     BankAccount            @relation(fields: [bankAccountId], references: [id])
-  closedBy        User?                  @relation("CashRegisterClosedBy", fields: [closedByUserId], references: [id])
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  openedBy        User                   @relation("CashRegisterOpenedBy", fields: [openedByUserId], references: [id])
-  transactions    FinancialTransaction[]
-  sales           Sale[]
+  id               String                 @id @default(uuid())
+  companyId        String                 @map("company_id")
+  openedByUserId   String                 @map("opened_by_user_id")
+  closedByUserId   String?                @map("closed_by_user_id")
+  bankAccountId    String                 @map("bank_account_id")
+  terminalId       String?                @map("terminal_id")
+  deviceId         String?                @map("device_id")
+  openedAt         DateTime               @default(now()) @map("opened_at")
+  closedAt         DateTime?              @map("closed_at")
+  openingBalance   Decimal                @default(0.00) @map("opening_balance") @db.Decimal(15, 2)
+  closingBalance   Decimal?               @map("closing_balance") @db.Decimal(15, 2)
+  expectedBalance  Decimal?               @map("expected_balance") @db.Decimal(15, 2)
+  difference       Decimal?               @db.Decimal(15, 2)
+  status           CashRegisterStatus     @default(OPEN)
+  notes            String?
+  movements        CashMovement[]
+  bankAccount      BankAccount            @relation(fields: [bankAccountId], references: [id])
+  closedBy         User?                  @relation("CashRegisterClosedBy", fields: [closedByUserId], references: [id])
+  company          Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  openedBy         User                   @relation("CashRegisterOpenedBy", fields: [openedByUserId], references: [id])
+  transactions     FinancialTransaction[]
+  sales            Sale[]
+  employeeAdvances EmployeeAdvance[]
 
   @@index([companyId, status])
   @@index([openedAt])
@@ -706,6 +967,13 @@ enum SaleStatus {
   RETURNED
 }
 
+enum SaleChannel {
+  LEGACY
+  PRODUCT
+  COUNTER
+  QUOTE
+}
+
 enum SaleAuthorizationType {
   DISCOUNT_OVER_LIMIT
   CANCEL_SALE
@@ -721,6 +989,100 @@ enum SellerCommissionStatus {
   PENDING
   PAID
   CANCELLED
+}
+
+enum ImportBatchStatus {
+  VALIDATING
+  READY
+  PROCESSING
+  COMPLETED
+  COMPLETED_WITH_ERRORS
+  FAILED_RECOVERABLE
+  CANCELLED
+}
+
+enum ImportRowStatus {
+  READY
+  IGNORED
+  BLOCKED
+  PROCESSING
+  COMPLETED
+  FAILED
+  CONFLICT
+}
+
+enum ImportStockPolicy {
+  NONE
+  INITIAL_IF_NO_HISTORY
+  TARGET_BALANCE
+  ADDITIONAL_ENTRY
+}
+
+model ImportBatch {
+  id              String            @id @default(uuid())
+  companyId       String            @map("company_id")
+  createdByUserId String            @map("created_by_user_id")
+  contentHash     String            @map("content_hash")
+  fingerprint     String            @unique
+  parserVersion   String            @map("parser_version")
+  mapping         Json
+  policies        Json
+  status          ImportBatchStatus @default(VALIDATING)
+  totalRows       Int               @default(0) @map("total_rows")
+  completedRows   Int               @default(0) @map("completed_rows")
+  errorRows       Int               @default(0) @map("error_rows")
+  startedAt       DateTime?         @map("started_at")
+  completedAt     DateTime?         @map("completed_at")
+  createdAt       DateTime          @default(now()) @map("created_at")
+  updatedAt       DateTime          @updatedAt @map("updated_at")
+  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  createdBy       User              @relation(fields: [createdByUserId], references: [id])
+  rows            ImportBatchRow[]
+
+  @@index([companyId, createdAt(sort: Desc)])
+  @@index([companyId, contentHash])
+  @@map("import_batches")
+}
+
+model ImportBatchRow {
+  id               String              @id @default(uuid())
+  batchId          String              @map("batch_id")
+  rowNumber        Int                 @map("row_number")
+  operationKey     String              @map("operation_key")
+  status           ImportRowStatus     @default(READY)
+  proposedAction   String              @map("proposed_action")
+  sourceData       Json                @map("source_data")
+  previewData      Json?               @map("preview_data")
+  errors           Json?
+  warnings         Json?
+  productId        String?             @map("product_id")
+  variantId        String?             @map("variant_id")
+  stockPolicy      ImportStockPolicy   @default(NONE) @map("stock_policy")
+  previewStock     Decimal?            @map("preview_stock") @db.Decimal(10, 2)
+  originalQuantity Decimal?            @map("original_quantity") @db.Decimal(15, 6)
+  originalUnit     String?             @map("original_unit")
+  conversionFactor Decimal?            @map("conversion_factor") @db.Decimal(15, 6)
+  processingToken  String?             @map("processing_token")
+  leaseExpiresAt   DateTime?           @map("lease_expires_at")
+  attemptCount     Int                 @default(0) @map("attempt_count")
+  processedAt      DateTime?           @map("processed_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+  batch            ImportBatch         @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  movements        InventoryMovement[]
+
+  @@unique([batchId, rowNumber])
+  @@unique([batchId, operationKey])
+  @@index([batchId, status])
+  @@index([status, leaseExpiresAt])
+  @@map("import_batch_rows")
+}
+
+enum CommissionReleasePolicy {
+  ON_FINANCIAL_OBLIGATION
+  ON_FIRST_INSTALLMENT_RECEIVED
+  ON_FULL_SETTLEMENT
+  PROPORTIONAL_TO_RECEIPTS
 }
 
 enum ExchangeReturnType {
@@ -749,12 +1111,17 @@ model Sale {
   sellerId       String  @map("seller_id")
   cashRegisterId String? @map("cash_register_id")
 
-  status              SaleStatus @default(PENDING)
-  subtotal            Decimal    @db.Decimal(15, 2)
-  globalDiscountType  String?    @map("global_discount_type")
-  globalDiscountValue Decimal?   @map("global_discount_value") @db.Decimal(15, 2)
-  discountAmount      Decimal    @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
-  totalAmount         Decimal    @db.Decimal(15, 2)
+  status              SaleStatus  @default(PENDING)
+  channel             SaleChannel @default(LEGACY)
+  subtotal            Decimal     @db.Decimal(15, 2)
+  globalDiscountType  String?     @map("global_discount_type")
+  globalDiscountValue Decimal?    @map("global_discount_value") @db.Decimal(15, 2)
+  discountAmount      Decimal     @default(0.00) @map("discount_amount") @db.Decimal(15, 2)
+  totalAmount         Decimal     @db.Decimal(15, 2)
+  freightAmount       Decimal     @default(0.00) @map("freight_amount") @db.Decimal(15, 2)
+  deliveryType        String?     @map("delivery_type")
+  deliveryAddress     Json?       @map("delivery_address")
+  deliveryDate        DateTime?   @map("delivery_date")
   notes               String?
 
   customerNameSnapshot  String? @map("customer_name_snapshot")
@@ -779,6 +1146,7 @@ model Sale {
   commissions    SellerCommission[]
 
   @@index([companyId, createdAt(sort: Desc)])
+  @@index([companyId, channel, createdAt(sort: Desc)])
   @@index([companyId, status])
   @@index([sellerId])
   @@index([customerId])
@@ -802,9 +1170,13 @@ model SaleItem {
   discount      Decimal  @default(0.00) @db.Decimal(15, 2)
   totalPrice    Decimal  @map("total_price") @db.Decimal(15, 2)
 
-  costPriceAtSale Decimal @map("cost_price_at_sale") @db.Decimal(15, 2)
-  salePriceAtSale Decimal @map("sale_price_at_sale") @db.Decimal(15, 2)
-  marginAtSale    Decimal @map("margin_at_sale") @db.Decimal(5, 2)
+  costPriceAtSale          Decimal  @map("cost_price_at_sale") @db.Decimal(15, 2)
+  salePriceAtSale          Decimal  @map("sale_price_at_sale") @db.Decimal(15, 2)
+  marginAtSale             Decimal  @map("margin_at_sale") @db.Decimal(5, 2)
+  commissionBaseSnapshot   Decimal? @map("commission_base_snapshot") @db.Decimal(15, 2)
+  commissionRateSnapshot   Decimal? @map("commission_rate_snapshot") @db.Decimal(5, 2)
+  commissionAmountSnapshot Decimal? @map("commission_amount_snapshot") @db.Decimal(15, 2)
+  commissionRuleSource     String?  @map("commission_rule_source")
 
   sale    Sale           @relation(fields: [saleId], references: [id], onDelete: Cascade)
   variant ProductVariant @relation(fields: [variantId], references: [id])
@@ -870,15 +1242,24 @@ model SellerGoal {
 }
 
 model SellerCommission {
-  id       String                 @id @default(uuid())
-  sellerId String                 @map("seller_id")
-  saleId   String                 @map("sale_id")
-  amount   Decimal                @db.Decimal(15, 2)
-  status   SellerCommissionStatus @default(PENDING)
+  id                    String                   @id @default(uuid())
+  sellerId              String                   @map("seller_id")
+  saleId                String                   @map("sale_id")
+  amount                Decimal                  @db.Decimal(15, 2)
+  status                SellerCommissionStatus   @default(PENDING)
+  baseAmountSnapshot    Decimal?                 @map("base_amount_snapshot") @db.Decimal(15, 2)
+  rateSnapshot          Decimal?                 @map("rate_snapshot") @db.Decimal(5, 2)
+  releasePolicySnapshot CommissionReleasePolicy? @map("release_policy_snapshot")
+  releasedAmount        Decimal                  @default(0.00) @map("released_amount") @db.Decimal(15, 2)
+  paidAmount            Decimal                  @default(0.00) @map("paid_amount") @db.Decimal(15, 2)
+  releasedAt            DateTime?                @map("released_at")
+  paidAt                DateTime?                @map("paid_at")
+  createdAt             DateTime                 @default(now()) @map("created_at")
 
   seller Seller @relation(fields: [sellerId], references: [id], onDelete: Cascade)
   sale   Sale   @relation(fields: [saleId], references: [id], onDelete: Cascade)
 
+  @@unique([sellerId, saleId])
   @@index([sellerId, status])
   @@index([saleId])
   @@map("seller_commissions")
@@ -956,9 +1337,10 @@ model OperationalSettings {
   defaultInterestRate Decimal @default(0.00) @map("default_interest_rate") @db.Decimal(10, 2)
 
   // Metas / Comissões
-  enableCommissions     Boolean @default(true) @map("enable_commissions")
-  defaultCommissionRate Decimal @default(0.00) @map("default_commission_rate") @db.Decimal(10, 2)
-  enableSellerGoals     Boolean @default(true) @map("enable_seller_goals")
+  enableCommissions       Boolean                 @default(true) @map("enable_commissions")
+  defaultCommissionRate   Decimal                 @default(0.00) @map("default_commission_rate") @db.Decimal(10, 2)
+  enableSellerGoals       Boolean                 @default(true) @map("enable_seller_goals")
+  commissionReleasePolicy CommissionReleasePolicy @default(ON_FINANCIAL_OBLIGATION) @map("commission_release_policy")
 
   // Carteira / Saldo
   enableCustomerWallet         Boolean @default(true) @map("enable_customer_wallet")
@@ -1109,26 +1491,194 @@ model ActionAuthorization {
 }
 
 model Seller {
-  id             String   @id @default(uuid())
-  companyId      String   @map("company_id")
-  name           String
-  nickname       String?
-  phone          String?
-  cpf            String?
-  email          String?
-  status         String   @default("ACTIVE")
-  commissionRate Decimal  @default(0.00) @map("commission_rate") @db.Decimal(5, 2)
-  goal           Decimal? @db.Decimal(15, 2)
-  notes          String?
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+  id                      String                   @id @default(uuid())
+  companyId               String                   @map("company_id")
+  name                    String
+  nickname                String?
+  phone                   String?
+  mobile                  String?
+  cpf                     String?
+  rg                      String?
+  birthDate               DateTime?                @map("birth_date")
+  email                   String?
+  userId                  String?                  @unique @map("user_id")
+  cep                     String?
+  street                  String?
+  addressNumber           String?                  @map("address_number")
+  complement              String?
+  district                String?
+  city                    String?
+  state                   String?
+  status                  String                   @default("ACTIVE")
+  commissionRate          Decimal                  @default(0.00) @map("commission_rate") @db.Decimal(5, 2)
+  commissionReleasePolicy CommissionReleasePolicy? @map("commission_release_policy")
+  goal                    Decimal?                 @db.Decimal(15, 2)
+  notes                   String?
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime                 @updatedAt @map("updated_at")
 
   company     Company            @relation(fields: [companyId], references: [id])
+  user        User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   sales       Sale[]             @relation("SaleSeller")
   goals       SellerGoal[]
   commissions SellerCommission[]
 
+  @@unique([companyId, cpf])
   @@index([companyId, status])
   @@index([companyId, name])
   @@map("sellers")
+}
+
+model EmployeeAdvance {
+  id              String                @id @default(uuid())
+  companyId       String                @map("company_id")
+  employeeId      String                @map("employee_id")
+  amount          Decimal               @db.Decimal(15, 2)
+  date            DateTime              @default(now())
+  competenceMonth String                @map("competence_month")
+  type            EmployeeAdvanceType
+  status          EmployeeAdvanceStatus @default(PENDING)
+  observation     String?
+  cashRegisterId  String?               @map("cash_register_id")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  updatedAt       DateTime              @updatedAt @map("updated_at")
+
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  employee     User          @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  cashRegister CashRegister? @relation(fields: [cashRegisterId], references: [id])
+
+  @@index([companyId, employeeId])
+  @@map("employee_advances")
+}
+
+enum EmployeeAdvanceType {
+  CASH_ADVANCE
+  PIX_ADVANCE
+  STORE_PRODUCT_WITHDRAWAL
+}
+
+enum EmployeeAdvanceStatus {
+  PENDING
+  DEDUCTED_PAYROLL
+  CANCELLED
+}
+
+model ProductGrade {
+  id        String               @id @default(uuid())
+  companyId String               @map("company_id")
+  name      String
+  isActive  Boolean              @default(true) @map("is_active")
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt @map("updated_at")
+
+  options   ProductGradeOption[]
+  company   Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@unique([companyId, name])
+  @@index([companyId, name])
+  @@map("product_grades")
+}
+
+model ProductGradeOption {
+  id        String       @id @default(uuid())
+  companyId String       @map("company_id")
+  gradeId   String       @map("grade_id")
+  name      String
+  order     Int          @default(0)
+  isActive  Boolean      @default(true) @map("is_active")
+  createdAt DateTime     @default(now()) @map("created_at")
+  updatedAt DateTime     @updatedAt @map("updated_at")
+
+  grade     ProductGrade @relation(fields: [gradeId], references: [id], onDelete: Cascade)
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([gradeId])
+  @@index([companyId])
+  @@map("product_grade_options")
+}
+
+model ProductLabelTemplate {
+  id                    String   @id @default(uuid())
+  companyId             String   @map("company_id")
+  name                  String
+  presetName            String?  @map("preset_name") // ex: "PIMACO - A4051/A4251/A4351"
+  paperSize             String   @default("A4 – 21,0 X 29,7 cm") @map("paper_size")
+  labelHeightCm         Decimal  @default(2.12) @map("label_height_cm") @db.Decimal(5, 2)
+  labelWidthCm          Decimal  @default(3.82) @map("label_width_cm") @db.Decimal(5, 2)
+  columnsOnPage         Int      @default(5) @map("columns_on_page")
+  rowsOnPage            Int      @default(13) @map("rows_on_page")
+  marginTopCm           Decimal  @default(1.07) @map("margin_top_cm") @db.Decimal(5, 2)
+  marginLeftCm          Decimal  @default(0.45) @map("margin_left_cm") @db.Decimal(5, 2)
+  verticalPitchCm       Decimal  @default(2.12) @map("vertical_pitch_cm") @db.Decimal(5, 2)
+  horizontalPitchCm     Decimal  @default(4.07) @map("horizontal_pitch_cm") @db.Decimal(5, 2)
+  topDescription        String?  @map("top_description")
+  maxCharsProductName   Int?     @map("max_chars_product_name")
+  fontFamily            String   @default("Helvetica") @map("font_family")
+  fontSizePt            Int      @default(6) @map("font_size_pt")
+  showInternalCode      Boolean  @default(true) @map("show_internal_code")
+  showBarcode           Boolean  @default(true) @map("show_barcode")
+  showBarcodeDigits     Boolean  @default(false) @map("show_barcode_digits")
+  barcodePosition       String   @default("Inferior") @map("barcode_position")
+  showPrice             Boolean  @default(true) @map("show_price")
+  priceFontSize         String   @default("Padrão") @map("price_font_size")
+  fieldPositions        Json?    @map("field_positions")
+  isActive              Boolean  @default(true) @map("is_active")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  company               Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@map("product_label_templates")
+}
+
+model FactoryOrder {
+  id                   String             @id @default(uuid())
+  companyId            String             @map("company_id")
+  orderNumber          String             @map("order_number") // ex: "ped_1790441194348"
+  supplierId           String?            @map("supplier_id")
+  factoryName          String             @map("factory_name") // ex: "CATTAI", "KAMYLUS", "KYLY"
+  commercialDiscount   Decimal            @default(0) @map("commercial_discount") @db.Decimal(5, 2)
+  applySuframa         Boolean            @default(false) @map("apply_suframa")
+  suframaDiscount      Decimal            @default(0) @map("suframa_discount") @db.Decimal(5, 2)
+  status               String             @default("draft") // draft, in_production, completed, cancelled
+  operatorName         String             @map("operator_name")
+  totalPieces          Int                @default(0) @map("total_pieces")
+  totalGross           Decimal            @default(0) @map("total_gross") @db.Decimal(12, 2)
+  totalNet             Decimal            @default(0) @map("total_net") @db.Decimal(12, 2)
+  notes                String?
+  createdAt            DateTime           @default(now()) @map("created_at")
+  updatedAt            DateTime           @updatedAt @map("updated_at")
+
+  items                FactoryOrderItem[]
+  supplier             Supplier?          @relation(fields: [supplierId], references: [id])
+  company              Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId])
+  @@index([orderNumber])
+  @@map("factory_orders")
+}
+
+model FactoryOrderItem {
+  id                      String       @id @default(uuid())
+  companyId               String       @map("company_id")
+  orderId                 String       @map("order_id")
+  partCode                String       @map("part_code") // Cód da Peça (ex: "8027", "8037")
+  reference               String       // Referência/Cor (ex: "VERMELHO", "AZUL", "2037+2037")
+  sizes                   String[]     // Tamanhos selecionados (ex: ["2", "4"] ou ["6", "8", "10", "12"])
+  quantity                Int          @default(1)
+  unitPrice               Decimal      @map("unit_price") @db.Decimal(10, 2)
+  priceWithCommercialDesc Decimal      @map("price_with_commercial_desc") @db.Decimal(10, 2)
+  priceWithSuframa        Decimal      @map("price_with_suframa") @db.Decimal(10, 2)
+  totalPrice              Decimal      @map("total_price") @db.Decimal(12, 2)
+  notes                   String?      // Observação
+  orderIndex              Int          @default(0) @map("order_index")
+  createdAt               DateTime     @default(now()) @map("created_at")
+  updatedAt               DateTime     @updatedAt @map("updated_at")
+
+  order                   FactoryOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  company                 Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("factory_order_items")
 }

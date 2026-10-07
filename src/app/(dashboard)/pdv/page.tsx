@@ -1,675 +1,720 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
-import { useProfile } from "@/lib/contexts/profile-context";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { 
+  ShoppingCart, Search, User, Store, Plus, Minus, Trash2, 
+  CreditCard, Banknote, HelpCircle, CheckCircle, Printer, Loader2, Play
+} from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import { toast } from "@/hooks/use-toast";
+
 import { searchVariantsAction, searchCustomersAction } from "@/lib/sales/actions/search-sales-entities-action";
 import { listSellersAction } from "@/lib/sales/actions/list-sellers-action";
 import { listPaymentMethodsAction } from "@/lib/sales/actions/list-payment-methods-action";
 import { createSaleAction } from "@/lib/sales/actions/create-sale-action";
-import { getOperationalSettingsAction } from "@/lib/configuracoes/operational-settings-actions";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Search, Plus, Trash2, ShoppingCart, User, CreditCard, X } from "lucide-react";
-import Link from "next/link";
-
+import { saveDraftSaleAction, getDraftSaleAction } from "@/lib/sales/actions/draft-sale-actions";
 import { AuthorizationDialog } from "@/components/authorization/authorization-dialog";
 
-export default function PDVPage() {
+type CartItem = {
+  id: string; // pseudo-id to avoid react key collisions
+  variant: any;
+  quantity: number;
+  discountType: "PERCENTAGE" | "AMOUNT";
+  discountValue: number;
+};
+
+export default function PdvPage() {
   const router = useRouter();
-  const { activeProfile } = useProfile();
+  const searchParams = useSearchParams();
+  const draftIdParam = searchParams.get("draftId");
 
-  // Search
-  const [productQuery, setProductQuery] = useState("");
-  const [customerQuery, setCustomerQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [customerResults, setCustomerResults] = useState<any[]>([]);
-  const [searchError, setSearchError] = useState("");
-  const [searchSuccess, setSearchSuccess] = useState("");
-  const inputRef = useRef<HTMLInputElement>(null);
-
-  // Cart & Sale State
-  const [cartItems, setCartItems] = useState<any[]>([]);
-  const [selectedCustomer, setSelectedCustomer] = useState<any>(null);
-  const [selectedSeller, setSelectedSeller] = useState<string>("");
+  const [loadingInitial, setLoadingInitial] = useState(true);
+  
+  // Data Dictionaries
   const [sellers, setSellers] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  
+  // Sale State
+  const [draftId, setDraftId] = useState<string | undefined>(undefined);
+  const [sellerId, setSellerId] = useState("");
+  const [customerId, setCustomerId] = useState("");
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customers, setCustomers] = useState<any[]>([]);
+  
+  const [items, setItems] = useState<CartItem[]>([]);
   const [globalDiscountType, setGlobalDiscountType] = useState<"PERCENTAGE" | "AMOUNT">("AMOUNT");
   const [globalDiscountValue, setGlobalDiscountValue] = useState<number>(0);
 
-  // Payments State
-  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
-  const [payments, setPayments] = useState<any[]>([]);
-  
-  // New Payment Form
-  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<string>("");
-  const [paymentAmount, setPaymentAmount] = useState<string>("");
-  const [paymentInstallments, setPaymentInstallments] = useState<number>(1);
+  // Search State
+  const [productQuery, setProductQuery] = useState("");
+  const [foundVariants, setFoundVariants] = useState<any[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
-  // Auth PIN Modal State
-  const [showPinModal, setShowPinModal] = useState(false);
-  const [authPin, setAuthPin] = useState("");
-  const [authReason, setAuthReason] = useState("");
-  const [pinError, setPinError] = useState("");
+  // Payment Modal State
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false);
+  const [payments, setPayments] = useState<{paymentMethodId: string, amount: number, installments: number}[]>([]);
+  const [currentPaymentMethod, setCurrentPaymentMethod] = useState("");
+  const [currentPaymentAmount, setCurrentPaymentAmount] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const [loading, setLoading] = useState(false);
-  const [settings, setSettings] = useState<any>(null);
+  // Success Modal State
+  const [isSuccessOpen, setIsSuccessOpen] = useState(false);
+  const [successData, setSuccessData] = useState<any>(null);
 
+  // Auth Modal State
+  const [authorizationId, setAuthorizationId] = useState("");
+  const [authType, setAuthType] = useState<any>("");
+  const [showAuthDialog, setShowAuthDialog] = useState(false);
+
+  // Fetch initial data
   useEffect(() => {
-    if (activeProfile?.empresaId) {
-      listSellersAction(activeProfile.empresaId).then(res => {
-        if (res.success) setSellers(res.sellers || []);
-        if (activeProfile.userId) setSelectedSeller(activeProfile.userId);
-      });
-      listPaymentMethodsAction(activeProfile.empresaId).then(res => {
-        if (res.success) setPaymentMethods(res.paymentMethods || []);
-      });
-      getOperationalSettingsAction().then(res => {
-        if (res.success && res.data) {
-          setSettings(res.data);
+    async function load() {
+      try {
+        const [sellersRes, pmRes] = await Promise.all([
+          listSellersAction("AUTO"),
+          listPaymentMethodsAction("AUTO")
+        ]);
+        if (sellersRes.success && sellersRes.sellers) {
+          setSellers(sellersRes.sellers);
+          if (sellersRes.sellers.length > 0) setSellerId(sellersRes.sellers[0].id);
         }
-      });
-    }
-  }, [activeProfile]);
+        if (pmRes.success && pmRes.paymentMethods) {
+          setPaymentMethods(pmRes.paymentMethods);
+          if (pmRes.paymentMethods.length > 0) setCurrentPaymentMethod(pmRes.paymentMethods[0].id);
+        }
 
-  // Product Search
-  const handleSearchProduct = async () => {
-    if (!activeProfile?.empresaId || !productQuery) return;
-    setSearchError("");
-    setSearchSuccess("");
-    const res = await searchVariantsAction(activeProfile.empresaId, productQuery);
-    if (res.success) {
-      const variants = res.variants || [];
-      if (variants.length === 1) {
-        const variant = variants[0];
-        const stock = Number(variant.availableStock);
-        const allowNegativeStock = settings?.allowNegativeStock ?? false;
-        
-        if (stock <= 0 && !allowNegativeStock) {
-          setSearchError("Produto sem estoque.");
-          return;
+        if (draftIdParam) {
+          const draftRes = await getDraftSaleAction(draftIdParam);
+          if (draftRes.success && draftRes.draft) {
+            setDraftId(draftRes.draft.id);
+            setSellerId(draftRes.draft.sellerId);
+            if (draftRes.draft.customerId) {
+              setCustomerId(draftRes.draft.customerId);
+              setCustomerSearch(draftRes.draft.customerNameSnapshot || "");
+            }
+            setGlobalDiscountType(draftRes.draft.globalDiscountType as "PERCENTAGE" | "AMOUNT");
+            setGlobalDiscountValue(Number(draftRes.draft.globalDiscountValue));
+            setItems(draftRes.draft.items.map((i: any) => ({
+              id: Math.random().toString(36).substr(2, 9),
+              variant: { ...i.variant, salePrice: i.unitPrice }, // Mock for cart
+              quantity: i.quantity,
+              discountType: i.discountType,
+              discountValue: Number(i.discountValue),
+            })));
+            setPayments(draftRes.draft.payments.map((p: any) => ({
+              paymentMethodId: p.paymentMethodId,
+              amount: Number(p.amount),
+              installments: p.installments
+            })));
+          }
         }
-        
-        handleSelectVariant(variant);
-      } else if (variants.length > 1) {
-        setSearchResults(variants);
-        setSearchError("");
-      } else {
-        setSearchResults([]);
-        setSearchError("Produto não encontrado.");
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setLoadingInitial(false);
+        searchInputRef.current?.focus();
       }
-    } else {
-      setSearchError("Erro ao buscar: " + res.error);
     }
-  };
+    load();
+  }, [draftIdParam]);
 
-  const handleSelectVariant = (variant: any) => {
-    addToCart(variant);
-    setProductQuery("");
-    setSearchResults([]);
-    setSearchError("");
-    setSearchSuccess(`Adicionado: ${variant.product.name} - ${variant.name}`);
-    setTimeout(() => setSearchSuccess(""), 3000);
-    setTimeout(() => inputRef.current?.focus(), 50);
-  };
+  // Product Search Debounce
+  useEffect(() => {
+    const delay = setTimeout(async () => {
+      if (!productQuery || productQuery.length < 2) {
+        setFoundVariants([]);
+        return;
+      }
+      try {
+        const res = await searchVariantsAction("AUTO", productQuery);
+        if (res.success && res.variants) {
+          if (res.variants.length === 1 && res.variants[0].barcode === productQuery) {
+            // Auto add exact barcode match
+            addItemToCart(res.variants[0]);
+            setProductQuery("");
+            setFoundVariants([]);
+          } else {
+            setFoundVariants(res.variants);
+          }
+        }
+      } catch (err) {}
+    }, 400);
+    return () => clearTimeout(delay);
+  }, [productQuery]);
 
-  const handleSearchCustomer = async () => {
-    if (!activeProfile?.empresaId || !customerQuery) return;
-    const res = await searchCustomersAction(activeProfile.empresaId, customerQuery);
-    if (res.success) setCustomerResults(res.customers || []);
-  };
+  // Customer Search Debounce
+  useEffect(() => {
+    const delay = setTimeout(async () => {
+      if (!customerSearch || customerSearch.length < 2 || customerId) return;
+      try {
+        const res = await searchCustomersAction("AUTO", customerSearch);
+        if (res.success && res.customers) {
+          setCustomers(res.customers);
+        }
+      } catch (err) {}
+    }, 400);
+    return () => clearTimeout(delay);
+  }, [customerSearch, customerId]);
 
-  const addToCart = (variant: any) => {
-    const stock = Number(variant.availableStock);
-    const allowNegativeStock = settings?.allowNegativeStock ?? false;
-
-    if (stock <= 0 && !allowNegativeStock) {
-      alert("Estoque insuficiente!");
-      return;
-    }
-    setCartItems(prev => {
-      const existing = prev.find(i => i.variantId === variant.id);
+  const addItemToCart = (variant: any) => {
+    setItems(prev => {
+      const existing = prev.find(i => i.variant.id === variant.id);
       if (existing) {
-        if (!allowNegativeStock && existing.quantity + 1 > stock) {
-          alert("Estoque insuficiente para adicionar mais uma unidade.");
-          return prev;
-        }
-        return prev.map(i => i.variantId === variant.id ? { ...i, quantity: i.quantity + 1 } : i);
+        return prev.map(i => i.id === existing.id ? { ...i, quantity: i.quantity + 1 } : i);
       }
-      return [...prev, {
-        variantId: variant.id,
-        productNameSnapshot: variant.product?.name ?? "Produto sem nome",
-        variantNameSnapshot: variant.name ?? "",
-        skuSnapshot: variant.sku ?? "",
-        barcodeSnapshot: variant.barcode ?? "",
-        quantity: 1,
-        unitPrice: Number(variant.salePrice),
-        discountType: "AMOUNT",
-        discountValue: 0,
-        discount: 0,
-        costPriceAtSale: Number(variant.costPrice || 0),
-        salePriceAtSale: Number(variant.salePrice),
-        marginAtSale: variant.costPrice ? ((Number(variant.salePrice) - Number(variant.costPrice)) / Number(variant.salePrice)) * 100 : 100,
-        availableStock: stock
-      }];
+      return [...prev, { id: Math.random().toString(36).substr(2, 9), variant, quantity: 1, discountType: "AMOUNT", discountValue: 0 }];
     });
-    setSearchResults([]);
     setProductQuery("");
+    setFoundVariants([]);
+    searchInputRef.current?.focus();
   };
 
-  const updateQuantity = (variantId: string, delta: number) => {
-    setCartItems(prev => prev.map(i => {
-      if (i.variantId === variantId) {
-        const newQ = i.quantity + delta;
-        if (newQ > i.availableStock) {
-          alert("Estoque insuficiente!");
-          return i;
-        }
-        if (newQ <= 0) return i;
+  const updateItemQty = (id: string, delta: number) => {
+    setItems(prev => prev.map(i => {
+      if (i.id === id) {
+        const newQ = Math.max(1, i.quantity + delta);
         return { ...i, quantity: newQ };
       }
       return i;
     }));
   };
 
-  const removeItem = (variantId: string) => {
-    setCartItems(prev => prev.filter(i => i.variantId !== variantId));
+  const removeItem = (id: string) => {
+    setItems(prev => prev.filter(i => i.id !== id));
   };
 
-  const updateItemDiscountType = (variantId: string, type: "PERCENTAGE" | "AMOUNT") => {
-    setCartItems(prev => prev.map(i => {
-      if (i.variantId === variantId) {
-        const val = i.discountValue;
-        const discountAmount = type === "PERCENTAGE" ? (val / 100) * i.unitPrice : val;
-        return { ...i, discountType: type, discount: discountAmount };
-      }
-      return i;
-    }));
+  const resetPdv = () => {
+    setItems([]);
+    setCustomerId("");
+    setCustomerSearch("");
+    setGlobalDiscountValue(0);
+    setPayments([]);
+    setDraftId(undefined);
+    setIsPaymentOpen(false);
+    setIsSuccessOpen(false);
+    setSuccessData(null);
+    router.replace("/pdv");
+    setTimeout(() => searchInputRef.current?.focus(), 100);
   };
 
-  const updateItemDiscount = (variantId: string, val: string) => {
-    const numVal = Number(val);
-    setCartItems(prev => prev.map(i => {
-      if (i.variantId === variantId) {
-        const discountAmount = i.discountType === "PERCENTAGE" ? (numVal / 100) * i.unitPrice : numVal;
-        return { ...i, discountValue: numVal, discount: discountAmount };
-      }
-      return i;
-    }));
-  };
-
-  // Math
-  const subtotal = cartItems.reduce((acc, i) => acc + (i.unitPrice * i.quantity), 0);
-  const itemsDiscount = cartItems.reduce((acc, i) => acc + (i.discount * i.quantity), 0);
+  // Calculations
+  const subtotal = useMemo(() => items.reduce((acc, i) => acc + (Number(i.variant.salePrice) * i.quantity), 0), [items]);
+  const itemsDiscountAmount = useMemo(() => items.reduce((acc, i) => {
+    const itemPrice = Number(i.variant.salePrice);
+    if (i.discountType === "AMOUNT") return acc + (i.discountValue * i.quantity);
+    return acc + ((itemPrice * i.discountValue / 100) * i.quantity);
+  }, 0), [items]);
   
-  const subtotalAfterItems = subtotal - itemsDiscount;
-  const globalDiscount = globalDiscountType === "PERCENTAGE" 
-    ? (globalDiscountValue / 100) * subtotalAfterItems 
-    : globalDiscountValue;
+  const subtotalAfterItemsDiscount = subtotal - itemsDiscountAmount;
+  const globalDiscountAmount = globalDiscountType === "AMOUNT" ? globalDiscountValue : (subtotalAfterItemsDiscount * globalDiscountValue / 100);
+  
+  const total = subtotalAfterItemsDiscount - globalDiscountAmount;
+  const totalPayments = payments.reduce((acc, p) => acc + p.amount, 0);
+  const remainingToPay = Math.max(0, total - totalPayments);
+  const changeAmount = Math.max(0, totalPayments - total);
 
-  const total = subtotalAfterItems - globalDiscount;
-  const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
-  const remainingToPay = total - totalPaid;
+  useEffect(() => {
+    if (isPaymentOpen && remainingToPay > 0 && payments.length === 0) {
+      setCurrentPaymentAmount(remainingToPay.toFixed(2));
+    }
+  }, [isPaymentOpen, remainingToPay, payments]);
 
-  const addPayment = () => {
-    if (!selectedPaymentMethod) return;
-    const amount = Number(paymentAmount);
-    if (amount <= 0) return;
-
-    const pm = paymentMethods.find(m => m.id === selectedPaymentMethod);
-    if (!pm) return;
-
-    if (pm.type === "CUSTOMER_WALLET") {
-      if (!selectedCustomer) {
-        alert("Selecione o cliente para usar a carteira digital.");
-        return;
+  // Actions
+  const handleHoldDraft = async () => {
+    if (items.length === 0) return toast({ variant: "destructive", title: "Carrinho vazio" });
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        draftId: draftId,
+        sellerId,
+        customerId: customerId || undefined,
+        globalDiscountType,
+        globalDiscountValue,
+        items: items.map(i => ({
+          variantId: i.variant.id,
+          quantity: i.quantity,
+          discountType: i.discountType,
+          discountValue: i.discountValue
+        })),
+        payments: payments
+      };
+      const res = await saveDraftSaleAction(payload);
+      if (res.success) {
+        toast({ title: "Venda guardada em rascunhos." });
+        resetPdv();
+      } else {
+        toast({ variant: "destructive", title: "Erro", description: res.error });
       }
-      if (settings && !settings.enableCustomerWallet) {
-        alert("Carteira digital do cliente desativada nas configurações operacionais.");
-        return;
-      }
-      const balance = Number(selectedCustomer.wallet?.balance || 0);
-      if (balance < amount) {
-        alert(`Saldo insuficiente na carteira (Saldo: R$ ${balance.toFixed(2)}).`);
-        return;
-      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
-      // Validar saldo parcial
-      if (settings && !settings.allowPartialWalletUsage) {
-        const requiredAmount = Math.min(balance, remainingToPay);
-        if (Math.abs(amount - requiredAmount) > 0.01) {
-          alert(`Uso de saldo parcial desativado. Você deve utilizar o saldo integral (R$ ${requiredAmount.toFixed(2)}).`);
-          return;
+  const handleAddPayment = () => {
+    const amt = parseFloat(currentPaymentAmount);
+    if (isNaN(amt) || amt <= 0) return toast({ variant: "destructive", title: "Valor inválido" });
+    setPayments(prev => [...prev, { paymentMethodId: currentPaymentMethod, amount: amt, installments: 1 }]);
+    setCurrentPaymentAmount((Math.max(0, remainingToPay - amt)).toFixed(2));
+  };
+
+  const handleFinalizeSale = async (authId?: string) => {
+    if (remainingToPay > 0 && total > 0) {
+      return toast({ variant: "destructive", title: "O pagamento não foi integralizado." });
+    }
+    
+    setIsSubmitting(true);
+    try {
+      const payload = {
+        companyId: "AUTO",
+        channel: "COUNTER" as const,
+        sellerId,
+        customerId: customerId || undefined,
+        subtotal: subtotal,
+        discountAmount: itemsDiscountAmount + globalDiscountAmount,
+        totalAmount: total,
+        freightAmount: 0,
+        globalDiscountType,
+        globalDiscountValue,
+        items: items.map(i => {
+          const itemPrice = Number(i.variant.salePrice);
+          const unitDiscount = i.discountType === "AMOUNT" ? i.discountValue : (itemPrice * i.discountValue / 100);
+          const tPrice = (itemPrice - unitDiscount) * i.quantity;
+          const costPrice = Number(i.variant.costPrice || 0);
+          return {
+            variantId: i.variant.id,
+            quantity: i.quantity,
+            discountType: i.discountType,
+            discountValue: i.discountValue,
+            productNameSnapshot: i.variant.product.name,
+            variantNameSnapshot: i.variant.name,
+            skuSnapshot: i.variant.sku || '',
+            barcodeSnapshot: i.variant.barcode || null,
+            unitPrice: itemPrice,
+            discount: unitDiscount,
+            totalPrice: tPrice,
+            costPriceAtSale: costPrice,
+            salePriceAtSale: itemPrice,
+            marginAtSale: itemPrice > 0 ? ((itemPrice - costPrice) / itemPrice) * 100 : 0
+          };
+        }),
+        payments: payments.map(p => ({
+          paymentMethodId: p.paymentMethodId,
+          amount: p.amount,
+          installments: p.installments
+        })),
+        draftId: draftId || undefined,
+        authorizationId: typeof authId === 'string' ? authId : undefined
+      };
+      const res = await createSaleAction(payload);
+      if (res.success && res.sale) {
+        setSuccessData(res.sale);
+        setIsPaymentOpen(false);
+        setIsSuccessOpen(true);
+        setShowAuthDialog(false);
+      } else {
+        if ('requireAuthorization' in res && res.requireAuthorization) {
+          setAuthorizationId(res.authorizationId as string);
+          setAuthType("DISCOUNT");
+          setShowAuthDialog(true);
+        } else {
+          toast({ variant: "destructive", title: "Erro", description: res.error as string });
         }
       }
-    }
-
-    setPayments(prev => [...prev, {
-      paymentMethodId: pm.id,
-      name: pm.name,
-      amount,
-      installments: paymentInstallments
-    }]);
-    setPaymentAmount("");
-    setSelectedPaymentMethod("");
-    setPaymentInstallments(1);
-  };
-
-  const removePayment = (idx: number) => {
-    setPayments(prev => prev.filter((_, i) => i !== idx));
-  };
-
-  const handleFinalize = async (pin?: string, reason?: string) => {
-    if (cartItems.length === 0) return alert("Carrinho vazio!");
-    if (!selectedSeller) return alert("Selecione um vendedor!");
-    
-    // Check if customer is required by operational settings
-    const blockNãoCustomer = settings && (!settings.allowSaleWithoutCustomer || settings.requireCustomerOnSale);
-    if (blockNãoCustomer && !selectedCustomer) {
-      return alert("Operação não permitida: É obrigatório identificar o cliente para fechar a venda.");
-    }
-
-    if (totalPaid < total - 0.01) return alert("O valor pago não cobre o total da venda!");
-    if (!activeProfile?.empresaId) return;
-
-    setLoading(true);
-    setPinError("");
-    const res = await createSaleAction({
-      companyId: activeProfile.empresaId,
-      sellerId: selectedSeller,
-      customerId: selectedCustomer?.id,
-      customerNameSnapshot: selectedCustomer?.name,
-      subtotal,
-      discountAmount: itemsDiscount + globalDiscount,
-      globalDiscountType,
-      globalDiscountValue,
-      totalAmount: total,
-      items: cartItems.map(i => ({
-        ...i,
-        totalPrice: (i.unitPrice - i.discount) * i.quantity
-      })),
-      payments: payments.map(p => ({
-        paymentMethodId: p.paymentMethodId,
-        amount: p.amount,
-        installments: p.installments
-      })),
-      authReason: reason,
-      authorizationId: pin
-    });
-
-    setLoading(false);
-    if (res.success) {
-      alert("Venda finalizada com sucesso!");
-      // Reset PDV
-      setCartItems([]);
-      setPayments([]);
-      setSelectedCustomer(null);
-      setGlobalDiscountValue(0);
-      setShowPinModal(false);
-      setAuthPin("");
-      setAuthReason("");
-      router.push(`/comercial/vendas/${res.sale!.id}`);
-    } else {
-      if (res.requireAuthorization) {
-        setAuthPin(res.authorizationId);
-        setShowPinModal(true);
-      } else {
-        alert("Erro ao finalizar venda:\n" + res.error);
-      }
+    } catch (err: any) {
+      toast({ variant: "destructive", title: "Erro fatal ao fechar venda." });
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(val);
+  // Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F2") { e.preventDefault(); searchInputRef.current?.focus(); }
+      if (e.key === "F4") { e.preventDefault(); if (items.length > 0) setIsPaymentOpen(true); }
+      if (e.key === "F8") { e.preventDefault(); handleHoldDraft(); }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [items, isPaymentOpen]);
+
+  if (loadingInitial) return <div className="flex h-screen items-center justify-center"><Loader2 className="animate-spin h-8 w-8 text-slate-400" /></div>;
 
   return (
-    <div className="h-[calc(100vh-6rem)] overflow-hidden flex flex-col p-4 bg-slate-50 gap-4">
-      <div className="flex justify-between items-center bg-white p-3 rounded-md border shadow-sm shrink-0">
-        <h1 className="text-xl font-bold text-slate-800">PDV / Frente de Caixa</h1>
+    <div className="h-[calc(100vh-2rem)] flex flex-col bg-[#f0f2f5] -m-4 sm:-m-6 p-4">
+      
+      {/* Top Bar */}
+      <div className="flex items-center justify-between bg-white rounded-xl shadow-sm px-6 py-3 mb-4 shrink-0">
         <div className="flex items-center gap-4">
-          <select 
-            className="border rounded px-2 py-1 text-sm bg-slate-50"
-            value={selectedSeller}
-            onChange={e => setSelectedSeller(e.target.value)}
-          >
-            <option value="">Selecione Vendedor...</option>
-            {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-          </select>
-          <Link href="/comercial/vendas"><Button variant="outline" size="sm">Voltar</Button></Link>
+          <div className="flex items-center gap-2 bg-[#1e2229] text-white px-4 py-2 rounded-lg shadow-sm">
+            <Store className="h-5 w-5" />
+            <span className="font-bold text-lg tracking-tight">NEEX PDV</span>
+          </div>
+          <Badge className="bg-green-100 text-green-700 border-green-200">Caixa Aberto</Badge>
+        </div>
+        
+        <div className="flex items-center gap-4">
+          <div className="hidden md:flex gap-4 mr-4 text-sm font-semibold text-slate-500 bg-slate-50 px-4 py-2 rounded-lg border">
+            <span><kbd className="bg-slate-200 px-1 rounded text-xs font-mono">F2</kbd> Buscar</span>
+            <span><kbd className="bg-slate-200 px-1 rounded text-xs font-mono">F4</kbd> Receber</span>
+            <span><kbd className="bg-slate-200 px-1 rounded text-xs font-mono">F8</kbd> Segurar</span>
+          </div>
+
+          <Button variant="outline" className="border-dashed" onClick={() => router.push("/comercial/vendas")}>
+            <Search className="h-4 w-4 mr-2" /> Recuperar Vendas (Rascunhos)
+          </Button>
+
+          <div className="flex items-center gap-2 border-l pl-4">
+            <Select value={sellerId} onValueChange={setSellerId}>
+              <SelectTrigger className="w-[180px] bg-slate-100 border-0 h-10 font-semibold shadow-inner">
+                <div className="flex items-center gap-2"><User className="h-4 w-4" /> <SelectValue /></div>
+              </SelectTrigger>
+              <SelectContent>
+                {sellers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       </div>
 
-      <div className="flex gap-4 flex-1 overflow-hidden">
-        {/* Esquerda: Produtos e Carrinho */}
-        <div className="flex-[2] flex flex-col gap-4 overflow-hidden">
-          {/* Busca Produto */}
-          <Card className="shrink-0">
-            <CardContent className="p-4 flex flex-col gap-2">
-              <div className="flex gap-2">
-                <Input 
-                  ref={inputRef}
-                  placeholder="Código de barras, SKU ou Nome do Produto..." 
-                  value={productQuery}
-                  onChange={e => {
-                    setProductQuery(e.target.value);
-                    setSearchError("");
-                  }}
-                  onKeyDown={e => e.key === 'Enter' && handleSearchProduct()}
-                  autoFocus
-                />
-                <Button onClick={handleSearchProduct}><Search className="w-4 h-4" /></Button>
-              </div>
-              {searchError && <p className="text-sm text-red-500 font-medium">{searchError}</p>}
-              {searchSuccess && <p className="text-sm text-green-600 font-medium">{searchSuccess}</p>}
-            </CardContent>
-          </Card>
-
-          {/* Resultados Busca Produto */}
-          {searchResults.length > 0 && (
-            <Card className="shrink-0 max-h-48 overflow-y-auto">
-              <CardContent className="p-2 divide-y">
-                {searchResults.map(v => (
-                  <div key={v.id} className="flex justify-between items-center p-2 hover:bg-slate-50">
+      <div className="flex flex-1 gap-4 overflow-hidden">
+        
+        {/* Left Column (Product Area & Cart) */}
+        <div className="flex-[6.5] flex flex-col gap-4 overflow-hidden">
+          
+          {/* Main Input */}
+          <div className="bg-white rounded-xl shadow-sm p-4 shrink-0 relative z-20">
+            <div className="flex items-center gap-3 relative">
+              <div className="bg-blue-50 p-3 rounded-lg"><ShoppingCart className="h-6 w-6 text-blue-600" /></div>
+              <Input 
+                ref={searchInputRef}
+                value={productQuery}
+                onChange={e => setProductQuery(e.target.value)}
+                placeholder="Busque por código de barras ou nome do produto... [F2]"
+                className="h-14 text-lg border-2 border-slate-200 focus-visible:border-blue-500 shadow-none px-4"
+                autoComplete="off"
+              />
+            </div>
+            
+            {/* Search Dropdown */}
+            {foundVariants.length > 0 && (
+              <div className="absolute top-full left-0 right-0 mt-2 bg-white border shadow-xl rounded-xl max-h-[300px] overflow-y-auto overflow-x-hidden z-50">
+                {foundVariants.map(v => (
+                  <div key={v.id} className="flex items-center justify-between p-4 hover:bg-slate-50 cursor-pointer border-b last:border-0" onClick={() => addItemToCart(v)}>
                     <div>
-                      <p className="font-bold text-sm">{v.product.name} - {v.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        SKU: {v.sku} | Código Interno: {v.product.internalCode || '-'} | Barcode: {v.barcode || '-'} | Estoque: {v.availableStock}
-                      </p>
+                      <div className="font-bold text-slate-800">{v.product.name}</div>
+                      <div className="text-sm text-slate-500 flex items-center gap-2">
+                        {v.product.internalCode} • <Badge variant="outline">{v.name !== 'Único' ? v.name : 'Padrão'}</Badge> • Estoque: {v.availableStock}
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4">
-                      <p className="font-bold text-green-600">{formatCurrency(Number(v.salePrice))}</p>
-                      <Button size="sm" onClick={() => handleSelectVariant(v)}>Adicionar</Button>
-                    </div>
+                    <div className="font-bold text-lg text-green-700">R$ {Number(v.salePrice).toFixed(2)}</div>
                   </div>
                 ))}
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
+          </div>
 
-          {/* Carrinho */}
-          <Card className="flex-1 flex flex-col overflow-hidden">
-            <CardHeader className="py-3 shrink-0"><CardTitle className="text-lg flex items-center gap-2"><ShoppingCart className="w-5 h-5"/> Carrinho de Compras</CardTitle></CardHeader>
-            <CardContent className="flex-1 overflow-y-auto p-0">
-              <table className="w-full text-sm">
-                <thead className="bg-slate-100 sticky top-0">
+          {/* Cart Table */}
+          <div className="flex-1 bg-white rounded-xl shadow-sm overflow-hidden flex flex-col relative z-10">
+            <div className="overflow-y-auto flex-1">
+              <table className="w-full text-left text-sm whitespace-nowrap">
+                <thead className="bg-slate-50 text-slate-600 sticky top-0 uppercase text-[11px] font-bold tracking-wider z-10 shadow-sm border-b">
                   <tr>
-                    <th className="p-2 text-left">Produto</th>
-                    <th className="p-2 text-center w-24">Qtd</th>
-                    <th className="p-2 text-right">Preço</th>
-                    <th className="p-2 text-right w-24">Desc/Un</th>
-                    <th className="p-2 text-right">Total</th>
-                    <th className="p-2 text-center w-12"></th>
+                    <th className="px-6 py-4">Item / Descrição</th>
+                    <th className="px-6 py-4 text-center">Variação</th>
+                    <th className="px-6 py-4 text-center">Quantidade</th>
+                    <th className="px-6 py-4 text-right">Preço Unit.</th>
+                    <th className="px-6 py-4 text-right">Total</th>
+                    <th className="px-6 py-4 text-center"></th>
                   </tr>
                 </thead>
-                <tbody className="divide-y">
-                  {cartItems.map((item) => (
-                    <tr key={item.variantId} className="hover:bg-slate-50">
-                      <td className="p-2">
-                        <p className="font-bold">{item.productNameSnapshot}</p>
-                        <p className="text-xs text-muted-foreground">{item.variantNameSnapshot} (SKU: {item.skuSnapshot})</p>
-                      </td>
-                      <td className="p-2">
-                        <div className="flex items-center justify-center gap-2">
-                          <button onClick={() => updateQuantity(item.variantId, -1)} className="w-6 h-6 bg-slate-200 rounded font-bold hover:bg-slate-300">-</button>
-                          <span className="w-6 text-center">{item.quantity}</span>
-                          <button onClick={() => updateQuantity(item.variantId, 1)} className="w-6 h-6 bg-slate-200 rounded font-bold hover:bg-slate-300">+</button>
-                        </div>
-                      </td>
-                      <td className="p-2 text-right">{formatCurrency(item.unitPrice)}</td>
-                      <td className="p-2">
-                        <div className="flex gap-1">
-                          <select 
-                            className="h-7 text-xs border rounded bg-slate-50 px-1"
-                            value={item.discountType}
-                            onChange={(e) => updateItemDiscountType(item.variantId, e.target.value as any)}
-                          >
-                            <option value="AMOUNT">R$</option>
-                            <option value="PERCENTAGE">%</option>
-                          </select>
-                          <Input 
-                            type="number" 
-                            min={0} max={item.discountType === "PERCENTAGE" ? 100 : item.unitPrice} 
-                            className="h-7 text-right text-xs w-16" 
-                            value={item.discountValue}
-                            onChange={(e) => updateItemDiscount(item.variantId, e.target.value)}
-                          />
-                        </div>
-                      </td>
-                      <td className="p-2 text-right font-bold">{formatCurrency((item.unitPrice - item.discount) * item.quantity)}</td>
-                      <td className="p-2 text-center">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-red-500" onClick={() => removeItem(item.variantId)}>
-                          <Trash2 className="w-4 h-4" />
-                        </Button>
-                      </td>
-                    </tr>
-                  ))}
-                  {cartItems.length === 0 && (
+                <tbody>
+                  {items.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="p-8 text-center text-muted-foreground">O carrinho está vazio.</td>
+                      <td colSpan={6} className="px-6 py-20 text-center text-slate-400">
+                        <ShoppingCart className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                        <p className="text-lg">Carrinho vazio</p>
+                        <p className="text-sm">Busque um produto acima ou use um leitor de código de barras</p>
+                      </td>
                     </tr>
+                  ) : (
+                    items.map((item, idx) => {
+                      const price = Number(item.variant.salePrice);
+                      const t = price * item.quantity;
+                      return (
+                        <tr key={item.id} className="border-b last:border-0 hover:bg-slate-50/50 group">
+                          <td className="px-6 py-4">
+                            <div className="font-bold text-slate-800 text-base">{item.variant.product.name}</div>
+                            <div className="text-xs text-slate-400 mt-1">{item.variant.barcode || item.variant.sku}</div>
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <Badge variant="outline" className="bg-white">{item.variant.name}</Badge>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-center gap-1">
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateItemQty(item.id, -1)}><Minus className="h-3 w-3" /></Button>
+                              <span className="w-10 text-center font-bold text-base">{item.quantity}</span>
+                              <Button variant="outline" size="icon" className="h-8 w-8 rounded-full" onClick={() => updateItemQty(item.id, 1)}><Plus className="h-3 w-3" /></Button>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 text-right font-medium text-slate-600">R$ {price.toFixed(2)}</td>
+                          <td className="px-6 py-4 text-right font-bold text-lg text-slate-800">R$ {t.toFixed(2)}</td>
+                          <td className="px-6 py-4 text-center">
+                            <Button variant="ghost" size="icon" className="text-red-400 hover:text-red-600 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-opacity" onClick={() => removeItem(item.id)}>
+                              <Trash2 className="h-5 w-5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      );
+                    })
                   )}
                 </tbody>
               </table>
-            </CardContent>
-          </Card>
+            </div>
+          </div>
+
         </div>
 
-        {/* Direita: Cliente, Resumo, Pagamentos */}
-        <div className="flex-1 flex flex-col gap-4 overflow-y-auto">
+        {/* Right Column (Totals and Client) */}
+        <div className="flex-[3.5] flex flex-col gap-4">
           
-          {/* Cliente */}
-          <Card className="shrink-0">
-            <CardHeader className="py-3"><CardTitle className="text-md flex items-center gap-2"><User className="w-4 h-4"/> Cliente</CardTitle></CardHeader>
-            <CardContent className="space-y-3 p-4 pt-0">
-              {selectedCustomer ? (
-                <div className="bg-slate-100 p-3 rounded-md flex justify-between items-center border">
-                  <div>
-                    <p className="font-bold">{selectedCustomer.name}</p>
-                    <p className="text-xs text-muted-foreground">{selectedCustomer.email || selectedCustomer.phone || '-'}</p>
-                    {selectedCustomer.wallet && (
-                      <p className="text-xs font-bold text-indigo-600 mt-1">Saldo Carteira: {formatCurrency(Number(selectedCustomer.wallet.balance))}</p>
-                    )}
-                  </div>
-                  <Button variant="ghost" size="sm" onClick={() => setSelectedCustomer(null)}><X className="w-4 h-4" /></Button>
-                </div>
-              ) : (
-                <div className="flex gap-2">
+          <div className="bg-white rounded-xl shadow-sm p-5 flex flex-col gap-4 shrink-0 relative z-20">
+            <div className="font-headline font-bold text-lg border-b pb-2">Identificação do Cliente</div>
+            <div className="relative">
+              {!customerId ? (
+                <>
                   <Input 
-                    placeholder="Buscar cliente..." 
-                    value={customerQuery}
-                    onChange={e => setCustomerQuery(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSearchCustomer()}
+                    value={customerSearch} onChange={e => setCustomerSearch(e.target.value)}
+                    placeholder="Buscar cliente (ou vazio para Consumidor Final)"
+                    className="h-12 border-slate-200"
                   />
-                  <Button variant="outline" onClick={handleSearchCustomer}><Search className="w-4 h-4" /></Button>
-                </div>
-              )}
-              {customerResults.length > 0 && !selectedCustomer && (
-                <div className="border rounded-md divide-y max-h-32 overflow-y-auto bg-white">
-                  {customerResults.map(c => (
-                    <div key={c.id} className="p-2 flex justify-between items-center text-sm cursor-pointer hover:bg-slate-50" onClick={() => { setSelectedCustomer(c); setCustomerResults([]); setCustomerQuery(""); }}>
-                      <span>{c.name}</span>
-                      <Button size="sm" variant="ghost">Selecionar</Button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Resumo e Pagamentos */}
-          <Card className="flex-1 flex flex-col bg-slate-800 text-white shadow-xl">
-            <CardContent className="p-5 flex-1 flex flex-col gap-4">
-              
-              <div className="space-y-1 text-sm border-b border-slate-700 pb-3">
-                <div className="flex justify-between"><span>Subtotal:</span> <span>{formatCurrency(subtotal)}</span></div>
-                <div className="flex justify-between text-red-300"><span>Descontos Itens:</span> <span>- {formatCurrency(itemsDiscount)}</span></div>
-                <div className="flex justify-between items-center text-red-300">
-                  <span>Desconto Global:</span> 
-                  <div className="flex gap-1 w-32">
-                    <select 
-                      className="h-7 text-xs border-slate-600 bg-slate-700 rounded px-1 text-white"
-                      value={globalDiscountType}
-                      onChange={(e) => setGlobalDiscountType(e.target.value as any)}
-                    >
-                      <option value="AMOUNT">R$</option>
-                      <option value="PERCENTAGE">%</option>
-                    </select>
-                    <Input 
-                      type="number" 
-                      className="h-7 text-right bg-slate-700 border-slate-600 text-white w-full" 
-                      value={globalDiscountValue}
-                      onChange={e => setGlobalDiscountValue(Number(e.target.value))}
-                    />
-                  </div>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-end">
-                <span className="text-slate-300">Total a Pagar</span>
-                <span className="text-4xl font-bold text-green-400">{formatCurrency(total)}</span>
-              </div>
-
-              {/* Múltiplos Pagamentos */}
-              <div className="bg-slate-700 rounded-lg p-3 space-y-3 mt-2">
-                <div className="flex justify-between items-center">
-                  <h3 className="font-bold flex items-center gap-2"><CreditCard className="w-4 h-4"/> Pagamentos</h3>
-                  <span className="text-xs bg-slate-800 px-2 py-1 rounded">Restante: <span className="font-bold text-red-400">{formatCurrency(Math.max(0, remainingToPay))}</span></span>
-                </div>
-                
-                <div className="flex gap-2 flex-wrap sm:flex-nowrap">
-                  <select 
-                    className="flex-1 min-w-[120px] h-9 rounded bg-slate-800 border-slate-600 text-sm px-2 text-white"
-                    value={selectedPaymentMethod}
-                    onChange={e => {
-                      setSelectedPaymentMethod(e.target.value);
-                      if (remainingToPay > 0) setPaymentAmount(remainingToPay.toFixed(2));
-                      setPaymentInstallments(1);
-                    }}
-                  >
-                    <option value="">Selecione o Meio...</option>
-                    {paymentMethods.map(pm => <option key={pm.id} value={pm.id}>{pm.name}</option>)}
-                  </select>
-
-                  {(() => {
-                    const pm = paymentMethods.find(m => m.id === selectedPaymentMethod);
-                    const maxInst = settings?.maxInstallments || 1;
-                    if (pm?.allowsInstallments && maxInst > 1) {
-                      return (
-                        <select
-                          className="w-20 h-9 rounded bg-slate-800 border-slate-600 text-sm px-2 text-white"
-                          value={paymentInstallments}
-                          onChange={e => setPaymentInstallments(Number(e.target.value))}
-                        >
-                          {Array.from({ length: maxInst }, (_, i) => i + 1).map(n => (
-                            <option key={n} value={n}>{n}x</option>
-                          ))}
-                        </select>
-                      );
-                    }
-                    return null;
-                  })()}
-
-                  <Input 
-                    type="number" 
-                    placeholder="R$ 0,00"
-                    className="w-24 h-9 bg-slate-800 border-slate-600 text-right text-white"
-                    value={paymentAmount}
-                    onChange={e => setPaymentAmount(e.target.value)}
-                  />
-                  <Button onClick={addPayment} className="h-9 px-3 bg-green-600 hover:bg-green-500"><Plus className="w-4 h-4"/></Button>
-                </div>
-
-                {(() => {
-                  const pm = paymentMethods.find(m => m.id === selectedPaymentMethod);
-                  if (pm?.type === "CUSTOMER_WALLET" && selectedCustomer) {
-                    const walletBalance = Number(selectedCustomer.wallet?.balance || 0);
-                    const maxUse = Math.min(walletBalance, remainingToPay);
-                    return (
-                      <div className="w-full flex justify-between items-center gap-2 mt-2 bg-slate-800 p-2 rounded border border-slate-700 text-xs">
-                        <span className="text-slate-300 font-semibold">Disponível: {formatCurrency(walletBalance)}</span>
-                        <div className="flex gap-1.5">
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="bg-indigo-600 hover:bg-indigo-500 h-7 text-[10px]"
-                            onClick={() => {
-                              setPaymentAmount(maxUse.toFixed(2));
-                            }}
-                          >
-                            Usar Saldo Total
-                          </Button>
-                          {settings?.allowPartialWalletUsage !== false && (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="h-7 text-[10px] text-white border-slate-600 hover:bg-slate-700"
-                              onClick={() => {
-                                setPaymentAmount((maxUse / 2).toFixed(2));
-                              }}
-                            >
-                              Usar Parcial (50%)
-                            </Button>
-                          )}
+                  {customers.length > 0 && customerSearch && (
+                    <div className="absolute top-full left-0 right-0 mt-2 bg-white border shadow-xl rounded-xl max-h-[200px] overflow-y-auto z-50">
+                      {customers.map(c => (
+                        <div key={c.id} className="p-3 hover:bg-slate-50 cursor-pointer border-b text-sm" onClick={() => { setCustomerId(c.id); setCustomerSearch(c.name); setCustomers([]); }}>
+                          <div className="font-bold">{c.name}</div>
+                          <div className="text-xs text-slate-500">{c.phone} • {c.cpf}</div>
                         </div>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                <div className="space-y-2 mt-2 max-h-24 overflow-y-auto">
-                  {payments.map((p, idx) => (
-                    <div key={idx} className="flex justify-between items-center bg-slate-800 p-2 rounded text-sm">
-                      <span>{p.name} {p.installments > 1 ? `(${p.installments}x)` : ''}</span>
-                      <div className="flex items-center gap-3">
-                        <span className="font-bold">{formatCurrency(p.amount)}</span>
-                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-red-400 hover:bg-slate-700" onClick={() => removePayment(idx)}><X className="w-4 h-4"/></Button>
-                      </div>
+                      ))}
                     </div>
-                  ))}
+                  )}
+                </>
+              ) : (
+                <div className="flex items-center justify-between bg-blue-50 border border-blue-100 p-3 rounded-lg">
+                  <div className="flex items-center gap-3">
+                    <div className="bg-blue-600 p-2 rounded-full"><User className="h-4 w-4 text-white" /></div>
+                    <div>
+                      <div className="font-bold text-blue-900">{customerSearch}</div>
+                      <div className="text-xs text-blue-600">Cliente Identificado</div>
+                    </div>
+                  </div>
+                  <Button variant="ghost" size="sm" className="text-blue-600 hover:bg-blue-100" onClick={() => { setCustomerId(""); setCustomerSearch(""); }}>Remover</Button>
                 </div>
-                <div className="flex justify-between font-bold pt-2 border-t border-slate-600">
-                  <span>Total Pago:</span>
-                  <span className="text-green-400">{formatCurrency(totalPaid)}</span>
+              )}
+            </div>
+            {!customerId && (
+              <Button variant="outline" className="w-full text-blue-600 border-blue-200 hover:bg-blue-50">
+                <Plus className="h-4 w-4 mr-2" /> Cadastro Rápido de Cliente
+              </Button>
+            )}
+          </div>
+
+          <div className="flex-1 bg-white rounded-xl shadow-sm p-6 flex flex-col justify-between">
+            <div className="space-y-4">
+              <div className="flex justify-between items-center text-slate-500">
+                <span className="font-semibold text-lg">Subtotal</span>
+                <span className="font-bold text-xl">R$ {subtotal.toFixed(2)}</span>
+              </div>
+              
+              <div className="space-y-2 border-y py-4">
+                <div className="flex justify-between items-center text-slate-500">
+                  <span className="font-semibold">Descontos</span>
+                  <span className="text-red-500 font-bold">- R$ {(itemsDiscountAmount + globalDiscountAmount).toFixed(2)}</span>
+                </div>
+                <div className="flex gap-2">
+                  <Select value={globalDiscountType} onValueChange={(v:any) => setGlobalDiscountType(v)}>
+                    <SelectTrigger className="w-24 bg-slate-50 border-0 h-10 shadow-inner">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="AMOUNT">R$</SelectItem>
+                      <SelectItem value="PERCENTAGE">%</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input 
+                    type="number" step="0.01" value={globalDiscountValue || ""} onChange={e => setGlobalDiscountValue(parseFloat(e.target.value) || 0)}
+                    className="flex-1 h-10 bg-slate-50 border-0 shadow-inner text-right font-bold"
+                    placeholder="0.00"
+                  />
                 </div>
               </div>
 
-            </CardContent>
-            
-            <div className="p-4 bg-slate-900 rounded-b-xl shrink-0">
-              <Button 
-                className="w-full h-16 text-lg" 
-                size="lg"
-                disabled={loading}
-                onClick={() => handleFinalize()}
-              >
-                {loading ? "Processando..." : "FINALIZAR VENDA"}
-              </Button>
+              <div className="pt-4">
+                <div className="flex justify-between items-end">
+                  <span className="font-headline font-bold text-2xl text-slate-800">Total</span>
+                  <span className="font-black text-5xl text-green-600 tracking-tight">R$ {total.toFixed(2)}</span>
+                </div>
+              </div>
             </div>
-          </Card>
+
+            <div className="space-y-3 mt-8">
+              <Button 
+                className="w-full h-16 text-xl font-bold bg-[#5cb85c] hover:bg-[#4cae4c] text-white shadow-md hover:shadow-lg transition-all"
+                onClick={() => {
+                  if (items.length === 0) return toast({ variant: "destructive", title: "Carrinho vazio" });
+                  setIsPaymentOpen(true);
+                }}
+              >
+                <CheckCircle className="h-6 w-6 mr-3" /> [F4] Receber Venda
+              </Button>
+              <div className="flex gap-3">
+                <Button variant="outline" className="flex-1 h-12 font-bold text-slate-600 border-slate-300" onClick={handleHoldDraft} disabled={isSubmitting}>
+                  [F8] Segurar
+                </Button>
+                <Button variant="outline" className="flex-1 h-12 font-bold text-red-500 border-red-200 hover:bg-red-50" onClick={resetPdv}>
+                  Cancelar
+                </Button>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
 
-      {showPinModal && (
-        <AuthorizationDialog
-          open={showPinModal}
-          onOpenChange={setShowPinModal}
-          authorizationId={authPin} // Nãote: state variable is named authPin, but it holds the authorizationId
-          authorizationType="DISCOUNT"
-          title="Desconto acima do limite"
-          description="O desconto aplicado excede o seu limite de alçada. Solicite a aprovação gerencial."
-          amount={globalDiscount + itemsDiscount}
-          percentage={subtotal > 0 ? ((globalDiscount + itemsDiscount) / subtotal) * 100 : 0}
-          onAuthorized={(authRecord) => {
-            handleFinalize(authRecord.id);
-          }}
-          onRejected={() => {
-            alert('A autorização de desconto foi rejeitada.');
-            setGlobalDiscountValue(0);
-            setShowPinModal(false);
-          }}
-        />
-      )}
+      {/* MODAL: PAYMENT */}
+      <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
+        <DialogContent className="sm:max-w-[800px] p-0 overflow-hidden bg-slate-50">
+          <div className="flex h-[500px]">
+            {/* Left Col Payment */}
+            <div className="w-1/2 bg-white p-6 border-r flex flex-col">
+              <DialogHeader className="mb-6">
+                <DialogTitle className="text-2xl font-bold flex items-center gap-2"><CreditCard className="h-6 w-6 text-slate-400" /> Recebimento</DialogTitle>
+              </DialogHeader>
+              
+              <div className="space-y-4 flex-1">
+                <div className="space-y-2">
+                  <Label>Forma de Pagamento</Label>
+                  <Select value={currentPaymentMethod} onValueChange={setCurrentPaymentMethod}>
+                    <SelectTrigger className="h-12 text-lg font-semibold"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {paymentMethods.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Valor do Lançamento (R$)</Label>
+                  <Input 
+                    type="number" step="0.01" 
+                    value={currentPaymentAmount} onChange={e => setCurrentPaymentAmount(e.target.value)} 
+                    className="h-16 text-3xl font-black text-right pr-4"
+                  />
+                </div>
+                <Button 
+                  className="w-full h-12 font-bold bg-[#1e2229] hover:bg-black text-white mt-4"
+                  onClick={handleAddPayment}
+                  disabled={remainingToPay <= 0}
+                >
+                  <Plus className="h-5 w-5 mr-2" /> Adicionar Pagamento
+                </Button>
+              </div>
+            </div>
+
+            {/* Right Col Review */}
+            <div className="w-1/2 p-6 flex flex-col justify-between">
+              <div>
+                <div className="flex justify-between items-end mb-6 bg-slate-100 p-4 rounded-xl">
+                  <span className="text-slate-500 font-semibold text-lg">Total</span>
+                  <span className="font-black text-4xl text-slate-800">R$ {total.toFixed(2)}</span>
+                </div>
+
+                <div className="space-y-2 max-h-[150px] overflow-y-auto mb-6">
+                  {payments.map((p, idx) => (
+                    <div key={idx} className="flex justify-between items-center bg-white p-3 rounded border shadow-sm">
+                      <div className="flex flex-col">
+                        <span className="font-bold text-sm text-slate-700">{paymentMethods.find(x => x.id === p.paymentMethodId)?.name}</span>
+                        <span className="text-xs text-slate-400">Pago</span>
+                      </div>
+                      <span className="font-bold text-green-600 text-lg">R$ {p.amount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {payments.length === 0 && <div className="text-center text-slate-400 text-sm py-4 italic">Nenhum pagamento adicionado</div>}
+                </div>
+
+                <div className="flex justify-between items-center py-2 border-b">
+                  <span className="text-slate-500 font-semibold">Falta Pagar</span>
+                  <span className="font-bold text-xl text-red-500">R$ {remainingToPay.toFixed(2)}</span>
+                </div>
+                <div className="flex justify-between items-center py-2 pt-4">
+                  <span className="text-slate-500 font-semibold">Troco</span>
+                  <span className="font-bold text-xl text-blue-600">R$ {changeAmount.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="pt-6">
+                <Button 
+                  className="w-full h-14 text-xl font-bold bg-[#5cb85c] hover:bg-[#4cae4c] text-white disabled:opacity-50"
+                  disabled={remainingToPay > 0 || isSubmitting}
+                  onClick={() => handleFinalizeSale()}
+                >
+                  {isSubmitting ? <Loader2 className="animate-spin h-6 w-6 mx-auto" /> : "Confirmar Venda"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* MODAL: SUCCESS */}
+      <Dialog open={isSuccessOpen} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-[400px] text-center p-8 [&>button]:hidden">
+          <div className="mx-auto w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mb-6">
+            <CheckCircle className="h-12 w-12 text-green-600" />
+          </div>
+          <DialogTitle className="text-2xl font-black text-slate-800 mb-2">Venda Concluída!</DialogTitle>
+          <DialogDescription className="text-lg text-slate-500 mb-8">
+            Pedido <span className="font-bold text-slate-800">#{successData?.saleNumber || successData?.id?.split('-')[0]}</span> emitido com sucesso.
+          </DialogDescription>
+          
+          <div className="bg-slate-50 p-4 rounded-xl mb-8 space-y-2 text-left">
+            <div className="flex justify-between">
+              <span className="text-slate-500">Valor Recebido</span>
+              <span className="font-bold">R$ {(successData?.totalAmount + changeAmount).toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Troco</span>
+              <span className="font-bold text-blue-600">R$ {changeAmount.toFixed(2)}</span>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <Button className="w-full h-12 bg-slate-800 hover:bg-slate-900 text-white font-bold" onClick={() => { /* stub print */ }}>
+              <Printer className="mr-2 h-5 w-5" /> Imprimir Cupom
+            </Button>
+            <Button variant="outline" className="w-full h-12 font-bold text-slate-600" onClick={resetPdv}>
+              <Play className="mr-2 h-4 w-4" /> Nova Venda (Enter)
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <AuthorizationDialog
+        open={showAuthDialog}
+        onOpenChange={setShowAuthDialog}
+        authorizationId={authorizationId}
+        authorizationType={authType}
+        title="Autorização de Administrador Necessária"
+        description="Esta venda contém um desconto acima do limite permitido e exige aprovação de um administrador."
+        amount={globalDiscountAmount + itemsDiscountAmount}
+        onAuthorized={(auth: any) => handleFinalizeSale(auth.id)}
+      />
+
     </div>
   );
 }
