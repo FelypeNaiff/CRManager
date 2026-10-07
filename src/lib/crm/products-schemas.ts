@@ -20,6 +20,7 @@ export const ProductVariantInputSchema = z.object({
   costPrice: z.number().min(0, 'Preço de custo deve ser maior ou igual a 0'),
   salePrice: z.number().min(0, 'Preço de venda deve ser maior ou igual a 0'),
   minimumStock: z.number().min(0, 'Estoque mínimo deve ser maior ou igual a 0').default(0),
+  initialStock: z.number().min(0).default(0).optional(),
   maximumStock: z.number().min(0).optional().nullable(),
   weightKg: z.number().min(0).optional().nullable(),
   heightCm: z.number().min(0).optional().nullable(),
@@ -54,6 +55,7 @@ export const ProductSchema = z.object({
   barcode: z.string().optional().nullable(),
   barcodeType: z.string().optional().nullable(),
   minimumStock: z.number().min(0, 'Estoque mínimo deve ser maior ou igual a 0').default(0).optional(),
+  initialStock: z.number().min(0).default(0).optional(),
   currentStock: z.number().optional().nullable(),
 });
 

@@ -235,8 +235,34 @@ export async function createProductVariant(productId: string, input: any) {
     const variant = await prisma.$transaction(async tx => {
       const product = await tx.product.findFirst({ where: { id: productId, companyId: session.companyId, isActive: true }, select: { id: true } });
       if (!product) throw new Error('Produto não encontrado.');
-      const { currentStock, ...restData } = parsed.data;
-      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...restData, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock), currentStock: new Prisma.Decimal(currentStock || 0) } });
+      const { currentStock, initialStock, ...restData } = parsed.data;
+      const initialStockVal = initialStock || 0;
+      const created = await tx.productVariant.create({ data: { companyId: session.companyId, productId, ...restData, costPrice: new Prisma.Decimal(parsed.data.costPrice), salePrice: new Prisma.Decimal(parsed.data.salePrice), minimumStock: new Prisma.Decimal(parsed.data.minimumStock), currentStock: new Prisma.Decimal(initialStockVal), availableStock: new Prisma.Decimal(initialStockVal) } });
+
+      if (initialStockVal > 0) {
+        const warehouse = await getOrCreateDefaultWarehouse(tx, session.companyId);
+        await tx.stockPosition.create({
+          data: {
+            companyId: session.companyId,
+            warehouseId: warehouse.id,
+            variantId: created.id,
+            physicalStock: new Prisma.Decimal(initialStockVal),
+          }
+        });
+        await tx.inventoryMovement.create({
+          data: {
+            companyId: session.companyId,
+            warehouseId: warehouse.id,
+            variantId: created.id,
+            quantity: new Prisma.Decimal(initialStockVal),
+            type: 'INITIAL',
+            origin: 'PRODUCT_CREATE',
+            reason: 'Saldo inicial de cadastro',
+            userId: session.userId,
+            idempotencyKey: `initial-stock-create-${created.id}`
+          }
+        });
+      }
       await writeActivityLog({ context: session, action: 'PRODUCT_VARIANT_CREATE', module: 'PRODUCT_VARIANTS', recordId: created.id, details: `Variação "${created.name}" criada.`, metadata: { productId, sku: created.sku, name: created.name } }, { policy: 'CRITICAL', tx });
       return created;
     });
@@ -316,6 +342,7 @@ export async function getProducts(filters?: { categoryId?: string; search?: stri
           category: { select: { name: true } },
           supplierId: true,
           supplier: { select: { name: true } },
+          createdAt: true,
           variants: {
             where: { isActive: true, companyId: session.companyId },
             select: {
@@ -392,6 +419,7 @@ export async function createProduct(input: any) {
       trackStock: parsed.data.trackStock, pdvEligible: parsed.data.pdvEligible, commissionRate: parsed.data.commissionRate,
       imageUrl: parsed.data.imageUrl, thumbnailUrl: parsed.data.thumbnailUrl, galleryUrls: parsed.data.galleryUrls,
       barcodeType: parsed.data.barcodeType, minimumStock: minStock,
+      initialStock: parsed.data.initialStock ?? 0,
     }));
 
     

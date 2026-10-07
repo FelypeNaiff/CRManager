@@ -19,6 +19,7 @@ export type CanonicalProductWrite = {
   imageUrl?: string | null; thumbnailUrl?: string | null; galleryUrls?: string[]; barcodeType?: string | null;
   minimumStock?: Prisma.Decimal.Value;
   currentStock?: Prisma.Decimal.Value;
+  initialStock?: number;
 };
 
 async function resolveSupplier(tx: Prisma.TransactionClient, context: ServerAuthContext, name?: string | null) {
@@ -50,8 +51,35 @@ export async function createCanonicalProduct(tx: Prisma.TransactionClient, conte
   const variant = await tx.productVariant.create({ data: {
     companyId: context.companyId, productId: product.id, name: 'Único', sku: input.sku.trim(), barcode: input.barcode?.trim() || null,
     barcodeType: input.barcodeType ?? null, costPrice: new Prisma.Decimal(input.costPrice ?? 0), salePrice: new Prisma.Decimal(input.salePrice ?? 0),
-    minimumStock: new Prisma.Decimal(input.minimumStock ?? 0), currentStock: new Prisma.Decimal(input.currentStock ?? 0),
+    minimumStock: new Prisma.Decimal(input.minimumStock ?? 0), currentStock: new Prisma.Decimal(input.initialStock ?? input.currentStock ?? 0),
+    availableStock: new Prisma.Decimal(input.initialStock ?? input.currentStock ?? 0)
   } });
+
+  if (input.initialStock && input.initialStock > 0) {
+    const warehouse = await getOrCreateDefaultWarehouse(tx, context.companyId);
+    await tx.stockPosition.create({
+      data: {
+        companyId: context.companyId,
+        warehouseId: warehouse.id,
+        variantId: variant.id,
+        physicalStock: new Prisma.Decimal(input.initialStock),
+      }
+    });
+    await tx.inventoryMovement.create({
+      data: {
+        companyId: context.companyId,
+        warehouseId: warehouse.id,
+        variantId: variant.id,
+        quantity: new Prisma.Decimal(input.initialStock),
+        type: 'INITIAL',
+        origin: 'PRODUCT_CREATE',
+        reason: 'Saldo inicial de cadastro',
+        userId: context.userId,
+        idempotencyKey: `initial-stock-create-${variant.id}`
+      }
+    });
+  }
+
   await tx.productPriceHistory.create({ data: { productId: product.id, oldCostPrice: new Prisma.Decimal(0),
     newCostPrice: variant.costPrice, oldSalePrice: new Prisma.Decimal(0), newSalePrice: variant.salePrice,
     changedByUserId: context.userId, changeReason: 'Preço inicial de cadastro' } });

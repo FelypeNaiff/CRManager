@@ -93,17 +93,14 @@ export default function ProdutosPage() {
             codigoBarras: defaultVariant?.barcode || "",
             valorVenda: defaultVariant ? Number(defaultVariant.salePrice) : 0,
             valorCusto: defaultVariant ? Number(defaultVariant.costPrice) : 0,
-            estoqueAtual: defaultVariant ? Number(defaultVariant.currentStock) : 0,
+            estoqueAtual: p.variants?.reduce((sum: number, v: any) => sum + Number(v.currentStock || 0), 0) ?? 0,
             grupo: p.categoryId || "",
             fornecedorId: p.supplierId || "",
             imageUrl: p.imageUrl || "",
             thumbnailUrl: p.thumbnailUrl || "",
             galleryUrls: p.galleryUrls || [],
             legacyFirebaseId: p.legacyFirebaseId,
-            createdAt: p.createdAt ? {
-              toMillis: () => new Date(p.createdAt).getTime(),
-              seconds: Math.floor(new Date(p.createdAt).getTime() / 1000)
-            } : null
+            createdAt: p.createdAt
           };
         });
         setProdutos(mapped);
@@ -202,8 +199,8 @@ export default function ProdutosPage() {
           aValue = Number(a.estoqueAtual || 0)
           bValue = Number(b.estoqueAtual || 0)
         } else if (sortConfig.key === 'cadastrado') {
-          aValue = a.createdAt?.toMillis ? a.createdAt.toMillis() : 0
-          bValue = b.createdAt?.toMillis ? b.createdAt.toMillis() : 0
+          aValue = a.createdAt ? new Date(a.createdAt).getTime() : 0
+          bValue = b.createdAt ? new Date(b.createdAt).getTime() : 0
         } else if (sortConfig.key === 'codigo') {
           aValue = a.codigoInterno || ""
           bValue = b.codigoInterno || ""
@@ -544,10 +541,10 @@ export default function ProdutosPage() {
                       </td>
                     )}
                     {cols.cadastrado && (
-                      <td className="px-3 py-2.5 text-muted-foreground">
+                      <td className="px-3 py-2 text-[13px] text-gray-700">
                         {produto.createdAt 
-                          ? new Date(produto.createdAt?.seconds * 1000).toLocaleString("pt-BR")
-                          : "-"}
+                          ? new Date(produto.createdAt).toLocaleDateString('pt-BR') + ' ' + new Date(produto.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+                          : '-'}
                       </td>
                     )}
                     <td className="px-3 py-2.5">
